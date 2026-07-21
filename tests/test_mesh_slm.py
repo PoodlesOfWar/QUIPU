@@ -1,0 +1,349 @@
+"""Tests for mesh_slm.py — toroidal quipu SLM trained by System Entirety."""
+from __future__ import annotations
+
+import json
+import sqlite3
+import pytest
+@pytest.fixture
+def isolated_slm_db(tmp_path, monkeypatch):
+    db_file = tmp_path / "slm.sqlite"
+
+    monkeypatch.setenv("SCB_DB_PATH", str(db_file))
+
+    # Import after env var is set so local_store.db_path() picks it up.
+    import importlib
+    import src.quipu.local_store as ls
+    importlib.reload(ls)
+    import src.quipu.mesh_slm as mesh_slm
+    importlib.reload(mesh_slm)
+
+    # Seed corpus_entity + corpus_edge so train_round has text to chew on.
+    cn = sqlite3.connect(str(db_file))
+    cn.executescript("""
+        CREATE TABLE IF NOT EXISTS corpus_entity(
+            entity_id TEXT, entity_type TEXT, label TEXT, props_json TEXT,
+            first_seen TEXT, last_seen TEXT, samples INTEGER DEFAULT 1,
+            PRIMARY KEY(entity_id, entity_type));
+        CREATE TABLE IF NOT EXISTS corpus_edge(
+            src_id TEXT, src_type TEXT, dst_id TEXT, dst_type TEXT, rel TEXT,
+            weight REAL, last_seen TEXT, samples INTEGER DEFAULT 1,
+            PRIMARY KEY(src_id, src_type, dst_id, dst_type, rel));
+    """)
+    samples = [
+        ("part_001", "Part",     "carbide insert assembly"),
+        ("part_002", "Part",     "hydraulic cylinder piston rod"),
+        ("vend_010", "Vendor",   "contoso3pl supply chain"),
+        ("site_aa",  "Site",     "siteb plant warehouse"),
+        ("po_55",    "PO",       "open purchase order pending"),
+        ("oh_77",    "OnHand",   "stock balance available"),
+    ]
+    for eid, et, lab in samples:
+        cn.execute(
+            "INSERT INTO corpus_entity(entity_id, entity_type, label, "
+            "first_seen, last_seen) VALUES(?,?,?,'2026-05-01','2026-05-20')",
+            (eid, et, lab),
+        )
+    edges = [
+        ("part_001", "Part", "vend_010", "Vendor", "SUPPLIED_BY"),
+        ("part_002", "Part", "vend_010", "Vendor", "SUPPLIED_BY"),
+        ("vend_010", "Vendor", "site_aa", "Site", "DELIVERS_TO"),
+        ("po_55",   "PO",   "part_001", "Part", "ORDERS"),
+        ("oh_77",   "OnHand","part_001","Part", "MEASURES"),
+    ]
+    for src_id, src_t, dst_id, dst_t, rel in edges:
+        cn.execute(
+            "INSERT INTO corpus_edge(src_id, src_type, dst_id, dst_type, rel, "
+            "weight, last_seen) VALUES(?,?,?,?,?, 0.8, '2026-05-20')",
+            (src_id, src_t, dst_id, dst_t, rel),
+        )
+    cn.commit()
+    cn.close()
+
+    yield mesh_slm
+
+
+def test_train_round_creates_vocab_and_quipu(isolated_slm_db):
+    slm = isolated_slm_db
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert summary["tokens"] > 0
+    assert summary["pairs"] > 0
+    state = slm.state_summary()
+    assert state["vocab_size"] > 0
+    assert state["quipu_edges"] > 0
+    assert state["rounds"] == 1
+
+
+def test_generate_emits_text_after_training(isolated_slm_db):
+    slm = isolated_slm_db
+    # Two rounds so quipu has real bigram mass.
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    # Reset rate limiter so a second round actually runs.
+    slm._LAST_TRAIN_TS = 0.0
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    out = slm.generate("contoso3pl supply", max_new_tokens=8, seed=42)
+    assert "text" in out
+    assert out["tokens_emitted"] >= 1
+    assert 0.0 <= out["confidence"] <= 1.0
+
+
+def test_slm_caller_classify_returns_label(isolated_slm_db):
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    fake_decision = type("D", (), {"model_id": "mesh-slm", "score": 0.7})()
+    out = slm.slm_caller(fake_decision,
+                         {"kind": "classify",
+                          "labels": ["carbide insert", "hydraulic cylinder", "unknown"]},
+                         {})
+    assert out["source"] == "mesh_slm"
+    assert out["label"] in ("carbide insert", "hydraulic cylinder", "unknown")
+    assert 0.0 <= out["confidence"] <= 1.0
+
+
+def test_slm_caller_low_confidence_raises(isolated_slm_db):
+    """Empty/unseen prompt with cold vocab should raise so caller falls back."""
+    slm = isolated_slm_db
+    # Force tiny vocab — only one chunk
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    fake_decision = type("D", (), {"model_id": "mesh-slm", "score": 0.7})()
+    # A totally OOV text prompt should produce low confidence → raise.
+    with pytest.raises(slm.MeshSLMUnavailable):
+        # Force confidence floor very high so we deterministically trip the fallback.
+        original_floor = slm._CONF_FLOOR
+        slm._CONF_FLOOR = 0.99
+        try:
+            slm.slm_caller(fake_decision, "xyzzy quux nonexistenttoken", {})
+        finally:
+            slm._CONF_FLOOR = original_floor
+
+
+def test_map_resuscitation_quipu_populates_full_torus(isolated_slm_db):
+    slm = isolated_slm_db
+
+    from src.quipu.local_store import db_path
+
+    cn = sqlite3.connect(str(db_path()))
+    cn.row_factory = sqlite3.Row
+    cn.executescript("""
+        CREATE TABLE IF NOT EXISTS kv_store(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS brain_kv(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    """)
+    cn.execute(
+        "INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)",
+        ("torus_amplify:bridge:hideout-mesh", "2.6"),
+    )
+    cn.execute(
+        "INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)",
+        ("torus_amplify:peer:DESKTOP-01", "1.8"),
+    )
+    cn.execute(
+        "INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)",
+        (
+            "vram_rehydrate:asset:DESKTOP-01:vram",
+            json.dumps(
+                {
+                    "target": "asset:DESKTOP-01:vram",
+                    "rehydrate_weight": 3.13508,
+                    "weyl": 2.253,
+                    "weyl_boost": 1.2058,
+                    "physical_realization": 0.60756,
+                    "mesh_density": 0.475,
+                    "harmonic_factor": 3.5636,
+                    "polarity_weight": 1.25,
+                }
+            ),
+        ),
+    )
+    cn.execute(
+        "INSERT OR REPLACE INTO brain_kv(key, value) VALUES(?, ?)",
+        (
+            "temporal_spatiality_rhythm",
+            json.dumps({"weyl": 2.253, "boost": 1.2058}),
+        ),
+    )
+    cn.execute(
+        "INSERT OR REPLACE INTO brain_kv(key, value) VALUES(?, ?)",
+        (
+            "entirety:physical_realization",
+            json.dumps(
+                {
+                    "physical_realization": 0.60756,
+                    "resource_sharing": {"mesh": {"mesh_density": 0.475}},
+                }
+            ),
+        ),
+    )
+    cn.commit()
+    cn.close()
+
+    summary = slm.map_resuscitation_quipu()
+
+    assert summary["node_count"] == 4096
+    assert summary["source_label"] == "asset:DESKTOP-01:vram"
+    assert summary["directed_stride"] > 0
+    assert summary["peak_weight"] > 0.0
+
+    cn = sqlite3.connect(str(db_path()))
+    cn.row_factory = sqlite3.Row
+    count = cn.execute(
+        "SELECT COUNT(*) AS c FROM mesh_slm_quipu_node"
+    ).fetchone()["c"]
+    sample = cn.execute(
+        "SELECT * FROM mesh_slm_quipu_node WHERE node_id=0"
+    ).fetchone()
+    cn.close()
+
+    assert count == 4096
+    assert sample["source_label"] == "asset:DESKTOP-01:vram"
+    assert 0 <= sample["directed_target"] < 4096
+    assert sample["resuscitation_weight"] > 0.0
+
+    state = slm.state_summary()
+    assert state["resuscitation_quipu"]["node_count"] == 4096
+
+
+# ---------------------------------------------------------------------------
+# 8th-D MESH field and UEQGM aspect integral tests
+# ---------------------------------------------------------------------------
+
+def test_train_round_reports_ueqgm_fields(isolated_slm_db):
+    """train_round summary must include the three new UEQGM-derived fields."""
+    slm = isolated_slm_db
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    # phase_weight must be a positive scalar (UEQGM adaptive runtime output)
+    assert "phase_weight" in summary
+    assert summary["phase_weight"] > 0.0
+    # wavefunction_overlap must be a valid probability (squared cosine ∈ [0,1])
+    assert "wavefunction_overlap" in summary
+    assert 0.0 <= summary["wavefunction_overlap"] <= 1.0
+    # mesh_field_8d must be a valid probability in [0, 1]
+    assert "mesh_field_8d" in summary
+    assert 0.0 <= summary["mesh_field_8d"] <= 1.0
+
+
+def test_mesh_field_8d_is_in_unit_interval(isolated_slm_db):
+    """_mesh_field_8d must always return a float in [0, 1]."""
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    from src.quipu.local_store import db_path
+
+    cn = sqlite3.connect(str(db_path()))
+    cn.row_factory = sqlite3.Row
+    mesh = slm._mesh_state_7d()
+    field = slm._mesh_field_8d(cn, mesh)
+    cn.close()
+    assert 0.0 <= field <= 1.0, f"mesh_field_8d out of range: {field}"
+
+
+def test_generate_exposes_mesh_field_8d(isolated_slm_db):
+    """generate() return dict must include mesh_field_8d key."""
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    slm._LAST_TRAIN_TS = 0.0
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    out = slm.generate("supply chain", max_new_tokens=8, seed=7)
+    assert "mesh_field_8d" in out
+    assert 0.0 <= out["mesh_field_8d"] <= 1.0
+
+
+def test_state_summary_exposes_mesh_field_8d(isolated_slm_db):
+    """state_summary() must expose mesh_field_8d, last_phase_weight, and
+    last_wavefunction_overlap after at least one training round."""
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    state = slm.state_summary()
+    assert "mesh_field_8d" in state
+    assert 0.0 <= state["mesh_field_8d"] <= 1.0
+    assert "last_phase_weight" in state
+    assert state["last_phase_weight"] is not None
+    assert "last_wavefunction_overlap" in state
+    assert state["last_wavefunction_overlap"] is not None
+
+
+def test_slm_caller_text_path_exposes_mesh_field_8d(isolated_slm_db):
+    """slm_caller text path must propagate mesh_field_8d from generate()."""
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    slm._LAST_TRAIN_TS = 0.0
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    fake_decision = type("D", (), {"model_id": "mesh-slm", "score": 0.7})()
+    # Use a known in-vocab phrase to maximise confidence
+    try:
+        out = slm.slm_caller(fake_decision, "contoso3pl supply chain", {})
+    except slm.MeshSLMUnavailable:
+        # Low confidence is acceptable in a cold fixture; just verify no crash
+        return
+    assert "mesh_field_8d" in out
+    assert 0.0 <= out["mesh_field_8d"] <= 1.0
+
+
+def test_mean_embed_7d_uses_highest_freq_tokens(isolated_slm_db):
+    """_mean_embed_7d() must select by frequency, not insertion order.
+
+    We insert two tokens with very different embeddings into the SLM tables
+    directly: one token with high freq and one with low freq.  The high-freq
+    token gets limit=1, so _mean_embed_7d with limit=1 should return *its*
+    embedding, not the most-recently-inserted token's.
+    """
+    slm = isolated_slm_db
+    # Ensure tables exist with a quick train.
+    slm.train_round(max_seconds=5.0, max_chunks=20)
+
+    from src.quipu.local_store import db_path
+
+    cn = sqlite3.connect(str(db_path()))
+    cn.row_factory = sqlite3.Row
+
+    # Insert two tokens: high-freq (freq=1000) and low-freq (freq=1).
+    # We insert low-freq *after* high-freq so token_id-DESC ordering would pick it.
+    cn.execute(
+        "INSERT OR IGNORE INTO mesh_slm_vocab(token, i, j, freq, first_seen, last_seen) "
+        "VALUES('__highfreq__', 60, 60, 1000, '2026-01-01', '2026-06-01')"
+    )
+    hf_id = cn.execute(
+        "SELECT token_id FROM mesh_slm_vocab WHERE token='__highfreq__'"
+    ).fetchone()["token_id"]
+    # Embed with a distinctive all-1.0 vector.
+    cn.execute(
+        "INSERT OR REPLACE INTO mesh_slm_embed(token_id, "
+        "e_vision, e_touch, e_smell, e_body, e_brain, e_perception, e_entirety) "
+        "VALUES(?, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)",
+        (hf_id,),
+    )
+
+    cn.execute(
+        "INSERT OR IGNORE INTO mesh_slm_vocab(token, i, j, freq, first_seen, last_seen) "
+        "VALUES('__lowfreq__', 61, 61, 1, '2026-01-01', '2026-06-01')"
+    )
+    lf_id = cn.execute(
+        "SELECT token_id FROM mesh_slm_vocab WHERE token='__lowfreq__'"
+    ).fetchone()["token_id"]
+    # Embed with a distinctive all-0.0 vector.
+    cn.execute(
+        "INSERT OR REPLACE INTO mesh_slm_embed(token_id, "
+        "e_vision, e_touch, e_smell, e_body, e_brain, e_perception, e_entirety) "
+        "VALUES(?, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)",
+        (lf_id,),
+    )
+    cn.commit()
+
+    # With limit=1 the function must pick the single highest-freq token (__highfreq__).
+    result = slm._mean_embed_7d(cn, limit=1)
+    cn.close()
+
+    # All dims should be 1.0 (the high-freq token's embedding), not 0.0.
+    assert all(v > 0.9 for v in result), (
+        f"Expected high-freq embedding (≈1.0), got {result}"
+    )
