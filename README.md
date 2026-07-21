@@ -50,6 +50,25 @@ python -m src.quipu.gard_shard_model selftest
 julia --project=julia julia/gard_shard_model.jl   # Julia peer selftest
 ```
 
+## Corpus ingestion — The Well (optional)
+
+`src/quipu/corpus_ingest.py` streams the openly-published corpora that pretrain
+current SOTA models (FineWeb, C4, Wikipedia, Dolma, arXiv, Gutenberg, …) and
+folds them into the mesh using QUIPU's **holographic compression**: each cycle
+is distilled to a 5-float Newman-Penrose Weyl tensor (~50 bytes, or a 20-byte
+packed `5×Float32 LE` record — byte-compatible with the Julia
+`mesh_compression_model` peer), scored by `mesh_compaction_summary` and
+`hawking_information_remnant_score`. The tensor persists to
+`brain_kv["learnings:weyl_tensor"]` and re-radiates dynamics via
+`langevin_sigma_from_weyl`. Boundary distillation, not document reconstruction —
+see `docs/CORPUS_INGEST.md`.
+
+```
+python -m quipu.corpus_ingest --list
+python -m quipu.corpus_ingest --sources arxiv,gutenberg --docs 200   # no extra deps
+pip install datasets && python -m quipu.corpus_ingest --sources fineweb,wikipedia --docs 1000
+```
+
 ## Continuation notes
 
 - `VERSION` and `src/quipu/_version.py` are synchronized at 0.24.1; `_version.py` `PHASES` holds the complete generational history. Continue appending there.

@@ -2,3 +2,8 @@ numpy>=1.26
 pandas>=2.0
 cryptography>=42.0
 pytest>=8.0
+
+# Optional: corpus_ingest streaming sources (FineWeb / C4 / Wikipedia / Dolma / ...)
+# Without these, corpus_ingest falls back to the http sources (arXiv, Gutenberg).
+requests>=2.31
+# datasets>=2.19        # uncomment to enable HuggingFace streaming corpora
