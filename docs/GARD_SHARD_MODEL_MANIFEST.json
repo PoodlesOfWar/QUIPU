@@ -1,0 +1,159 @@
+{
+  "schema": "gard-shard-documentation/v1",
+  "title": "MESH-SLM-SCM-GLM-Quipu-GNN GARD Shard Model",
+  "status": "implemented",
+  "architecture": {
+    "model": "MESH-SLM-SCM-GLM-Quipu-GNN",
+    "python": {
+      "module": "src.quipu.gard_shard_model",
+      "source": "pipeline/src/quipu/gard_shard_model.py",
+      "cli": "python -m src.quipu.gard_shard_model selftest|publish"
+    },
+    "julia": {
+      "module": "GardShardModel",
+      "source": "pipeline/src/quipu/gard_shard_model.jl",
+      "project": "pipeline/Project.toml",
+      "cli": "julia --project=pipeline pipeline/src/quipu/gard_shard_model.jl"
+    },
+    "model_context": [
+      "MESH 7-D state",
+      "Weyl Psi5 compression remnant",
+      "SCM phase and emission metadata",
+      "SLM/GLM/GNN identifiers",
+      "Quipu graph counts and corrected compaction metrics"
+    ]
+  },
+  "wire_protocol": {
+    "name": "gard-shard/v1",
+    "version": 1,
+    "domain_separation": "SiCi_SQRT(-1)",
+    "canonical_json": "UTF-8, sorted object keys, compact separators, no NaN or Infinity",
+    "pipeline": [
+      "canonical JSON",
+      "zlib compression",
+      "deterministic byte partitioning",
+      "HKDF-SHA256 per shard",
+      "AES-256-CBC with PKCS#7",
+      "HMAC-SHA256 Encrypt-then-MAC"
+    ],
+    "mac_preimage": [
+      "gard-shard-mac/v1 frame marker",
+      "protocol and explicit version",
+      "public domain context",
+      "authenticated zlib compression level",
+      "model-context SHA-256 digest",
+      "salt",
+      "shard index and count",
+      "IV",
+      "ciphertext"
+    ],
+    "integrity": {
+      "plaintext_sha256": "digest of canonical plaintext",
+      "compressed_sha256": "digest of joined compressed payload",
+      "ciphertext_sha256": "digest per ciphertext shard",
+      "assignment_proof": "HKDF/HMAC proof over a canonical repository assignment object"
+    }
+  },
+  "security": {
+    "secret_environment_variable": "SCBRAIN_GRID_SECRET",
+    "public_domain_label": "SiCi_SQRT(-1)",
+    "verify_digest_default": true,
+    "verify_digest_opt_out": "SCBRAIN_GARD_VERIFY_DIGEST=0",
+    "verification_order": "Authenticate all HMAC tags in constant time before CBC decryption or zlib decompression.",
+    "secret_handling": [
+      "Never publish or commit the grid secret.",
+      "Never publish derived AES or HMAC keys.",
+      "Never publish plaintext payloads in the Hub manifest.",
+      "Use fresh random salt and IV material for production envelopes."
+    ],
+    "clarification": "SHA-256 supplies hashing, HKDF, and HMAC; AES-256-CBC supplies confidentiality."
+  },
+  "compression_reference": {
+    "source": "pipeline/src/quipu/mesh_compression_model.jl",
+    "python_authority": "pipeline/src/quipu/ueqgm_engine.py::mesh_compaction_summary",
+    "canonical_15tb_full_torus": {
+      "mesh_bytes_total": 1101884,
+      "compaction_ratio": 14967705,
+      "compaction_scalar": 0.622934,
+      "hawking_remnant_score": 0.989231
+    },
+    "langevin_reference": "langevin_sigma_from_weyl uses a conjunctive invalid-length guard and bounded delta-Lambda diffusion semantics."
+  },
+  "apis": {
+    "python": [
+      "GardShardConfig",
+      "build_model_context",
+      "langevin_sigma_from_weyl",
+      "encrypt_json",
+      "decrypt_json",
+      "verify_envelope",
+      "sign_assignment_proof",
+      "verify_assignment_proof",
+      "build_hub_manifest",
+      "publish_loadopoly_manifest"
+    ],
+    "julia": [
+      "GardShardConfig",
+      "build_model_context",
+      "mesh_compaction_summary",
+      "langevin_sigma_from_weyl",
+      "encrypt_json",
+      "decrypt_json",
+      "verify_envelope",
+      "sign_assignment_proof",
+      "verify_assignment_proof",
+      "build_hub_manifest",
+      "publish_loadopoly_manifest"
+    ]
+  },
+  "loadopoly_hub": {
+    "portal_directory": "Loadopoly-Portal",
+    "route": "/gard-shard-model.json",
+    "port": 9080,
+    "refresh": "Launch-Loadopoly.ps1 invokes the Python publish command before starting or opening the portal."
+  },
+  "compatibility": {
+    "vector_id": "gard-shard-v1-fixed-001",
+    "fixture_secret_label": "public non-production test fixture only",
+    "model_digest": "5bbba9598191e8e5622ffce857bf7f70af38fa964d7a0eac5be79e7c4f8bc804",
+    "plaintext_sha256": "3a9d41f63f18d0ef61b631842420eff808fa97830788442c08e364c11f416d7a",
+    "compressed_sha256": "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb"
+  },
+  "sample_envelope": {
+    "schema": "gard-shard-envelope/v1",
+    "protocol": "gard-shard/v1",
+    "protocol_version": 1,
+    "domain": "SiCi_SQRT(-1)",
+    "encoding": "base64",
+    "compression": {
+      "algorithm": "zlib",
+      "level": 6
+    },
+    "encryption": {
+      "algorithm": "AES-256-CBC",
+      "padding": "PKCS#7"
+    },
+    "authentication": {
+      "algorithm": "HMAC-SHA256",
+      "mode": "encrypt-then-mac"
+    },
+    "model_digest": "<64-char-sha256>",
+    "shards": [
+      {
+        "index": 0,
+        "count": 1,
+        "salt_b64": "<random-32-byte-base64>",
+        "iv_b64": "<random-16-byte-base64>",
+        "ciphertext_b64": "<redacted-ciphertext>",
+        "ciphertext_sha256": "<64-char-sha256>",
+        "hmac_sha256_b64": "<redacted-hmac>"
+      }
+    ]
+  },
+  "verification": [
+    "Run the focused Python GARD and repository catalog tests with pytest and the workspace addopts override.",
+    "Run python -m src.quipu.gard_shard_model selftest from pipeline/.",
+    "When Julia is installed, instantiate pipeline/Project.toml and run the guarded GardShardModel selftest.",
+    "Fetch http://localhost:9080/gard-shard-model.json after Loadopoly launches and confirm the portal card renders without secrets."
+  ]
+}
