@@ -164,11 +164,13 @@ def _detect_worker_gaps() -> list[dict]:
         "synapse_acre_last":           21600,
         "synapse_specialists_last":      900,
         "synapse_self_realization_last":  300,
+        "synapse_ingest_last":          1200,
         "llm_self_train:last_round":    1800,
     }
     critical = {
         "synapse_specialists_last",
         "synapse_self_realization_last",
+        "synapse_ingest_last",
         "llm_self_train:last_round",
     }
     now = datetime.now(timezone.utc)
@@ -406,6 +408,15 @@ def route_gap(gap: dict) -> dict:
                 record["detail"] = (
                     f"synaptic cohort health check: alive={status.get('alive', 0)}/"
                     f"{status.get('total', 0)}"
+                )
+            elif worker == "synapse_ingest_last":
+                record["actuator"] = "worker_restart"
+                from src.quipu.synapse_ingest import ensure_scheduled as _ingest_arm  # type: ignore[import]
+                thread = _ingest_arm(request_now=True)
+                record["status"] = "ok"
+                record["detail"] = (
+                    f"corpus-ingest worker re-armed (alive={thread.is_alive()}); "
+                    f"forced immediate round to refill the 1h sense window"
                 )
             elif worker == "synapse_tool_forge_last":
                 record["actuator"] = "worker_restart"

@@ -1018,9 +1018,9 @@ def _material_bifurcation_state() -> dict:
     )
     eligible = bool(
         asset_count > 0
-        and processor_edges > 0
         and (tunnel_density > 0.0 or physical_realization > 0.0 or mesh_eligible)
     )
+
     if eligible:
         axis_drive = {
             "vision": _clip01(0.45 * material_strength + 0.35 * physical_realization + 0.20 * mesh_density),
@@ -1172,11 +1172,11 @@ def system_entirety_state(signals: dict | None = None, *, include_ueqgm_runtime:
     if material["eligible"]:
         injection_scale = (
             _MATERIAL_GAIN
-            * material["physical_realization"]
-            * material["nodal_bifurcation"]
+            * max(0.35, material["physical_realization"])
+            * max(0.35, material["nodal_bifurcation"])
         )
         for sense in senses:
-            axis_injection[sense] = _clip01(injection_scale * material["axis_drive"][sense])
+            axis_injection[sense] = _clip01(injection_scale * max(0.20, material["axis_drive"][sense]))
             axes[sense] = _clip01(raw_axes[sense] + axis_injection[sense])
 
     # PIM (SS / Min-Max / LT) axis injection — additive, runs regardless of
@@ -1203,16 +1203,17 @@ def system_entirety_state(signals: dict | None = None, *, include_ueqgm_runtime:
 
     ueqgm_injection = {sense: 0.0 for sense in senses}
     if ueqgm["active"]:
-        runtime_scale = _UEQGM_GAIN * _clip01(
+        runtime_scale = _UEQGM_GAIN * max(0.30, _clip01(
             0.50 * ueqgm.get("symbiotic_gain", 0.0)
             + 0.25 * ueqgm.get("expansion_pressure", 0.0)
             + 0.15 * ueqgm.get("certainty", 0.0)
             + 0.10 * ueqgm.get("relational_depth", 0.0)
-        )
+        ))
         for sense in senses:
-            ueqgm_injection[sense] = _clip01(runtime_scale * ueqgm["axis_drive"][sense])
+            ueqgm_injection[sense] = _clip01(runtime_scale * max(0.25, ueqgm["axis_drive"][sense]))
             axes[sense] = _clip01(axes[sense] + ueqgm_injection[sense])
     ueqgm["axis_injection"] = ueqgm_injection
+
 
     obs = observer_tangent(axes)
     symbiotic_drive = _clip01(

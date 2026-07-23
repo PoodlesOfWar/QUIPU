@@ -29,3 +29,10 @@ julia/Manifest.toml
 .DS_Store
 Thumbs.db
 .idea/
+
+# GARD Shard temp artifacts
+gui/GARD_Shard/compression/*
+!gui/GARD_Shard/compression/.gitkeep
+gui/GARD_Shard/decompression/*
+!gui/GARD_Shard/decompression/.gitkeep
+

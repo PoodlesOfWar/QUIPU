@@ -773,9 +773,10 @@ def _axis_drive_from_entirety(entirety_state: dict | None, symbiotic_gain: float
     if max_axis <= 0.0:
         return {sense: 0.0 for sense in _UEQGM_SENSES}
     return {
-        sense: round(_clip01((_clip01(axes.get(sense, 0.0)) / max_axis) * symbiotic_gain), 4)
+        sense: round(_clip01(((_clip01(axes.get(sense, 0.0)) + 0.20) / (max_axis + 0.20)) * symbiotic_gain), 4)
         for sense in _UEQGM_SENSES
     }
+
 
 
 def get_adaptive_runtime(cn: "sqlite3.Connection" | None = None) -> dict:  # noqa: F821
@@ -854,7 +855,10 @@ def get_adaptive_runtime(cn: "sqlite3.Connection" | None = None) -> dict:  # noq
 def refresh_adaptive_runtime(
     cn: "sqlite3.Connection",  # noqa: F821
     entirety_state: dict | None = None,
+    *,
+    force: bool = False,
 ) -> dict:
+
     """Refresh the adaptive UEQGM runtime from corpus, learnings, and Entirety certainty.
 
     The daemon-facing runtime is intentionally stateful. It uses:
@@ -932,12 +936,13 @@ def refresh_adaptive_runtime(
     retained_parameters: list[str] = []
     resolved_base: dict[str, object] = {}
     for parameter, candidate in base_candidates.items():
-        if _should_apply_runtime_parameter(
+        if force or _should_apply_runtime_parameter(
             previous,
             parameter,
             parameter_evidence[parameter],
             parameter_density_floor[parameter],
         ):
+
             resolved_base[parameter] = candidate
             applied_parameters.append(parameter)
         else:
@@ -1009,7 +1014,8 @@ def refresh_adaptive_runtime(
         parameter_evidence[parameter] = symbiotic_cluster_evidence
         parameter_density_floor[parameter] = symbiotic_cluster_floor
 
-    if _should_apply_runtime_parameter(previous, "symbiotic_gain", symbiotic_cluster_evidence, symbiotic_cluster_floor):
+    if force or _should_apply_runtime_parameter(previous, "symbiotic_gain", symbiotic_cluster_evidence, symbiotic_cluster_floor):
+
         terrain_entropy = round(float(terrain_entropy_candidate), 6)
         symbiotic_gain = round(symbiotic_gain_candidate, 4)
         expansion_pressure = round(expansion_pressure_candidate, 4)

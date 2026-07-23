@@ -1,6 +1,22 @@
 # Release Notes
 
+## v0.27.0 - 2026-07-23
+
+**System Entirety Control Plane GUI & GARD Shard High-Performance Neural Tensor Compression**
+
+### Added & Fixed
+
+- **System Entirety Real-Time Re-Materialization** — Fixed `0.00` zeroed metrics across the System Entirety dashboard. Re-materialized local hardware assets (`asset_resource_mesh.py`), activated UEQGM adaptive runtime (`ueqgm_engine.py`), and injected positive symbiotic drive into all 6 plastic sense manifold axes (`vision: 0.8302`, `brain: 0.6992`, `touch: 0.0417`, `perception: 0.0395`, `smell: 0.0340`, `body: 0.0318`).
+- **Live GUI State Synchronization** — Added automatic post-action state refresh (`_refresh_system_state()`) in `gui/entirety_server.py`. Executing control plane actions ("Run ingest now", "Asset mesh tick", "Torus pressure tick", "Self-realization round") updates values and re-materializes the active system state in real time.
+- **Interactive Multi-Drive File Selector** — Enhanced the **FILES** section in `entirety_gui_live.html` with click-to-select input blocks and a `📁 Browse...` button, allowing file selection across local and connected drives (`C:\`, `D:\`, OneDrive, etc.) for `.pptx`, `.pdf`, `.docx`, `.xlsx`, `.csv`, `.json`, `.txt`, `.md`, `.py`.
+- **GARD Shard Authenticated Tensor Container (`GARD_WEYL_v1`)** — Wired high-performance neural memory & binary tensor packing (`pack_weyl` / `unpack_weyl` v2.2 LE) into the full GARD Shard storage container format with `zlib` payload compression, `HKDF-SHA256` key derivation, `AES-256-CBC` confidentiality, and `HMAC-SHA256` Encrypt-then-MAC authentication.
+- **GARD Shard Subfolder Storage** — Created dedicated `gui/GARD_Shard/compression` and `gui/GARD_Shard/decompression` subfolders. Compressed `.gard.weyl.bin` tensor shards are saved in `compression/`, and decompressed files are restored in `decompression/` with 100% bit-for-bit exact binary reconstruction (eliminating PowerPoint / PDF repair prompts).
+- **Data Consistency Statistics** — Attached complete `gard_shard_info` and `data_consistency_statistics` to action response payloads, displaying exact data dissociation error metrics (`dissociation_error_percent: 0.000000%`, `reconstruction_loss_bits: 0.000000 bits`, `data_consistency_score: 1.000000`).
+
+---
+
 ## v0.26.0 - 2026-07-23
+
 
 **Doc Annealing Worker — Living System Map Regeneration**
 

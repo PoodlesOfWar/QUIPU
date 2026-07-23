@@ -1,0 +1,2622 @@
+{
+  "generated_at": "2026-07-23T19:04:36.895145+00:00",
+  "senses": {
+    "vision": 0.8,
+    "touch": 0.0,
+    "smell": 0.0,
+    "body": 0.0,
+    "brain": 0.6666666666666666,
+    "perception": 0.0
+  },
+  "current": {
+    "axes": {
+      "vision": 0.8302,
+      "touch": 0.0417,
+      "smell": 0.034,
+      "body": 0.0318,
+      "brain": 0.6992,
+      "perception": 0.0395
+    },
+    "observer": 0.343,
+    "magnitude": 1.1407,
+    "material_bifurcation": {
+      "eligible": true,
+      "physical_realization": 0.3373,
+      "asset_strength": 0.2183,
+      "storage_signal": 0.2568,
+      "free_disk_gb": 671.41,
+      "total_disk_gb": 952.49,
+      "drive_count": 1,
+      "material_strength": 0.0,
+      "tunnel_density": 1.0,
+      "processor_edge_density": 0.0,
+      "nodal_bifurcation": 0.3758,
+      "mesh": {
+        "eligible": false,
+        "peer_count": 1,
+        "contract_count": 3,
+        "transport_count": 1,
+        "tunnel_peer_count": 0,
+        "tunnel_peer_ratio": 0.0,
+        "transport_diversity": 1.0,
+        "mesh_density": 0.5,
+        "topology": "local"
+      },
+      "axis_injection": {
+        "vision": 0.01,
+        "touch": 0.0216,
+        "smell": 0.0138,
+        "body": 0.0117,
+        "brain": 0.0123,
+        "perception": 0.0194
+      },
+      "bridge_mesh_density": {
+        "has_data": false,
+        "total_roots": 0,
+        "primary_root": "",
+        "mesh_density": 0.0,
+        "nodal_contribution": 0.0,
+        "tunnel_saturation": 0.0,
+        "anchor_strength": 0.0,
+        "computed_at": ""
+      },
+      "nodal_location": {
+        "has_data": false,
+        "location_name": "",
+        "location_path": "",
+        "docs_live": false,
+        "onedrive_live": false,
+        "sync_score": 0.0,
+        "anchor_weight": 0.0,
+        "computed_at": ""
+      }
+    },
+    "pim_planning": {
+      "has_data": false,
+      "ss_coverage_rate": 0.0,
+      "ss_breach_rate": 0.0,
+      "ss_signal": 0.0,
+      "minmax_coverage_rate": 0.0,
+      "minmax_violation_rate": 0.0,
+      "mm_signal": 0.0,
+      "lt_agility_score": 0.0,
+      "lt_breach_rate": 0.0,
+      "lt_signal": 0.0,
+      "item_count": 0,
+      "org_count": 0,
+      "updated_at": "",
+      "axis_injection": {
+        "vision": 0.0,
+        "touch": 0.0,
+        "smell": 0.0,
+        "body": 0.0,
+        "brain": 0.0,
+        "perception": 0.0
+      }
+    },
+    "repository_catalog": {
+      "has_data": false,
+      "total_files": 0,
+      "capabilities_discovered": 0,
+      "source_count": 0,
+      "file_coverage": 0.0,
+      "capability_density": 0.0,
+      "source_breadth": 0.0,
+      "freshness": 0.0,
+      "avg_relevance_score": 0.0,
+      "avg_pim_relevance": 0.0,
+      "avg_supply_chain_relevance": 0.0,
+      "catalog_signal": 0.0,
+      "playwright_perception_signal": 0.0,
+      "media_perception_signal": 0.0,
+      "playwright_artifacts": {
+        "file_count": 0,
+        "pim_routed_count": 0,
+        "avg_pim_relevance": 0.0,
+        "avg_deep_corpus_score": 0.0,
+        "signal": 0.0
+      },
+      "media_perception": {
+        "file_count": 0,
+        "analysed_count": 0,
+        "entity_count": 0,
+        "avg_confidence": 0.0,
+        "avg_relevance_score": 0.0,
+        "avg_pim_relevance": 0.0,
+        "signal": 0.0,
+        "sources": {}
+      },
+      "updated_at": "",
+      "top_terms": [],
+      "axis_injection": {
+        "vision": 0.0,
+        "touch": 0.0,
+        "smell": 0.0,
+        "body": 0.0,
+        "brain": 0.0,
+        "perception": 0.0
+      }
+    },
+    "ueqgm_runtime": {
+      "active": true,
+      "certainty": 0.0,
+      "corpus_signal": 0.0,
+      "learning_signal": 0.8128,
+      "newness_signal": 0.965,
+      "relational_depth": 0.55,
+      "symbiotic_gain": 0.4169,
+      "expansion_pressure": 0.4116,
+      "phase_weight": 0.9,
+      "coherence_depth": 3,
+      "mesh_alignment": 0.0,
+      "observer_alignment": 0.0,
+      "runtime_keywords": [
+        "quipu",
+        "actuator",
+        "error",
+        "gap_kind"
+      ],
+      "applied_parameters": [
+        "axis_drive",
+        "certainty",
+        "corpus_signal",
+        "expansion_pressure",
+        "learning_signal",
+        "mesh_alignment",
+        "observer_alignment",
+        "runtime_keywords",
+        "symbiotic_gain",
+        "terrain_entropy"
+      ],
+      "retained_parameters": [
+        "coherence_depth",
+        "phase_weight",
+        "phi"
+      ],
+      "axis_drive": {
+        "vision": 0.0,
+        "touch": 0.0,
+        "smell": 0.0,
+        "body": 0.0,
+        "brain": 0.0,
+        "perception": 0.0
+      },
+      "axis_injection": {
+        "vision": 0.0201,
+        "touch": 0.0201,
+        "smell": 0.0201,
+        "body": 0.0201,
+        "brain": 0.0201,
+        "perception": 0.0201
+      },
+      "updated_at": "2026-07-23T19:00:48.755536+00:00"
+    },
+    "transaction": {
+      "drive": 0.3215,
+      "symbiotic_drive": 0.2488,
+      "eligible": true,
+      "bit_flip": "material_bifurcated",
+      "ueqgm_overlay": "adaptive",
+      "topology": "local"
+    }
+  },
+  "bit_state": 1,
+  "expansion_phase": "broaden",
+  "ingest_heartbeat": {
+    "ran_at": "2026-07-23T18:50:48.181037+00:00",
+    "status": "ok",
+    "docs": 120,
+    "weyl_cycles": 1,
+    "tools_forged": 2,
+    "elapsed_s": 197.18
+  },
+  "windows": [
+    {
+      "hours": 1.0,
+      "learning": {
+        "active": true,
+        "window_hours": 1.0,
+        "entry_count": 5,
+        "distinct_kinds": 1,
+        "kind_counts": {
+          "self_realization": 5
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 5,
+            "share": 1.0,
+            "avg_signal": 0.75,
+            "max_signal": 0.75
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 5,
+            "share": 1.0,
+            "avg_signal": 0.75,
+            "max_signal": 0.75
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          }
+        ],
+        "mean_signal": 0.75
+      }
+    },
+    {
+      "hours": 3.0,
+      "learning": {
+        "active": true,
+        "window_hours": 3.0,
+        "entry_count": 10,
+        "distinct_kinds": 5,
+        "kind_counts": {
+          "self_realization": 6,
+          "perception": 1,
+          "synapse_ingest": 1,
+          "torus_touch": 1,
+          "ueqgm_runtime": 1
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "perception",
+            "title": "Local Document & Architecture Perception Scan",
+            "signal_strength": 0.88
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "torus_touch",
+            "title": "Torus Gap Pressure Alignment",
+            "signal_strength": 0.8
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "ueqgm_runtime",
+            "title": "UEQGM Certainty Floor Cleared",
+            "signal_strength": 0.9
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "synapse_ingest",
+            "title": "Corpus Ingest Window Refill",
+            "signal_strength": 0.85
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "self_realization",
+            "title": "System Entirety Remediation Round",
+            "signal_strength": 0.95
+          }
+        ],
+        "mean_signal": 0.813
+      }
+    },
+    {
+      "hours": 6.0,
+      "learning": {
+        "active": true,
+        "window_hours": 6.0,
+        "entry_count": 10,
+        "distinct_kinds": 5,
+        "kind_counts": {
+          "self_realization": 6,
+          "perception": 1,
+          "synapse_ingest": 1,
+          "torus_touch": 1,
+          "ueqgm_runtime": 1
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "perception",
+            "title": "Local Document & Architecture Perception Scan",
+            "signal_strength": 0.88
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "torus_touch",
+            "title": "Torus Gap Pressure Alignment",
+            "signal_strength": 0.8
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "ueqgm_runtime",
+            "title": "UEQGM Certainty Floor Cleared",
+            "signal_strength": 0.9
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "synapse_ingest",
+            "title": "Corpus Ingest Window Refill",
+            "signal_strength": 0.85
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "self_realization",
+            "title": "System Entirety Remediation Round",
+            "signal_strength": 0.95
+          }
+        ],
+        "mean_signal": 0.813
+      }
+    },
+    {
+      "hours": 12.0,
+      "learning": {
+        "active": true,
+        "window_hours": 12.0,
+        "entry_count": 10,
+        "distinct_kinds": 5,
+        "kind_counts": {
+          "self_realization": 6,
+          "perception": 1,
+          "synapse_ingest": 1,
+          "torus_touch": 1,
+          "ueqgm_runtime": 1
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "perception",
+            "title": "Local Document & Architecture Perception Scan",
+            "signal_strength": 0.88
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "torus_touch",
+            "title": "Torus Gap Pressure Alignment",
+            "signal_strength": 0.8
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "ueqgm_runtime",
+            "title": "UEQGM Certainty Floor Cleared",
+            "signal_strength": 0.9
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "synapse_ingest",
+            "title": "Corpus Ingest Window Refill",
+            "signal_strength": 0.85
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "self_realization",
+            "title": "System Entirety Remediation Round",
+            "signal_strength": 0.95
+          }
+        ],
+        "mean_signal": 0.813
+      }
+    },
+    {
+      "hours": 24.0,
+      "learning": {
+        "active": true,
+        "window_hours": 24.0,
+        "entry_count": 10,
+        "distinct_kinds": 5,
+        "kind_counts": {
+          "self_realization": 6,
+          "perception": 1,
+          "synapse_ingest": 1,
+          "torus_touch": 1,
+          "ueqgm_runtime": 1
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "perception",
+            "title": "Local Document & Architecture Perception Scan",
+            "signal_strength": 0.88
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "torus_touch",
+            "title": "Torus Gap Pressure Alignment",
+            "signal_strength": 0.8
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "ueqgm_runtime",
+            "title": "UEQGM Certainty Floor Cleared",
+            "signal_strength": 0.9
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "synapse_ingest",
+            "title": "Corpus Ingest Window Refill",
+            "signal_strength": 0.85
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "self_realization",
+            "title": "System Entirety Remediation Round",
+            "signal_strength": 0.95
+          }
+        ],
+        "mean_signal": 0.813
+      }
+    },
+    {
+      "hours": 72.0,
+      "learning": {
+        "active": true,
+        "window_hours": 72.0,
+        "entry_count": 10,
+        "distinct_kinds": 5,
+        "kind_counts": {
+          "self_realization": 6,
+          "perception": 1,
+          "synapse_ingest": 1,
+          "torus_touch": 1,
+          "ueqgm_runtime": 1
+        },
+        "kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "top_kinds": [
+          {
+            "kind": "self_realization",
+            "count": 6,
+            "share": 0.6,
+            "avg_signal": 0.7833,
+            "max_signal": 0.95
+          },
+          {
+            "kind": "perception",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.88,
+            "max_signal": 0.88
+          },
+          {
+            "kind": "synapse_ingest",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.85,
+            "max_signal": 0.85
+          },
+          {
+            "kind": "torus_touch",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.8,
+            "max_signal": 0.8
+          },
+          {
+            "kind": "ueqgm_runtime",
+            "count": 1,
+            "share": 0.1,
+            "avg_signal": 0.9,
+            "max_signal": 0.9
+          }
+        ],
+        "recent_titles": [
+          {
+            "logged_at": "2026-07-23T18:19:20.182510+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:18:44.103438+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:50.999235+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:17:23.224178+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:16:09.778550+00:00",
+            "kind": "self_realization",
+            "title": "Self-realization recovery round",
+            "signal_strength": 0.75
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "perception",
+            "title": "Local Document & Architecture Perception Scan",
+            "signal_strength": 0.88
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "torus_touch",
+            "title": "Torus Gap Pressure Alignment",
+            "signal_strength": 0.8
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "ueqgm_runtime",
+            "title": "UEQGM Certainty Floor Cleared",
+            "signal_strength": 0.9
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "synapse_ingest",
+            "title": "Corpus Ingest Window Refill",
+            "signal_strength": 0.85
+          },
+          {
+            "logged_at": "2026-07-23T18:02:56.012973+00:00",
+            "kind": "self_realization",
+            "title": "System Entirety Remediation Round",
+            "signal_strength": 0.95
+          }
+        ],
+        "mean_signal": 0.813
+      }
+    }
+  ],
+  "flip_history": [],
+  "ingest_history": [
+    {
+      "ts": "2026-07-21T04:20:19.088979+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 144.3,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T05:20:15.594177+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 140.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T06:23:15.311075+00:00",
+      "total_condensed": 776,
+      "elapsed_s": 320.0,
+      "per_source": {
+        "arxiv": 26,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.324175,
+        0.960557,
+        0.982456,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 1,
+      "compaction_scalar": 0.078085,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T07:30:18.513837+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 143.3,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T08:40:17.873254+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 142.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T09:50:20.114050+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 143.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T11:00:16.796164+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 141.5,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T12:10:18.659028+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 143.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T13:20:19.949689+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 144.6,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T14:30:18.516016+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 144.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T15:30:19.050079+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 142.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T16:40:14.827824+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 140.5,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T17:40:21.461869+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 146.9,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T18:40:17.556863+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 142.9,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T19:50:23.586443+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 149.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T20:50:22.247983+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 145.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.332274,
+        0.985555,
+        0.96,
+        0.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.039651,
+      "tools_forged_total": 0
+    },
+    {
+      "ts": "2026-07-21T21:10:23.153660+00:00",
+      "total_condensed": 389,
+      "elapsed_s": 66.7,
+      "per_source": {
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.368534,
+        0.873802,
+        0.966667,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.010954,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-21T21:53:12.409474+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 317.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.02221,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-21T22:54:20.766937+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 385.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.017218,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T00:03:06.644209+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 312.0,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.014243,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T01:13:50.426001+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 355.5,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.012138,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T02:25:17.795167+00:00",
+      "total_condensed": 906,
+      "elapsed_s": 442.8,
+      "per_source": {
+        "arxiv": 156,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 8,
+      "weyl_latest_psi5": [
+        0.338325,
+        0.967958,
+        0.985075,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.027744,
+      "tools_forged_total": 16
+    },
+    {
+      "ts": "2026-07-22T03:33:20.755234+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 323.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.009821,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T04:43:18.476470+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 323.5,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.009007,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T05:43:21.022681+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 326.0,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.008367,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T06:57:31.817091+00:00",
+      "total_condensed": 750,
+      "elapsed_s": 576.8,
+      "per_source": {
+        "arxiv": 0,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.34447,
+        0.988984,
+        0.967742,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.010258,
+      "tools_forged_total": 14
+    },
+    {
+      "ts": "2026-07-22T08:03:27.043018+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 331.9,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.007511,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T09:13:23.664908+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 328.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.007117,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T10:13:34.136372+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 336.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.006793,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T11:23:33.525597+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 338.2,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.006492,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T12:33:24.498991+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 329.3,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.006203,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T13:45:27.478979+00:00",
+      "total_condensed": 776,
+      "elapsed_s": 453.0,
+      "per_source": {
+        "arxiv": 26,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.337384,
+        0.96795,
+        0.982456,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.014337,
+      "tools_forged_total": 11
+    },
+    {
+      "ts": "2026-07-22T14:50:43.996958+00:00",
+      "total_condensed": 750,
+      "elapsed_s": 169.4,
+      "per_source": {
+        "arxiv": 0,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.34447,
+        0.988984,
+        0.967742,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 1,
+      "compaction_scalar": 0.049678,
+      "tools_forged_total": 13
+    },
+    {
+      "ts": "2026-07-22T14:53:03.120779+00:00",
+      "total_condensed": 200,
+      "elapsed_s": 169.4,
+      "per_source": {
+        "arxiv": 0,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 2,
+      "weyl_latest_psi5": [
+        0.420624,
+        0.91394,
+        0.987654,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.0245,
+      "tools_forged_total": 4
+    },
+    {
+      "ts": "2026-07-22T15:36:06.005168+00:00",
+      "total_condensed": 189,
+      "elapsed_s": 38.0,
+      "per_source": {
+        "arxiv": 189,
+        "wikipedia": 0,
+        "fineweb": 0
+      },
+      "weyl_cycles": 2,
+      "weyl_latest_psi5": [
+        0.379215,
+        0.984365,
+        0.985714,
+        1.0,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.010418,
+      "tools_forged_total": 4
+    },
+    {
+      "ts": "2026-07-22T16:02:58.040705+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 301.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.9996,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.02408,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T17:03:52.416652+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 358.0,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.9994,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.018941,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T18:04:36.137628+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 401.5,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.999,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.0159,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T19:15:36.684377+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 462.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.9987,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.013854,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T20:16:14.402719+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 499.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.999,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.012324,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T21:07:44.152153+00:00",
+      "total_condensed": 389,
+      "elapsed_s": 80.2,
+      "per_source": {
+        "arxiv": 189,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.450841,
+        0.919363,
+        0.966667,
+        0.9996,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.011097,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-22T21:23:31.629297+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 337.0,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.9843,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.022445,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T21:32:06.126388+00:00",
+      "total_condensed": 389,
+      "elapsed_s": 76.2,
+      "per_source": {
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.450841,
+        0.919363,
+        0.966667,
+        0.9996,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.011096,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-22T21:39:54.448841+00:00",
+      "total_condensed": 389,
+      "elapsed_s": 76.5,
+      "per_source": {
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.450841,
+        0.919363,
+        0.966667,
+        0.9993,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.011061,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-22T22:03:14.326188+00:00",
+      "total_condensed": 389,
+      "elapsed_s": 85.7,
+      "per_source": {
+        "local_docs": 0,
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.450841,
+        0.919363,
+        0.966667,
+        0.9941,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.010992,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-22T22:17:05.289687+00:00",
+      "total_condensed": 589,
+      "elapsed_s": 111.3,
+      "per_source": {
+        "local_docs": 200,
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 5,
+      "weyl_latest_psi5": [
+        0.405696,
+        0.916938,
+        0.990909,
+        0.9977,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.029962,
+      "tools_forged_total": 10
+    },
+    {
+      "ts": "2026-07-22T22:24:16.529675+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 381.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.9941,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.021507,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-22T22:27:49.978329+00:00",
+      "total_condensed": 589,
+      "elapsed_s": 99.4,
+      "per_source": {
+        "local_docs": 200,
+        "arxiv": 189,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 5,
+      "weyl_latest_psi5": [
+        0.405696,
+        0.916938,
+        0.990909,
+        0.5661,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.029746,
+      "tools_forged_total": 10
+    },
+    {
+      "ts": "2026-07-22T23:33:39.245772+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 344.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6063,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.021455,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T00:44:25.327759+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 390.6,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6043,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.017009,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T01:46:01.128441+00:00",
+      "total_condensed": 958,
+      "elapsed_s": 486.2,
+      "per_source": {
+        "arxiv": 208,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 8,
+      "weyl_latest_psi5": [
+        0.34256,
+        0.970819,
+        0.991597,
+        0.6044,
+        0.56
+      ],
+      "compaction_ratio": 1,
+      "compaction_scalar": 0.057887,
+      "tools_forged_total": 16
+    },
+    {
+      "ts": "2026-07-23T02:24:39.051272+00:00",
+      "total_condensed": 400,
+      "elapsed_s": 152.4,
+      "per_source": {
+        "local_docs": 200,
+        "arxiv": 0,
+        "gutenberg": 200
+      },
+      "weyl_cycles": 4,
+      "weyl_latest_psi5": [
+        0.460494,
+        0.91764,
+        0.97561,
+        0.3667,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.015476,
+      "tools_forged_total": 8
+    },
+    {
+      "ts": "2026-07-23T02:44:41.668006+00:00",
+      "total_condensed": 880,
+      "elapsed_s": 406.7,
+      "per_source": {
+        "arxiv": 130,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 8,
+      "weyl_latest_psi5": [
+        0.345064,
+        0.960248,
+        0.97561,
+        0.739,
+        0.56
+      ],
+      "compaction_ratio": 1,
+      "compaction_scalar": 0.0421,
+      "tools_forged_total": 16
+    },
+    {
+      "ts": "2026-07-23T03:55:11.476975+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 434.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.7283,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.018418,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T05:05:02.074549+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 427.2,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6676,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.015025,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T06:05:36.969383+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 461.9,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6672,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.012935,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T07:07:09.667958+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 554.6,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6489,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.011433,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T08:18:48.759625+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 653.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6463,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.010372,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T09:20:30.236395+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 755.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6647,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.009548,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T10:21:39.367598+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 821.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6306,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.008885,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T11:32:12.141285+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 856.9,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6386,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.008324,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T12:43:09.989621+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 914.8,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6244,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.007831,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T13:56:43.042185+00:00",
+      "total_condensed": 828,
+      "elapsed_s": 1128.6,
+      "per_source": {
+        "arxiv": 78,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.34232,
+        0.970987,
+        0.990826,
+        0.6277,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.030012,
+      "tools_forged_total": 14
+    },
+    {
+      "ts": "2026-07-23T15:06:07.776063+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 1093.4,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6334,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.007145,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T16:06:13.132291+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 1098.6,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6292,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.006825,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T17:17:27.135346+00:00",
+      "total_condensed": 984,
+      "elapsed_s": 1172.7,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 250
+      },
+      "weyl_cycles": 9,
+      "weyl_latest_psi5": [
+        0.342623,
+        0.988623,
+        0.96,
+        0.6219,
+        0.56
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.006538,
+      "tools_forged_total": 18
+    },
+    {
+      "ts": "2026-07-23T17:40:54.439537+00:00",
+      "total_condensed": 120,
+      "elapsed_s": 157.5,
+      "per_source": {
+        "local_docs": 40,
+        "arxiv": 40,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 40
+      },
+      "weyl_cycles": 1,
+      "weyl_latest_psi5": [
+        0.386111,
+        0.932182,
+        0.991736,
+        0.6421,
+        0.646154
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.004277,
+      "tools_forged_total": 2
+    },
+    {
+      "ts": "2026-07-23T18:04:10.702414+00:00",
+      "total_condensed": 120,
+      "elapsed_s": 196.2,
+      "per_source": {
+        "local_docs": 40,
+        "arxiv": 40,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 40
+      },
+      "weyl_cycles": 1,
+      "weyl_latest_psi5": [
+        0.386111,
+        0.932182,
+        0.991736,
+        0.6722,
+        0.646154
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.004203,
+      "tools_forged_total": 2
+    },
+    {
+      "ts": "2026-07-23T18:16:09.643618+00:00",
+      "total_condensed": 120,
+      "elapsed_s": 219.9,
+      "per_source": {
+        "local_docs": 40,
+        "arxiv": 40,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 40
+      },
+      "weyl_cycles": 1,
+      "weyl_latest_psi5": [
+        0.386111,
+        0.932182,
+        0.991736,
+        0.6412,
+        0.646154
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.004053,
+      "tools_forged_total": 2
+    },
+    {
+      "ts": "2026-07-23T18:18:32.598789+00:00",
+      "total_condensed": 840,
+      "elapsed_s": 1238.1,
+      "per_source": {
+        "arxiv": 234,
+        "gutenberg": 250,
+        "fineweb": 250,
+        "wikipedia": 106
+      },
+      "weyl_cycles": 7,
+      "weyl_latest_psi5": [
+        0.351087,
+        0.976995,
+        0.991736,
+        0.6674,
+        0.622223
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.031708,
+      "tools_forged_total": 14
+    },
+    {
+      "ts": "2026-07-23T18:27:30.981652+00:00",
+      "total_condensed": 120,
+      "elapsed_s": 200.2,
+      "per_source": {
+        "local_docs": 40,
+        "arxiv": 40,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 40
+      },
+      "weyl_cycles": 1,
+      "weyl_latest_psi5": [
+        0.386111,
+        0.932182,
+        0.991736,
+        0.7274,
+        0.646154
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.003962,
+      "tools_forged_total": 2
+    },
+    {
+      "ts": "2026-07-23T18:50:48.171824+00:00",
+      "total_condensed": 120,
+      "elapsed_s": 197.2,
+      "per_source": {
+        "local_docs": 40,
+        "arxiv": 40,
+        "wikipedia": 0,
+        "fineweb": 0,
+        "gutenberg": 40
+      },
+      "weyl_cycles": 1,
+      "weyl_latest_psi5": [
+        0.386111,
+        0.932182,
+        0.991736,
+        0.727,
+        0.646154
+      ],
+      "compaction_ratio": 0,
+      "compaction_scalar": 0.003934,
+      "tools_forged_total": 2
+    }
+  ]
+}
