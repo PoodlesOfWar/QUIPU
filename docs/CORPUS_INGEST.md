@@ -11,8 +11,23 @@ record), scored by the Bekenstein-Hawking information surface.
 Each cycle runs four stages:
 
 1. **Stream** documents from public dataset interfaces — never a full download.
-2. **Fold** each document into the mesh bulk via `mesh_slm.ingest_expert_trace`
-   (tokens → 7-D torus, Hebbian quipu edges), settled by `train_round`.
+2. **Fold** each document into the mesh bulk. Each condensed trace is reduced to
+   concept-dense, **stopword-stripped** text (`_concept_text`) and written to the
+   `mesh_corpus_feed` table via `mesh_slm.feed_corpus`. `train_round` then reads
+   that feed, places tokens on the 7-D torus, and builds the Hebbian **quipu
+   edges** — the knotted memory everything downstream (tool_forge, ACRE) depends
+   on.
+
+   > **Why the feed exists.** The parent's `train_round` read its corpus from
+   > `corpus_entity` / `corpus_edge` / `llm_dispatch_log` — Ring 4 app tables
+   > that are *not* extracted into QUIPU. Without a native feed, `train_round`
+   > always saw an empty corpus and bailed `no_corpus`, so ingested documents
+   > produced vocabulary but **zero edges and zero training rounds** (the
+   > self-train-stalled-at-zero thread from LEARNINGS.md). Feeding *raw* prose
+   > instead of concept text is equally broken: the fixed 4096-cell vocab
+   > saturates with function words (`the`/`of`/`and`) which, having the highest
+   > frequency, can never be evicted and starve real concepts. The
+   > stopword-stripped feed is what keeps the vocabulary meaningful.
 3. **Compress** the cycle to its Weyl tensor Ψ₀–Ψ₄ with
    `ueqgm_engine.weyl_scalar_tensor` over five observables, persist it to
    `brain_kv["learnings:weyl_tensor"]` and as a 20-byte packed record, and report
@@ -21,6 +36,15 @@ Each cycle runs four stages:
 4. **Decompress** — `gard_shard_model.langevin_sigma_from_weyl` lifts the
    current/previous tensors back into the diffusion reference σ that drives mesh
    emission. The tensor is the boundary encoding; σ is what it reconstitutes.
+   (If `cryptography` isn't installed, this step degrades to a constant σ
+   rather than blocking ingestion — see Dependencies below.)
+5. **Refine** — every `refine_every` Weyl cycles (default: every cycle),
+   `systemic_refinement_agent.run_strategy()` runs: ACRE gets a chance to
+   crystallize a new emergent specialist, and `tool_forge.forge_round` scans
+   the freshly-grown mesh corpus for clusters worth auto-implementing as
+   tools. This is Ring 5 (Refinement -> Toolforge) — see
+   `docs/../README.md#ring-5` and the module docstrings in `tool_forge.py`,
+   `expert_orchestrator.py`, `systemic_refinement_agent.py`.
 
 ### Weyl scalar mapping
 
@@ -54,6 +78,7 @@ interfaces only; HTTP sources are rate-limited.
 
 | key         | kind | corpus | needs `datasets`? |
 |-------------|------|--------|-------------------|
+| `local_docs`| local| QUIPU's own `docs/` — the System Entirety's self-knowledge (UEQGM/MESH/research) | no |
 | `fineweb`   | hf   | HuggingFaceFW/fineweb (filtered Common Crawl) | yes |
 | `c4`        | hf   | allenai/c4 (Colossal Clean Crawl) | yes |
 | `wikipedia` | hf   | wikimedia/wikipedia | yes |
@@ -63,7 +88,11 @@ interfaces only; HTTP sources are rate-limited.
 | `arxiv`     | http | arXiv export API (abstracts) | no |
 | `gutenberg` | http | Project Gutenberg (public domain) | no |
 
-Default mix: `fineweb, wikipedia, arxiv, gutenberg`.
+Default mix: `local_docs, arxiv, wikipedia, fineweb, gutenberg`. `local_docs` is
+the System Entirety ingesting its own architecture corpus (the UEQGM / MESH /
+system-entirety / research docs) in its own distinctive vocabulary (weyl, torus,
+quipu, holographic, entirety, resonance) — a knowledge mode unlike arXiv or
+fiction, and the best candidate for a genuinely novel ACRE specialist.
 
 ## Usage
 
@@ -78,7 +107,16 @@ python -m quipu.corpus_ingest --sources fineweb,wikipedia,arxiv --docs 1000 --co
 
 # Bounded background run (stop after 30 min)
 python -m quipu.corpus_ingest --max-seconds 1800
+
+# One-time: flush a mesh whose vocab saturated with stopwords from an earlier
+# mis-wired run, then re-ingest cleanly.
+python -m src.quipu.corpus_ingest --reset --sources arxiv,gutenberg --docs 200
 ```
+
+`--reset` clears `mesh_slm_vocab` / `mesh_slm_embed` / `mesh_slm_quipu` /
+`mesh_corpus_feed` and the training-round counters (Weyl history in `brain_kv`
+is preserved). Only needed once, to recover from the pre-fix state; ongoing
+runs must NOT reset or they would wipe learning each cycle.
 
 Each `--compress-every` documents emits one Weyl cycle; the CLI prints the
 latest tensor, compaction ratio/scalar, remnant score, packed base64, and the
@@ -112,3 +150,9 @@ pip install datasets
 
 Without it, the `hf` sources are skipped and the `http` sources still run. Some
 HuggingFace datasets are access-gated and require `huggingface-cli login`.
+
+`corpus_ingest` also imports `gard_shard_model` for the σ-decompression step,
+which in turn requires `cryptography` (already listed in `requirements.txt` for
+the GARD-shard protocol). If `cryptography` isn't installed, this import is
+caught and σ falls back to a constant `0.05` — ingestion and Weyl compression
+still run, only the σ-reconstitution number is inert.

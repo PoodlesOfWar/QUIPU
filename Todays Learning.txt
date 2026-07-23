@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File "Show-TodaysLearning.ps1"

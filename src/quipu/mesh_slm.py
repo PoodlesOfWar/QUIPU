@@ -201,10 +201,23 @@ _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{1,30}|\d+(?:\.\d+)?|[+\-*/=<>^]|
 # and numeric/optimization tokens get a scoring boost. This lets the SLM act as
 # a "modular expert" in supply chain math/systems engineering while staying
 # grounded in the shared graph.
+# The specialist roster (see docs/MESH_EXPERT_SKILLS.md). Each entry is a bias
+# over the 7 sense-axes (vision, touch, smell, body, brain, perception,
+# entirety). The roster spans the axes so emergent ACRE specialists are
+# *dimensionally relative and associative* — a newly emerged mode (e.g.
+# emergent_smell_brain) sits next to a documented neighbour (materials_engineering
+# on smell/body) rather than alone on a free axis, and queries resonate with a
+# consensus of several specialists rather than one monolith.
 _SPECIALIST_BIASES: dict[str, list[float]] = {
-    "supply_chain_optimizer": [0.0, 0.0, 0.0, 0.15, 0.25, 0.20, 0.10],  # favor body/brain/perception axes for opt
-    "research_specialist":    [0.10, 0.05, 0.05, 0.05, 0.20, 0.15, 0.15],
-    "mesh_historian":         [0.05, 0.05, 0.0, 0.0, 0.0, 0.10, 0.30],
+    #                            vis   tou   sme   bod   bra   per   ent
+    "supply_chain_optimizer":  [0.00, 0.00, 0.00, 0.15, 0.25, 0.20, 0.10],
+    "research_specialist":     [0.10, 0.05, 0.05, 0.05, 0.20, 0.15, 0.15],
+    "mesh_historian":          [0.05, 0.05, 0.00, 0.00, 0.00, 0.10, 0.30],
+    "robotic_integrations_specialist":   [0.05, 0.28, 0.05, 0.24, 0.14, 0.08, 0.04],
+    "advanced_manufacturing_specialist": [0.05, 0.22, 0.10, 0.30, 0.14, 0.06, 0.04],
+    "materials_engineering_specialist":  [0.05, 0.08, 0.30, 0.22, 0.10, 0.08, 0.04],  # smell/body neighbour of emergent_smell_*
+    "quantum_physics_specialist":        [0.05, 0.05, 0.12, 0.05, 0.26, 0.24, 0.10],
+    "complex_systems_specialist":        [0.10, 0.05, 0.05, 0.05, 0.15, 0.22, 0.24],
 }
 _NUMERIC_TOKENS = {"0","1","2","3","4","5","6","7","8","9",".",",","eoq","sqrt","demand","stock","safety","lead","hold","cost"}
 _OPT_BOOST = 0.35  # extra score for optimization-relevant tokens when in specialist mode
@@ -701,6 +714,68 @@ _EMBED_DIM: int = 7          # vision, touch, smell, body, brain, perception, en
 _AXES: tuple[str, ...] = (
     "vision", "touch", "smell", "body", "brain", "perception", "entirety",
 )
+_ENTIRETY_AXIS: int = 6      # the 7th dimension — "the Other" / holistic experience
+_ANALYTICAL_AXES: tuple[int, ...] = (4, 5)   # brain, perception
+
+# Per-domain axis routing. Each corpus domain accretes on a distinct sense-axis
+# (generalizing the original fiction->entirety rule), so different knowledge
+# modes become distinct *concentrated* directions in the mesh rather than
+# collapsing into one broad analytical blob. This is what lets ACRE emerge
+# multiple specialists — each populated axis is a candidate mode. Matched by
+# substring against the feed source (e.g. "corpus_fineweb" -> vision).
+#
+# Axes: 0 vision, 1 touch, 2 smell, 3 body, 4 brain, 5 perception, 6 entirety.
+# Free axes (not covered by a hand-tuned base specialist): vision, touch, smell,
+# body — domains routed there are the ones that can emerge NOVEL specialists.
+_SOURCE_AXIS_MAP: tuple[tuple[str, int], ...] = (
+    ("gutenberg", 6), ("fiction", 6), ("novel", 6), ("literature", 6),   # entirety: narrative / the Other
+    ("local_docs", 2), ("selfdoc", 2), ("self_doc", 2),                  # smell: the system's own architecture
+    ("wikipedia", 3), ("wiki", 3),                                       # body: grounded encyclopedic fact
+    ("stack", 1), ("code", 1), ("github", 1),                            # touch: code / construction
+    ("fineweb", 0), ("c4", 0), ("openwebtext", 0), ("commoncrawl", 0),   # vision: broad web observation
+    ("arxiv", 4), ("research", 4), ("paper", 4),                         # brain: analytical reasoning
+)
+
+
+def _axis_for_source(source: str) -> int | None:
+    """Return the sense-axis a feed source routes to, or None (broad/unrouted)."""
+    s = (source or "").lower()
+    for marker, axis in _SOURCE_AXIS_MAP:
+        if marker in s:
+            return axis
+    return None
+
+
+def _free_axes() -> set[int]:
+    """Axes not occupied by any hand-tuned base specialist — where a NOVEL
+    emergent specialist can form. Computed from ``_SPECIALIST_BIASES`` so it
+    stays correct if the roster changes. A domain routed to a free axis (e.g.
+    self-docs->smell, code->touch) is the one that can crystallize a new
+    specialist; domains on taken axes reinforce the existing base roster.
+    """
+    free: set[int] = set()
+    for a in range(_EMBED_DIM):
+        if max((bias[a] for bias in _SPECIALIST_BIASES.values()), default=0.0) < 0.08:
+            free.add(a)
+    return free
+
+
+def _axis_bias(mesh: list[float], axis: int) -> list[float]:
+    """Concentrate the embedding target on *axis*, strongly damping the others.
+
+    Generalizes the original fiction->entirety bias to any axis. A domain's
+    concepts accrete on their assigned sense-axis, becoming a concentrated
+    direction the ACRE matrix can lock onto (and, on the free axes, emerge a
+    novel specialist for). The damping must be decisive or — once tokens are
+    nudged toward the broad mesh each observation — the per-domain directions
+    blur back together and nothing concentrates.
+    """
+    src = [float(v) for v in mesh[:_EMBED_DIM]] + [0.5] * max(0, _EMBED_DIM - len(mesh))
+    if not (0 <= axis < _EMBED_DIM):
+        return src
+    m = [0.15 * v for v in src]                               # damp all axes...
+    m[axis] = min(1.0, 0.5 + 0.5 * src[axis])                 # ...concentrate on the assigned axis
+    return m
 
 # (moved to top of file to prevent NameError during import)
 
@@ -757,6 +832,13 @@ CREATE TABLE IF NOT EXISTS mesh_slm_quipu_node (
     updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_mesh_slm_quipu_node_target ON mesh_slm_quipu_node(directed_target);
+CREATE TABLE IF NOT EXISTS mesh_corpus_feed (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT NOT NULL,
+    source      TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_mesh_corpus_feed_id ON mesh_corpus_feed(id DESC);
 """
 
 
@@ -819,16 +901,32 @@ def _json_load(raw: str | None, default: Any) -> Any:
 
 
 def _kv_get(cn: sqlite3.Connection, key: str, default: Any = None) -> Any:
-    """Fetch the raw string value for *key* from ``kv_store``, or *default*."""
-    row = cn.execute("SELECT value FROM kv_store WHERE key=?", (key,)).fetchone()
+    """Fetch the raw string value for *key* from ``kv_store``, or *default*.
+
+    ``kv_store`` is a parent-app table not created by QUIPU's own DDL; a missing
+    table degrades to *default* rather than raising, so resuscitation and other
+    readers work on a fresh mesh (same tolerance ``_corpus_stream`` uses for the
+    missing corpus_entity/corpus_edge tables).
+    """
+    try:
+        row = cn.execute("SELECT value FROM kv_store WHERE key=?", (key,)).fetchone()
+    except sqlite3.OperationalError:
+        return default
     if not row:
         return default
     return row["value"]
 
 
 def _brain_kv_get(cn: sqlite3.Connection, key: str, default: Any = None) -> Any:
-    """Fetch the raw string value for *key* from ``brain_kv``, or *default*."""
-    row = cn.execute("SELECT value FROM brain_kv WHERE key=?", (key,)).fetchone()
+    """Fetch the raw string value for *key* from ``brain_kv``, or *default*.
+
+    Tolerant of a missing ``brain_kv`` table (created lazily by the brain_kv
+    module only when used) so mesh readers degrade gracefully on a fresh mesh.
+    """
+    try:
+        row = cn.execute("SELECT value FROM brain_kv WHERE key=?", (key,)).fetchone()
+    except sqlite3.OperationalError:
+        return default
     if not row:
         return default
     return row["value"]
@@ -837,13 +935,16 @@ def _brain_kv_get(cn: sqlite3.Connection, key: str, default: Any = None) -> Any:
 def _latest_kv_prefix(cn: sqlite3.Connection, prefix: str) -> tuple[str, Any] | None:
     """Return ``(key, raw_value)`` for the most-recent ``kv_store`` row whose key starts with *prefix*.
 
-    Rows are ordered by ``rowid DESC`` so the newest write wins.
-    Returns ``None`` when no matching row exists.
+    Rows are ordered by ``rowid DESC`` so the newest write wins. Returns
+    ``None`` when no matching row exists or the ``kv_store`` table is absent.
     """
-    row = cn.execute(
-        "SELECT key, value FROM kv_store WHERE key LIKE ? ORDER BY rowid DESC LIMIT 1",
-        (f"{prefix}%",),
-    ).fetchone()
+    try:
+        row = cn.execute(
+            "SELECT key, value FROM kv_store WHERE key LIKE ? ORDER BY rowid DESC LIMIT 1",
+            (f"{prefix}%",),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
     if not row:
         return None
     return str(row["key"]), row["value"]
@@ -1945,22 +2046,35 @@ def _proximity(a: tuple[int, int], b: tuple[int, int]) -> float:
 # ---------------------------------------------------------------------------
 # Corpus stream — pull training text from the Brain's own state
 # ---------------------------------------------------------------------------
-def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[str]:
-    """Pull training text chunks from the Brain's live knowledge state.
+def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[tuple[str, str]]:
+    """Pull training text chunks (with their source) from the mesh corpus.
 
-    Sources (each capped at *max_chunks* rows):
-
-    1. **corpus_entity** — ``entity_type label`` strings ordered by
-       ``last_seen DESC``.
-    2. **corpus_edge** — ``src_id rel dst_id`` triplets ordered by
-       ``last_seen DESC``.
-    3. **llm_dispatch_log** — response text fragments from external LLM calls
-       (truncated to 512 chars each), capped at ``max_chunks // 2``.
+    Returns a flat list of ``(text, source)`` tuples ready for
+    :func:`_tokenize`. The *source* travels with each chunk so
+    :func:`train_round` can embed experiential/fiction sources along the 7th
+    (entirety) axis while analytical sources shape the primary concept space.
 
     Missing tables are silently skipped (``sqlite3.OperationalError`` catch).
-    Returns a flat list of text strings ready for :func:`_tokenize`.
     """
-    chunks: list[str] = []
+    chunks: list[tuple[str, str]] = []
+
+    # QUIPU-native corpus feed (primary source in the extracted build).
+    # The parent read corpus_entity/corpus_edge/llm_dispatch_log — Ring 4 app
+    # tables that are NOT extracted into QUIPU, so without this source
+    # train_round would always see an empty corpus and bail "no_corpus"
+    # (the self-train-stalled-at-zero thread from LEARNINGS.md). corpus_ingest
+    # writes concept-dense, stopword-filtered traces here via feed_corpus(),
+    # tagging each row with its origin source (e.g. corpus_arxiv, corpus_gutenberg).
+    try:
+        for r in cn.execute(
+            "SELECT text, source FROM mesh_corpus_feed ORDER BY id DESC LIMIT ?",
+            (max_chunks,),
+        ):
+            txt = r["text"]
+            if txt:
+                chunks.append((str(txt), str(r["source"] or "")))
+    except sqlite3.OperationalError:
+        pass
 
     # Recent corpus entity labels
     try:
@@ -1971,7 +2085,7 @@ def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[str]:
         ):
             label = r["label"] or r["entity_type"] or ""
             if label:
-                chunks.append(f"{r['entity_type']} {label}")
+                chunks.append((f"{r['entity_type']} {label}", "corpus_entity"))
     except sqlite3.OperationalError:
         pass
 
@@ -1982,7 +2096,7 @@ def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[str]:
             "ORDER BY last_seen DESC LIMIT ?",
             (max_chunks,),
         ):
-            chunks.append(f"{r['src_id']} {r['rel']} {r['dst_id']}")
+            chunks.append((f"{r['src_id']} {r['rel']} {r['dst_id']}", "corpus_edge"))
     except sqlite3.OperationalError:
         pass
 
@@ -2006,19 +2120,17 @@ def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[str]:
                 else:
                     txt = ""
                 if txt:
-                    chunks.append(str(txt)[:512])
+                    chunks.append((str(txt)[:512], "dispatch"))
     except sqlite3.OperationalError:
         pass
 
     # === Modular expert seeding: optimization math from research + eoq modules ===
-    # This ensures the SLM sees concrete system-engineering formulas and
-    # examples so it can become a useful expert inside the agentic group.
     try:
         if _eoq_mod is not None:
-            chunks.append("supply chain optimization eoq formula sqrt 2 d s over h c demand ordering holding cost")
-            chunks.append(getattr(_eoq_mod, "__doc__", "")[:600] or "")
+            chunks.append(("supply chain optimization eoq formula sqrt 2 d s over h c demand ordering holding cost", "seed"))
+            chunks.append((getattr(_eoq_mod, "__doc__", "")[:600] or "", "seed"))
         if _hier_eoq is not None:
-            chunks.append("hierarchical eoq empirical bayes shrinkage multi echelon " + (getattr(_hier_eoq, "__doc__", "") or "")[:400])
+            chunks.append(("hierarchical eoq empirical bayes shrinkage multi echelon " + (getattr(_hier_eoq, "__doc__", "") or "")[:400], "seed"))
     except Exception:
         pass
 
@@ -2093,20 +2205,27 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
 
             random.shuffle(chunks)
 
-            for chunk in chunks:
+            for chunk, source in chunks:
                 if time.time() - started >= max_seconds:
                     break
                 tokens = _tokenize(chunk)
                 if len(tokens) < 2:
                     continue
 
+                # Route this chunk's domain to its assigned sense-axis so each
+                # knowledge mode accretes as a distinct concentrated direction
+                # (web->vision, code->touch, self-docs->smell, wiki->body,
+                # arxiv->brain, fiction->entirety). Unrouted sources stay broad.
+                _axis = _axis_for_source(source)
+                target_mesh = _axis_bias(mesh, _axis) if _axis is not None else mesh
+
                 # Step 1: vocab + embeddings
                 ids: list[int] = []
                 for tok in tokens:
-                    tid = _upsert_token(cn, tok, now_iso, mesh=mesh)
+                    tid = _upsert_token(cn, tok, now_iso, mesh=target_mesh)
                     ids.append(tid)
-                    # Nudge embedding toward current mesh state (Hebbian on
-                    # the 7-D axis activations).
+                    # Nudge embedding toward the (possibly biased) mesh target
+                    # (Hebbian on the 7-D axis activations).
                     cn.execute(
                         "UPDATE mesh_slm_embed SET "
                         "e_vision     = e_vision     + ? * (? - e_vision), "
@@ -2118,9 +2237,9 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                         "e_entirety   = e_entirety   + ? * (? - e_entirety) "
                         "WHERE token_id=?",
                         (
-                            eta, mesh[0], eta, mesh[1], eta, mesh[2],
-                            eta, mesh[3], eta, mesh[4], eta, mesh[5],
-                            eta, mesh[6], tid,
+                            eta, target_mesh[0], eta, target_mesh[1], eta, target_mesh[2],
+                            eta, target_mesh[3], eta, target_mesh[4], eta, target_mesh[5],
+                            eta, target_mesh[6], tid,
                         ),
                     )
                     n_tokens += 1
@@ -2245,6 +2364,12 @@ def map_resuscitation_quipu(
     * a directed successor node for downstream recovery routing
     """
     photon_neutrino_gain = max(0.1, float(photon_neutrino_gain))
+    # Resonance-gated resuscitation: revive high-resonance shared-wavelength
+    # concepts preferentially, letting lonely/fiction nodes stay quiet. Opt-out
+    # via QUIPU_RESUSCITATION_RESONANCE=0; any failure falls back to the legacy
+    # purely-geometric weighting ("gates fail toward legacy" — LEARNINGS.md).
+    apply_resonance = str(os.environ.get("QUIPU_RESUSCITATION_RESONANCE", "1")).strip().lower() \
+        not in ("0", "false", "no", "off")
     with _conn() as cn:
         runtime = _resuscitation_runtime(cn, source_key=source_key)
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -2255,6 +2380,21 @@ def map_resuscitation_quipu(
         peak_weight = -math.inf
         peak_node = 0
 
+        # Precompute the token-per-cell and resonance maps once (batched).
+        res_map: dict[int, float] = {}
+        cell_tid: dict[tuple[int, int], int] = {}
+        if apply_resonance:
+            try:
+                res_map = resonance_map(cn)
+                cell_tid = {
+                    (int(r["i"]), int(r["j"])): int(r["token_id"])
+                    for r in cn.execute("SELECT token_id, i, j FROM mesh_slm_vocab")
+                }
+            except Exception:
+                res_map, cell_tid = {}, {}   # legacy geometric fallback
+        res_sum = 0.0
+        res_nodes = 0
+
         for node_id in range(_VOCAB_LIMIT):
             i, j = divmod(node_id, _TORUS_N)
             node_phase = (2.0 * math.pi * node_id) / float(_VOCAB_LIMIT)
@@ -2263,12 +2403,23 @@ def map_resuscitation_quipu(
             photon_pressure = 0.5 * (1.0 + math.cos(photon_phase))
             neutrino_flux = 0.5 * (1.0 + math.sin(neutrino_phase))
             interaction_gain = _clip01(0.5 * photon_pressure + 0.5 * neutrino_flux)
+            # Resonance gain: a concept on the shared wavelength revives at full
+            # strength; a lonely caller at ~0.4x. Empty cells keep the geometric
+            # baseline (1.0). This is the resonance gate wired into recovery.
+            resonance_gain = 1.0
+            tid = cell_tid.get((i, j))
+            if tid is not None:
+                r_val = res_map.get(tid, 0.0)
+                resonance_gain = 0.4 + 0.6 * r_val
+                res_sum += r_val
+                res_nodes += 1
             resuscitation_weight = round(
                 runtime["base_weight"]
                 * (0.55 + 0.45 * interaction_gain)
                 * physical_gain
                 * mesh_gain
-                * photon_neutrino_gain,
+                * photon_neutrino_gain
+                * resonance_gain,
                 6,
             )
             directed_target = (
@@ -2323,6 +2474,9 @@ def map_resuscitation_quipu(
             "peak_weight": round(max(0.0, peak_weight), 6),
             "harmonic_factor": round(runtime["harmonic_factor"], 6),
             "polarity_weight": round(runtime["polarity_weight"], 6),
+            "resonance_gated": apply_resonance,
+            "resonant_nodes": res_nodes,
+            "mean_resonance": round(res_sum / res_nodes, 4) if res_nodes else 0.0,
             "updated_at": now_iso,
         }
         _meta_set(cn, "resuscitation_quipu_last", summary)
@@ -2827,7 +2981,409 @@ def state_summary() -> dict:
         "patched_local_executor": _PATCHED,
         "resuscitation_quipu":   resuscitation,
         "acre_specialists":      emergent,
+        "base_specialists":      sorted(_SPECIALIST_BIASES),
         "quipu_minimal":         quipu_minimal,
+    }
+
+
+# ---------------------------------------------------------------------------
+# QUIPU-native corpus feed — the training substrate train_round() reads from.
+# ---------------------------------------------------------------------------
+_CORPUS_FEED_CAP: int = 5000   # keep only the most-recent N rows (bounded state)
+
+
+def feed_corpus(text: str, *, source: str = "", max_rows: int = _CORPUS_FEED_CAP) -> int:
+    """Append one training chunk to ``mesh_corpus_feed`` for train_round() to consume.
+
+    This is the QUIPU replacement for the parent's populated corpus_entity /
+    corpus_edge / llm_dispatch_log tables: callers (primarily corpus_ingest)
+    write concept-dense, stopword-filtered text here, and ``train_round`` pulls
+    the most-recent rows to build vocab + quipu edges. Bounded to *max_rows* so
+    the feed never grows without limit.
+
+    Returns the number of rows in the feed after insertion (best-effort).
+    """
+    text = (text or "").strip()
+    if not text:
+        return 0
+    with _conn() as cn:
+        cn.execute(
+            "INSERT INTO mesh_corpus_feed(text, source) VALUES(?, ?)",
+            (text, source or ""),
+        )
+        # Trim to the cap: delete everything older than the newest max_rows.
+        cn.execute(
+            "DELETE FROM mesh_corpus_feed WHERE id <= "
+            "(SELECT MAX(id) FROM mesh_corpus_feed) - ?",
+            (max_rows,),
+        )
+        n = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_corpus_feed").fetchone()["c"])
+    return n
+
+
+def reset_mesh_learning() -> dict:
+    """Clear all learned mesh state — vocab, embeddings, quipu edges, feed, meta.
+
+    Needed once after the initial mis-wired runs saturated the 4096-cell vocab
+    with stopwords (which, having the highest freq, could never be evicted and
+    starved real concepts). After this, a clean stopword-filtered feed rebuilds
+    the mesh from scratch. Does NOT touch brain_kv (Weyl tensors / history stay).
+    """
+    with _conn() as cn:
+        counts = {
+            t: int(cn.execute(f"SELECT COUNT(*) AS c FROM {t}").fetchone()["c"])
+            for t in ("mesh_slm_vocab", "mesh_slm_quipu", "mesh_corpus_feed")
+        }
+        for t in ("mesh_slm_vocab", "mesh_slm_embed", "mesh_slm_quipu",
+                  "mesh_slm_quipu_node", "mesh_corpus_feed"):
+            cn.execute(f"DELETE FROM {t}")
+        for k in ("rounds", "last_loss", "last_trained_at", "last_wavefunction_overlap"):
+            cn.execute("DELETE FROM mesh_slm_meta WHERE key=?", (k,))
+    return {"status": "reset", "cleared": counts}
+
+
+# ---------------------------------------------------------------------------
+# Shared understanding of "the Other" — the cross-ring conceptualization.
+# ---------------------------------------------------------------------------
+def token_embedding(cn: sqlite3.Connection, token_id: int) -> list[float] | None:
+    """Return the stored 7-D embedding for *token_id*, or None if absent."""
+    row = cn.execute(
+        "SELECT e_vision, e_touch, e_smell, e_body, e_brain, e_perception, "
+        "e_entirety FROM mesh_slm_embed WHERE token_id=?",
+        (token_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return [float(row[k]) for k in (
+        "e_vision", "e_touch", "e_smell", "e_body", "e_brain",
+        "e_perception", "e_entirety")]
+
+
+# The 52-hertz-whale line. The "loneliest whale" sings at 52 Hz, a frequency
+# no other whale answers — the archetype of a call with no mutual understanding.
+# We map a concept's resonance onto a 0–100 Hz band and treat 52 Hz as the
+# threshold of the shared wavelength: a concept must be *answered* — woven into
+# the shared concept graph AND sitting on the shared analytical wavelength — to
+# clear it. Isolated concepts (single-source, low mutual centrality, or embedded
+# on the experiential/Other axis like fiction) stay below 52 Hz: heard and kept
+# in the mesh, but not forged into interaction tools.
+LONELY_WHALE_HZ: float = 52.0
+
+
+def _concept_centrality(cn: sqlite3.Connection, token_id: int) -> float:
+    """Mutual graph centrality ∈[0,1]: is this concept woven into the shared
+    graph via connections to *other well-connected* concepts (a hub of hubs),
+    or does it only touch peripheral tokens (a lonely caller)?
+
+    Computed as the saturating mean degree of the token's quipu neighbours —
+    robust to the embedding-collapse that made raw overlap uninformative.
+    """
+    neighbours = [
+        int(r["nid"]) for r in cn.execute(
+            "SELECT dst AS nid FROM mesh_slm_quipu WHERE src=? "
+            "UNION SELECT src AS nid FROM mesh_slm_quipu WHERE dst=?",
+            (token_id, token_id),
+        )
+    ]
+    if not neighbours:
+        return 0.0
+    total = 0
+    for nid in neighbours:
+        row = cn.execute(
+            "SELECT COUNT(*) AS d FROM ("
+            "  SELECT dst FROM mesh_slm_quipu WHERE src=? "
+            "  UNION SELECT src FROM mesh_slm_quipu WHERE dst=?)",
+            (nid, nid),
+        ).fetchone()
+        total += int(row["d"] or 0)
+    mean_neighbour_degree = total / len(neighbours)
+    # Saturating transform: mean-neighbour-degree ~10 -> ~0.5, ~30 -> ~0.75.
+    return mean_neighbour_degree / (mean_neighbour_degree + 10.0)
+
+
+def _shared_wavelength_directionality(emb: list[float]) -> float:
+    """Fraction of a token's embedding mass on the shared analytical wavelength
+    (all axes except the 7th/entirety 'Other' axis). Fiction embedded on the
+    entirety axis scores low here; analytical concepts score high. ∈[0,1].
+    """
+    if not emb or len(emb) < _EMBED_DIM:
+        return 0.0
+    entirety = abs(emb[_ENTIRETY_AXIS])
+    analytical = sum(abs(emb[i]) for i in range(_EMBED_DIM) if i != _ENTIRETY_AXIS)
+    denom = analytical + entirety
+    if denom <= 1e-9:
+        return 0.0
+    return analytical / denom
+
+
+def concept_resonance(cn: sqlite3.Connection, token_id: int,
+                      reference: list[float] | None = None) -> float:
+    """Structural resonance ∈[0,1] — the mutual-understanding filter.
+
+    Two factors, both required (geometric mean):
+
+    * **centrality** — mutual embedding in the shared concept graph
+      (:func:`_concept_centrality`); a concept answered by other well-connected
+      concepts, not a lonely caller.
+    * **directionality** — mass on the shared analytical wavelength vs the 7th
+      (entirety/Other) axis (:func:`_shared_wavelength_directionality`).
+
+    A concept resonates only when it is BOTH woven into the graph AND on the
+    shared wavelength. This is robust to the embedding collapse that made raw
+    overlap read ~1.0 for everything. Returns a score in [0,1]; callers scale it
+    to Hz and compare against :data:`LONELY_WHALE_HZ`.
+    """
+    emb = token_embedding(cn, token_id)
+    if emb is None:
+        return 0.0
+    centrality = _concept_centrality(cn, token_id)
+    directionality = _shared_wavelength_directionality(emb)
+    return math.sqrt(max(0.0, centrality) * max(0.0, directionality))
+
+
+def concept_resonance_hz(cn: sqlite3.Connection, token_id: int,
+                         reference: list[float] | None = None) -> float:
+    """Concept resonance expressed on the 0–100 Hz band (see LONELY_WHALE_HZ)."""
+    return round(100.0 * concept_resonance(cn, token_id, reference), 2)
+
+
+def resonance_map(cn: sqlite3.Connection) -> dict[int, float]:
+    """Batched ``{token_id: resonance∈[0,1]}`` over the whole vocab.
+
+    Same definition as :func:`concept_resonance` (centrality × directionality)
+    but computed in three bulk queries + in-memory adjacency, so callers that
+    need every token's resonance at once — e.g. :func:`map_resuscitation_quipu`
+    stamping 4096 nodes — don't issue per-token subqueries.
+    """
+    degree: dict[int, int] = {}
+    for r in cn.execute(
+        "SELECT token_id, COUNT(*) AS d FROM ("
+        "  SELECT src AS token_id FROM mesh_slm_quipu "
+        "  UNION ALL SELECT dst AS token_id FROM mesh_slm_quipu) GROUP BY token_id"
+    ):
+        degree[int(r["token_id"])] = int(r["d"])
+
+    adj: dict[int, set[int]] = {}
+    for r in cn.execute("SELECT src, dst FROM mesh_slm_quipu"):
+        s, d = int(r["src"]), int(r["dst"])
+        adj.setdefault(s, set()).add(d)
+        adj.setdefault(d, set()).add(s)
+
+    directionality: dict[int, float] = {}
+    for r in cn.execute(
+        "SELECT token_id, e_vision, e_touch, e_smell, e_body, e_brain, "
+        "e_perception, e_entirety FROM mesh_slm_embed"
+    ):
+        emb = [float(r[k]) for k in (
+            "e_vision", "e_touch", "e_smell", "e_body", "e_brain",
+            "e_perception", "e_entirety")]
+        directionality[int(r["token_id"])] = _shared_wavelength_directionality(emb)
+
+    out: dict[int, float] = {}
+    for tid, nbrs in adj.items():
+        if not nbrs:
+            continue
+        mean_nbr_deg = sum(degree.get(n, 0) for n in nbrs) / len(nbrs)
+        centrality = mean_nbr_deg / (mean_nbr_deg + 10.0)
+        d = directionality.get(tid, 0.0)
+        out[tid] = math.sqrt(max(0.0, centrality) * max(0.0, d))
+    return out
+
+
+def observe_interactions(reps: int = 2, min_group: int = 1) -> dict:
+    """Feed per-axis interaction directions into the ACRE matrix so specialists
+    can emerge — one candidate mode per populated sense-axis.
+
+    With per-domain axis routing (see ``_SOURCE_AXIS_MAP``), concepts accrete on
+    distinct axes: web->vision, code->touch, self-docs->smell, wiki->body,
+    arxiv->brain, fiction->entirety. This groups the vocabulary by each concept's
+    *dominant* axis, and for every populated axis accumulates that group's
+    rectified peak-normalised deviation from the global mean — a direction
+    concentrated on that axis. ACRE then crystallizes a specialist for whichever
+    populated axis is novel relative to the hand-tuned base roster (the free axes
+    vision / touch / smell / body). Previously everything analytical collapsed to
+    one broad ~uniform mode; per-axis grouping is what exposes the distinct modes.
+    """
+    observed = 0
+    axis_poles: dict[int, list[float]] = {}
+    with _conn() as cn:
+        try:
+            rows = cn.execute(
+                "SELECT e_vision, e_touch, e_smell, e_body, e_brain, e_perception, "
+                "e_entirety FROM mesh_slm_embed"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+        embs = [[float(r[k]) for k in (
+            "e_vision", "e_touch", "e_smell", "e_body", "e_brain",
+            "e_perception", "e_entirety")] for r in rows]
+
+        if len(embs) >= 2:
+            gmean = [sum(e[j] for e in embs) / len(embs) for j in range(_EMBED_DIM)]
+            groups: dict[int, list[list[float]]] = {}
+            for e in embs:
+                ax = max(range(_EMBED_DIM), key=lambda k: e[k])   # dominant axis
+                groups.setdefault(ax, []).append(e)
+
+            free = _free_axes()
+            # Observe taken axes first, FREE axes last: the interaction-matrix EMA
+            # weights recent observations highest, so a free-axis mode ends up
+            # dominant (and, weighted 3x below, dominant by mass too) — giving the
+            # novel direction the best chance to clear acre_emerge's single
+            # dominant-eigenvector check.
+            for ax, grp in sorted(groups.items(), key=lambda kv: (kv[0] in free, -len(kv[1]))):
+                if len(grp) < min_group:
+                    continue
+                gm = [sum(e[j] for e in grp) / len(grp) for j in range(_EMBED_DIM)]
+                dev = [max(0.0, gm[j] - gmean[j]) for j in range(_EMBED_DIM)]
+                peak = max(dev)
+                if peak <= 1e-6:
+                    continue
+                pole = [d / peak for d in dev]
+                axis_poles[ax] = [round(x, 3) for x in pole]
+                # Weight free axes higher: a populated free axis (self-docs->smell,
+                # code->touch) can then dominate the matrix and emerge a NOVEL
+                # specialist, instead of always being drowned by the larger
+                # analytical/entirety corpora that only reinforce the base roster.
+                ax_reps = reps * (3 if ax in free else 1)
+                for _ in range(ax_reps):
+                    acre_observe(cn, pole, pole)
+                    observed += 1
+    return {"observed": observed,
+            "free_axes": sorted(_AXES[a] for a in _free_axes()),
+            "axis_poles": {_AXES[a]: p for a, p in axis_poles.items()}}
+
+
+def base_specialists() -> list[str]:
+    """The hand-tuned base specialist roster (always present, independent of ACRE)."""
+    return sorted(_SPECIALIST_BIASES)
+
+
+def _all_specialists() -> dict[str, list[float]]:
+    """The full roster — hand-tuned base + ACRE emergent — name -> bias vector."""
+    candidates: dict[str, list[float]] = {**_SPECIALIST_BIASES}
+    try:
+        with _conn() as cn:
+            candidates.update(_load_emergent_specialists(cn))
+    except Exception:
+        pass
+    return candidates
+
+
+def _weyl_tensor() -> list[float]:
+    """Current holographic-compression Weyl tensor Ψ₀–Ψ₄ from brain_kv, or a
+    neutral ``[0.5]×5`` when none has been written yet."""
+    try:
+        with _conn() as cn:
+            raw = _brain_kv_get(cn, "learnings:weyl_tensor", None)
+        v = json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(v, list) and len(v) >= 5:
+            return [float(x) for x in v[:5]]
+    except Exception:
+        pass
+    return [0.5] * 5
+
+
+def _weyl_resonant_coupling(bias: list[float], weyl: list[float]) -> float:
+    """Floquet coupling ∈[0,1] of a specialist to the current Weyl frequency.
+
+    The holographic Weyl tensor sets a resonant *phase* (driven by Ψ₄, the
+    Hawking-remnant / outgoing-Λ scalar that ``langevin_sigma_from_weyl`` also
+    keys on). Each specialist has a characteristic frequency ω from the axis it
+    leans on, and couples to that phase via the UEQGM Floquet factor cos(ω·φ):
+    specialists whose frequency resonates with the current Weyl phase couple
+    strongly, so the consensus *interacts on the Weyl* and shifts as the tensor
+    (i.e. the ongoing compression state) evolves.
+    """
+    weyl_phase = 2.0 * math.pi * _clip01(weyl[4] if len(weyl) > 4 else 0.5)
+    # Continuous frequency = the bias's center-of-mass axis (its spectral
+    # centroid), NOT the integer peak axis. An integer omega is degenerate under
+    # the Floquet cosine — Ψ₄ and 1-Ψ₄ would couple identically — whereas a
+    # continuous omega makes the coupling sensitive to the actual Weyl phase.
+    total = sum(bias) if bias else 0.0
+    centroid = (sum(i * bias[i] for i in range(len(bias))) / total) if total > 1e-9 else 0.0
+    omega = 1.0 + centroid                          # ∈ (1, 1+dim); non-integer in general
+    return _clip01(0.5 * (1.0 + _ueqgm_floquet_modulation(weyl_phase, omega)))
+
+
+def resonant_specialists(k: int = 3, reference: list[float] | None = None) -> list[tuple[str, float]]:
+    """The top-*k* specialists as a **Weyl-coupled consensus set** —
+    ``[(name, weight), ...]`` with weights summing to 1.
+
+    Each specialist's raw resonance (wavefunction overlap with the mesh state) is
+    modulated by its Floquet coupling to the current Weyl resonant frequency
+    (:func:`_weyl_resonant_coupling`), so the consensus is not static — it
+    *interacts on the Weyl with the resonant-frequency scalar* and re-weights as
+    the holographic compression tensor evolves. This is the associative
+    interaction from docs/MESH_EXPERT_SKILLS.md: a query is answered by the
+    weighted association of several resonant specialists, keeping any one
+    (including a newly emerged mode) dimensionally relative.
+    """
+    ref = reference if reference is not None else _mesh_state_7d()
+    weyl = _weyl_tensor()
+    scored: list[tuple[str, float]] = []
+    for name, bias in _all_specialists().items():
+        try:
+            ov = float(_ueqgm_wavefunction_overlap(bias, ref))
+        except Exception:
+            ov = 0.0
+        if ov <= 0.0:
+            continue
+        coupling = _weyl_resonant_coupling(bias, weyl)   # Weyl resonant-frequency interaction
+        weight = ov * (0.5 + 0.5 * coupling)             # frequency modulates, never fully mutes
+        scored.append((name, weight))
+    scored.sort(key=lambda t: t[1], reverse=True)
+    top = scored[:max(1, k)]
+    total = sum(w for _, w in top) or 1.0
+    return [(name, round(w / total, 4)) for name, w in top]
+
+
+def select_resonant_specialist(reference: list[float] | None = None) -> str | None:
+    """The single best-resonant specialist (base or emergent) — the head of the
+    consensus from :func:`resonant_specialists`. Used where one name is needed.
+    """
+    consensus = resonant_specialists(k=1, reference=reference)
+    return consensus[0][0] if consensus else None
+
+
+def compute_shared_understanding() -> dict:
+    """Compute the conceptualization of "the Other" that every ring can share.
+
+    Returns the self-state (live MESH), the Other-state (the collective mean
+    embedding — the aggregate "voice" of the ingested corpus), their mutual
+    resonance (wavefunction overlap = the shared-wavelength coherence), and the
+    ACRE principal interaction axis (the emergent shape of self⊗Other). Callers
+    persist this to ``brain_kv["entirety:the_other"]`` so Ring 5 synthesis, the
+    orchestrator, and the heart all read one shared understanding rather than
+    each deriving its own.
+    """
+    with _conn() as cn:
+        mesh = _mesh_state_7d()
+        other = _mean_embed_7d(cn)
+        try:
+            resonance = float(_ueqgm_wavefunction_overlap(other, mesh))
+        except Exception:
+            resonance = 0.0
+        axis: list[float] | None = None
+        stored = _meta_get(cn, _ACRE_META_MATRIX, None)
+        if isinstance(stored, list) and len(stored) == _EMBED_DIM:
+            try:
+                a, _eig, _tr = _acre_principal_axis(
+                    [[float(x) for x in row] for row in stored])
+                axis = [round(float(v), 4) for v in a]
+            except Exception:
+                axis = None
+    # The 7th (entirety) axis strength of the collective — how much experiential
+    # / fiction ("the Other") mass the shared mesh currently carries.
+    other_axis_strength = round(float(other[_ENTIRETY_AXIS]), 4) if len(other) > _ENTIRETY_AXIS else 0.0
+    return {
+        "self_state": [round(float(v), 4) for v in mesh],
+        "other_state": [round(float(v), 4) for v in other],
+        "resonance": round(resonance, 4),
+        "shared_hz": round(100.0 * resonance, 2),
+        "other_axis_strength": other_axis_strength,
+        "acre_axis": axis,
+        "at": datetime.now(timezone.utc).isoformat(),
     }
 
 

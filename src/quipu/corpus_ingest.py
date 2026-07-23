@@ -50,6 +50,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 from . import mesh_slm
@@ -58,18 +59,42 @@ from .ueqgm_engine import (
     mesh_compaction_summary,
     weyl_scalar_tensor,
 )
-from .gard_shard_model import langevin_sigma_from_weyl
+
+# gard_shard_model pulls in `cryptography` at import time (for the encrypted
+# shard protocol) which corpus_ingest does not otherwise need — only the pure
+# Weyl decompression helper. Gate it the same way the rest of the codebase
+# gates optional dependencies ("gates fail toward legacy behavior" per
+# LEARNINGS.md) so a missing `cryptography` install degrades corpus_ingest's
+# sigma reconstitution to a constant rather than blocking the whole module.
+try:
+    from .gard_shard_model import langevin_sigma_from_weyl
+except Exception:                       # pragma: no cover - optional dep path
+    def langevin_sigma_from_weyl(psi5_now, psi5_prev, *, kappa: float = 18.0,
+                                 sigma_base: float = 0.05) -> float:
+        return float(sigma_base)
 
 try:
     from . import brain_kv
 except Exception:                       # pragma: no cover - brain_kv is in-repo
     brain_kv = None                     # type: ignore
 
+try:
+    from . import systemic_refinement_agent as _refinement
+except Exception:                       # pragma: no cover - Ring 5 optional
+    _refinement = None                  # type: ignore
+
 log = logging.getLogger("quipu.corpus_ingest")
 
 _WEYL_TENSOR_KEY = "learnings:weyl_tensor"
 _WEYL_PACKED_KEY = "learnings:weyl_tensor_packed_b64"
 _WEYL_PREV_KEY = "learnings:weyl_tensor_prev"
+
+# Bounded, timestamped run history — the single "learnings:weyl_tensor" key only
+# ever holds the LATEST cycle, which can't answer "what happened today" versus
+# some earlier run. This gives daily_digest.py (and anything else that wants a
+# same-day view) one authoritative, timestamped feed to filter.
+_INGEST_HISTORY_KEY = "corpus_ingest:history"
+_INGEST_HISTORY_CAP = 200
 
 # The Well reference geometry (matches ueqgm_engine constants): 16 datasets, 4-D.
 _THE_WELL_SPATIAL_DIMS = 4
@@ -107,10 +132,26 @@ def unpack_weyl(data: bytes) -> tuple[float, float, float, float, float]:
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _WORD = re.compile(r"[A-Za-z][A-Za-z\-']+")
 _STOP = frozenset(
-    "the a an and or but if then of to in on at for with by from as is are was "
-    "were be been being this that these those it its it's we you they he she "
-    "not no do does did has have had will would can could should may might must "
-    "there their our your his her them us me i".split()
+    # articles / conjunctions / core prepositions
+    "the a an and or but nor so yet if then else of to in on at for with by from "
+    "as into onto upon over under above below between among through during before "
+    "after within without across around about against toward towards per via "
+    # pronouns / determiners
+    "this that these those it its it's we you they he she him her them us me i my "
+    "our your his their mine ours yours theirs who whom whose which what whatever "
+    "whichever each every either neither both all any some none such same other "
+    "another one ones "
+    # verbs (auxiliary / linking / common light verbs)
+    "is are was were be been being am do does did done doing have has had having "
+    "will would can could shall should may might must ought need dare used get "
+    "got gets getting make makes made made say said says "
+    # adverbs / fillers / connectives
+    "not no nor only just also too very more most less least much many few "
+    "so than then thus hence therefore however moreover meanwhile still even ever "
+    "never always often sometimes usually here there where when while because "
+    "since although though whereas whether "
+    # discourse / misc high-frequency function words
+    "up down out off again further once new like well back".split()
 )
 
 
@@ -148,6 +189,21 @@ def _salience(text: str) -> tuple[str, float, list[str]]:
     salience = sum(d for d, _, _ in top) / len(top)
     terms = [w for w, _ in freq.most_common(8)]
     return trace, max(0.0, min(1.0, salience)), terms
+
+
+def _concept_text(text: str, *, max_tokens: int = 60) -> str:
+    """Stopword-stripped, concept-dense rendering of *text* for the mesh feed.
+
+    train_round() tokenizes whatever it reads and builds quipu bigram edges
+    between consecutive tokens. If we feed it raw prose, the highest-frequency
+    tokens are function words (the/of/and) which then saturate the fixed 4096
+    torus vocab and — because eviction is lowest-frequency-first — can never be
+    displaced, starving real concepts. Feeding concept-only text makes the
+    bigrams concept->concept and keeps the vocab meaningful.
+    """
+    toks = [w for w in _WORD.findall((text or "").lower())
+            if w not in _STOP and len(w) > 2]
+    return " ".join(toks[:max_tokens])
 
 
 def _norm_entropy(counts: Counter) -> float:
@@ -252,7 +308,39 @@ def _arxiv_loader() -> Callable[[int], Iterator[str]]:
     return _load
 
 
+def _local_docs_loader() -> Callable[[int], Iterator[str]]:
+    """Ingest the System Entirety's OWN knowledge corpus — QUIPU's docs/ folder
+    (UEQGM engine notes, system-entirety maps, MESH schema, research, perception,
+    plasticity, synaptic-agent docs). This is the self-referential expansion the
+    external web sources can't provide: the mesh learning its own architecture,
+    in its own distinctive vocabulary (weyl, torus, quipu, holographic, floquet,
+    entirety, resonance) — a knowledge mode unlike arXiv or fiction, and a
+    genuine candidate for a novel ACRE specialist.
+    """
+    def _load(limit: int) -> Iterator[str]:
+        docs_dir = Path(__file__).resolve().parents[2] / "docs"
+        if not docs_dir.is_dir():
+            return
+        got = 0
+        for md in sorted(docs_dir.glob("*.md")):
+            try:
+                text = md.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            for i in range(0, len(text), 2000):
+                chunk = text[i:i + 2000]
+                if len(chunk) > 100:
+                    yield chunk
+                    got += 1
+                    if got >= limit:
+                        return
+    return _load
+
+
 SOURCES: dict[str, Source] = {
+    "local_docs":  Source("local_docs", "local", "QUIPU docs/ (System Entirety self-knowledge)",
+                          _local_docs_loader(),
+                          "UEQGM / MESH / system-entirety / research docs; the system's own corpus."),
     "fineweb":     Source("fineweb", "hf", "HuggingFaceFW/fineweb (CC web text)",
                           _hf_stream("HuggingFaceFW/fineweb", "text", config="sample-10BT"),
                           "Large filtered Common Crawl - core of modern web pretraining."),
@@ -279,7 +367,7 @@ SOURCES: dict[str, Source] = {
                           "Scientific abstracts across ML/OR/systems; no datasets dep."),
 }
 
-DEFAULT_SOURCES = ["fineweb", "wikipedia", "arxiv", "gutenberg"]
+DEFAULT_SOURCES = ["local_docs", "arxiv", "wikipedia", "fineweb", "gutenberg"]
 
 
 # ===========================================================================
@@ -402,6 +490,8 @@ def run_ingest(
     docs_per_source: int = 250,
     train_every: int = 40,
     compress_every: int = 120,
+    refine_every: int = 1,
+    max_tools_per_cycle: int = 2,
     max_seconds: float = 0.0,
     strength: float = 1.0,
 ) -> dict:
@@ -410,6 +500,14 @@ def run_ingest(
     Every ``train_every`` docs the mesh settles (``train_round``); every
     ``compress_every`` docs the accumulated cycle is distilled to its Weyl
     tensor, persisted to ``brain_kv``, and reported with its compaction ratio.
+
+    Every ``refine_every`` Weyl cycles (default: every cycle), this also runs
+    one Ring 5 refinement pass (``systemic_refinement_agent.run_strategy``):
+    ACRE gets a chance to crystallize a new emergent specialist, and
+    ``tool_forge`` scans the freshly-grown mesh corpus for clusters worth
+    auto-implementing as tools. This is what makes Ring 5 real rather than a
+    stub — the crawl feeds Ring 4 (Corpus), which this loop immediately hands
+    to Ring 5 (Refinement -> Toolforge) instead of leaving it inert.
     """
     keys = list(sources) if sources else list(DEFAULT_SOURCES)
     unknown = [k for k in keys if k not in SOURCES]
@@ -419,7 +517,9 @@ def run_ingest(
     started = time.monotonic()
     per_source: dict[str, dict] = {}
     weyl_snapshots: list[dict] = []
+    refinement_cycles: list[dict] = []
     total = 0
+    weyl_cycle_count = 0
 
     # Rolling accumulators for the current compression cycle.
     cyc_sal: list[float] = []
@@ -428,7 +528,7 @@ def run_ingest(
     cyc_bytes = 0.0
 
     def _emit_weyl() -> None:
-        nonlocal cyc_sal, cyc_terms, cyc_sources, cyc_bytes
+        nonlocal cyc_sal, cyc_terms, cyc_sources, cyc_bytes, weyl_cycle_count
         if not cyc_sal:
             return
         psi5, meta = compress_cycle_to_weyl(
@@ -440,11 +540,21 @@ def run_ingest(
         meta["sigma_reconstituted"] = round(decompress_sigma(), 6)
         meta["at"] = datetime.now(timezone.utc).isoformat()
         weyl_snapshots.append(meta)
+        weyl_cycle_count += 1
         log.info("[weyl] Ψ=%s ratio=%s scalar=%s remnant=%s σ=%s",
                  meta["psi5"], meta.get("compaction_ratio"),
                  meta.get("compaction_scalar"), meta["hawking_remnant_score"],
                  meta["sigma_reconstituted"])
         cyc_sal, cyc_terms, cyc_sources, cyc_bytes = [], Counter(), Counter(), 0.0
+
+        # Ring 4 -> Ring 5: hand the freshly-compressed corpus to refinement.
+        if _refinement is not None and refine_every > 0 and weyl_cycle_count % refine_every == 0:
+            try:
+                cycle = _refinement.run_strategy(max_tools=max_tools_per_cycle)
+                refinement_cycles.append(cycle)
+                log.info("[ring5] refinement cycle: actions=%s", cycle.get("actions"))
+            except Exception as exc:
+                log.debug("[ring5] refinement cycle failed: %s", exc)
 
     for key in keys:
         src = SOURCES[key]
@@ -458,8 +568,16 @@ def run_ingest(
                 trace, sal, terms = _salience(raw)
                 if len(trace) < 60:
                     continue
+                # Feed concept-dense (stopword-stripped) text into the mesh
+                # corpus feed. train_round() reads this and builds the vocab +
+                # quipu edges. (The old ingest_expert_trace path only created
+                # tokens, never edges, and kept stopwords - which saturated the
+                # 4096 vocab with function words and starved real concepts.)
+                concept = _concept_text(trace)
+                if len(concept.split()) < 3:
+                    continue
                 try:
-                    mesh_slm.ingest_expert_trace(f"corpus_{key}", trace, strength=strength)
+                    mesh_slm.feed_corpus(concept, source=f"corpus_{key}")
                 except Exception as exc:
                     log.debug("[ingest] mesh feed failed: %s", exc)
                     continue
@@ -492,6 +610,9 @@ def run_ingest(
     _emit_weyl()
 
     latest = weyl_snapshots[-1] if weyl_snapshots else {}
+    tools_forged_total = sum(
+        (c.get("forge_summary") or {}).get("tools_forged", 0) for c in refinement_cycles
+    )
     result = {
         "status": "ok",
         "at": datetime.now(timezone.utc).isoformat(),
@@ -501,10 +622,47 @@ def run_ingest(
         "weyl_cycles": len(weyl_snapshots),
         "weyl_latest": latest,
         "weyl_history": weyl_snapshots,
+        "refinement_cycles": refinement_cycles,
+        "tools_forged_total": tools_forged_total,
     }
-    log.info("[ingest] done: %s docs, %s Weyl cycles, %ss",
-             total, len(weyl_snapshots), result["elapsed_s"])
+    log.info("[ingest] done: %s docs, %s Weyl cycles, %s Ring-5 cycles (%s tools forged), %ss",
+             total, len(weyl_snapshots), len(refinement_cycles), tools_forged_total,
+             result["elapsed_s"])
+    _record_ingest_run(result)
     return result
+
+
+def _record_ingest_run(result: dict) -> None:
+    """Append a compact summary of this run to the bounded history in brain_kv."""
+    if brain_kv is None:
+        return
+    try:
+        entry = {
+            "ts": result["at"],
+            "total_condensed": result["total_condensed"],
+            "elapsed_s": result["elapsed_s"],
+            "per_source": {k: v.get("ingested", 0) for k, v in result["per_source"].items()},
+            "weyl_cycles": result["weyl_cycles"],
+            "weyl_latest_psi5": (result.get("weyl_latest") or {}).get("psi5"),
+            "compaction_ratio": (result.get("weyl_latest") or {}).get("compaction_ratio"),
+            "compaction_scalar": (result.get("weyl_latest") or {}).get("compaction_scalar"),
+            "tools_forged_total": result["tools_forged_total"],
+        }
+        history = brain_kv.kv_get_json(_INGEST_HISTORY_KEY, [])
+        if not isinstance(history, list):
+            history = []
+        history.append(entry)
+        brain_kv.kv_set_json(_INGEST_HISTORY_KEY, history[-_INGEST_HISTORY_CAP:])
+    except Exception as exc:
+        log.debug("corpus_ingest: history record failed: %s", exc)
+
+
+def ingest_history() -> list[dict]:
+    """Return the bounded history of past run_ingest() calls (newest last)."""
+    if brain_kv is None:
+        return []
+    h = brain_kv.kv_get_json(_INGEST_HISTORY_KEY, [])
+    return h if isinstance(h, list) else []
 
 
 def _cli() -> None:
@@ -514,11 +672,25 @@ def _cli() -> None:
     ap.add_argument("--docs", type=int, default=250, help="max documents per source")
     ap.add_argument("--train-every", type=int, default=40)
     ap.add_argument("--compress-every", type=int, default=120, help="docs per Weyl cycle")
+    ap.add_argument("--refine-every", type=int, default=1, help="Weyl cycles per Ring-5 refinement pass; 0 disables")
+    ap.add_argument("--max-tools-per-cycle", type=int, default=2)
     ap.add_argument("--max-seconds", type=float, default=0.0, help="0 = no time limit")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--reset", action="store_true",
+                    help="clear the (possibly stopword-saturated) mesh vocab/edges/feed before ingesting")
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.reset:
+        info = mesh_slm.reset_mesh_learning()
+        print(f"Mesh learning state reset - cleared {info.get('cleared')}")
+        try:
+            from . import tool_forge
+            tinfo = tool_forge.clean_generated_tools()
+            print(f"Forged tools cleared - removed {tinfo.get('removed')} files")
+        except Exception as exc:
+            print(f"(tool cleanup skipped: {exc})")
 
     if args.list:
         try:
@@ -528,7 +700,7 @@ def _cli() -> None:
             hf_ok = False
         print("Available sources:")
         for k, s in SOURCES.items():
-            flag = "" if s.kind == "http" or hf_ok else "  (needs: pip install datasets)"
+            flag = "" if s.kind in ("http", "local") or hf_ok else "  (needs: pip install datasets)"
             print(f"  {k:12s} [{s.kind}] {s.label}{flag}")
             if s.note:
                 print(f"               {s.note}")
@@ -538,7 +710,8 @@ def _cli() -> None:
 
     keys = [k.strip() for k in args.sources.split(",") if k.strip()]
     res = run_ingest(keys, docs_per_source=args.docs, train_every=args.train_every,
-                     compress_every=args.compress_every, max_seconds=args.max_seconds)
+                     compress_every=args.compress_every, refine_every=args.refine_every,
+                     max_tools_per_cycle=args.max_tools_per_cycle, max_seconds=args.max_seconds)
     print(f"\nCondensed {res['total_condensed']} documents into {res['weyl_cycles']} Weyl cycles "
           f"in {res['elapsed_s']}s")
     w = res.get("weyl_latest") or {}
@@ -549,6 +722,12 @@ def _cli() -> None:
         print(f"  hawking remnant score   : {w.get('hawking_remnant_score')}")
         print(f"  packed 20-byte (b64)    : {w.get('packed_b64')}")
         print(f"  reconstituted sigma     : {w.get('sigma_reconstituted')}")
+    print(f"\nRing 5: {len(res['refinement_cycles'])} refinement cycles, "
+          f"{res['tools_forged_total']} tools forged")
+    if res["refinement_cycles"]:
+        last = res["refinement_cycles"][-1]
+        print(f"  last cycle actions      : {last.get('actions')}")
+        print(f"  acre specialists        : {last.get('acre_specialists')}")
 
 
 if __name__ == "__main__":

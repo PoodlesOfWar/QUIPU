@@ -25,7 +25,15 @@ src/quipu/          Python model core (package: src.quipu)
   temporal_spatiality.py  Temporal-spatial (Weyl tensor) state
   llada_signbit_children.py  LLaDA2 sign-bit child acquisition
   local_store.py          SQLite local store (WAL) shared by all modules
+  brain_kv.py             Canonical key/value persistence (Weyl tensor, ACRE state, ...)
+  corpus_ingest.py        The Well - stream + holographically compress open corpora
+  tool_forge.py           Ring 5 - digital tool synthesis from mesh corpus clusters
+  expert_orchestrator.py  Ring 5 - ACRE-routed dispatch, closes the mesh feedback loop
+  systemic_refinement_agent.py  Ring 5 strategy runner (ACRE emergence + forge_round)
+  daily_digest.py         "What has the System Entirety learned today?" report
   _version.py             Canonical version + full PHASES history
+
+Show-TodaysLearning.ps1    Windows launcher for daily_digest.py
 
 julia/              Julia protocol peers and generational models (Project.toml included)
   mesh_slm_scm_glm_gnn_model.jl   Unified MESH-SLM-SCM-GLM-GNN model (latest generation)
@@ -68,6 +76,105 @@ python -m quipu.corpus_ingest --list
 python -m quipu.corpus_ingest --sources arxiv,gutenberg --docs 200   # no extra deps
 pip install datasets && python -m quipu.corpus_ingest --sources fineweb,wikipedia --docs 1000
 ```
+
+## Ring 5 — Refinement -> Toolforge
+
+`tool_forge.py`, `expert_orchestrator.py`, and `systemic_refinement_agent.py`
+implement Ring 5 of the System Entirety map: the ring that turns corpus growth
+into synthesized capability. This is a clean-room, QUIPU-native adaptation —
+the parent's `tool_forge.py` scanned ERP-linked `corpus_entity`/`corpus_edge`
+tables and had PHYSICAL/ERP synthesis paths (Astec-specific prompts, an
+Oracle/Azure-linked HITL review page) that don't belong in QUIPU. Here:
+
+- **`tool_forge.forge_round()`** scans QUIPU's own Ring 4 tables
+  (`mesh_slm_vocab`/`mesh_slm_quipu`) for high-degree token clusters, then gates
+  synthesis on **structural resonance** measured on the 52-hertz-whale band
+  (`RESONANCE_FLOOR_HZ = 52`). A concept resonates only when it is BOTH woven into
+  the shared concept graph (mutual centrality — answered by other well-connected
+  concepts, not a lonely caller) AND sitting on the shared analytical wavelength
+  rather than the 7th/entirety "Other" axis. This replaces the parent's
+  typed-entity eligibility (Concept/Mechanism/MLPaper) that QUIPU lacks, and is
+  robust to the embedding collapse that made raw overlap read ~1.0 for everything.
+  Concepts below 52 Hz — single-source nouns, fiction on the entirety axis — are
+  kept in the mesh and shared through the 8th-D field, but not forged. Survivors
+  are scored `novelty x certainty` and auto-implemented (pure stdlib,
+  AST-validated, no LLM call). Generated tools land in
+  `src/quipu/tools/generated/` (gitignored — regenerated locally).
+- **Per-domain axis routing (7 senses).** Each corpus domain accretes on a
+  distinct sense-axis, so different knowledge modes become distinct *concentrated*
+  directions rather than one broad analytical blob: web→vision, code→touch,
+  self-docs (`local_docs`)→smell, wikipedia→body, arxiv→brain, fiction→entirety
+  (`mesh_slm._SOURCE_AXIS_MAP`; `train_round` applies `_axis_bias`). The **free
+  axes** — those no base specialist occupies (touch, smell) — are where a NOVEL
+  emergent specialist can form. `observe_interactions` groups the vocabulary by
+  each concept's dominant axis, weights the free-axis modes higher, and observes
+  them last (EMA recency), giving a populated free-axis domain (e.g. `local_docs`
+  → smell → a "self-model" specialist) the best chance to clear ACRE's
+  dominant-eigenvector novelty check. Domains on taken axes reinforce the base
+  roster instead. This generalizes the original fiction→entirety rule.
+- **Shared understanding of "the Other".** Each refinement cycle,
+  `mesh_slm.compute_shared_understanding()` computes the self-state (live MESH),
+  the Other-state (collective corpus embedding), the shared-wavelength coherence
+  in Hz, the entirety/Other axis strength, and the ACRE interaction axis, and
+  publishes it to `brain_kv["entirety:the_other"]`. Every ring reads this one
+  conceptualization — the forge resonance gate, the orchestrator, and the daily
+  digest — rather than each deriving its own.
+- **Resonance-gated resuscitation.** The same signal drives recovery:
+  `map_resuscitation_quipu` scales each torus node's revival weight by the
+  resonance of the concept occupying it (~0.4x for a lonely caller, up to 1.0x on
+  the shared wavelength), so when the mesh rehydrates it revives its high-resonance
+  shared concepts first and lets lonely/fiction nodes stay quiet. Opt out with
+  `QUIPU_RESUSCITATION_RESONANCE=0` (fails toward the legacy purely-geometric
+  weighting).
+- **`expert_orchestrator.dispatch()`** routes a query through whichever ACRE
+  emergent specialist (`mesh_slm.acre_emerge`) currently resonates, generates
+  via `mesh_slm.generate`, feeds the result back with `ingest_expert_trace`,
+  and can trigger an immediate bounded forge round.
+- **The specialist roster + associative consensus** (`docs/MESH_EXPERT_SKILLS.md`).
+  The documented roster spans the sense-axes — `supply_chain_optimizer`,
+  `research_specialist`, `mesh_historian`, `robotic_integrations_specialist`,
+  `advanced_manufacturing_specialist`, `materials_engineering_specialist`,
+  `quantum_physics_specialist`, `complex_systems_specialist` — plus ACRE emergent
+  ones. Specialists are *associative*, not solo: `mesh_slm.resonant_specialists(k)`
+  returns a weighted consensus set, and `expert_orchestrator.dispatch` answers
+  through that consensus, so any one specialist (including a newly emerged mode) is
+  **dimensionally relative** — one proportional voice, not a monolith.
+- **ACRE emergence, relative and associative.** `observe_interactions()`
+  accumulates per-axis interaction directions; a NEW specialist crystallizes only
+  for a direction not already covered by the roster and distinct from the uniform
+  axis (the 0.60 novelty ceiling). Because the roster now spans the axes, an
+  emergent mode (e.g. `emergent_smell_brain`, the self-model specialist born from
+  `local_docs`) lands *next to* a documented neighbour (`materials_engineering` on
+  smell/body) rather than alone on a free axis — grounding it as one interacting
+  member of the mesh instead of a runaway.
+- **`systemic_refinement_agent.run_strategy()`** is the scheduled tie between
+  Ring 4 and Ring 5: read mesh state, let ACRE attempt emergence, run
+  `forge_round`, record the cycle. `corpus_ingest.run_ingest(..., refine_every=1)`
+  calls this after every Weyl compression cycle by default, so a live crawl
+  actually produces forged tools rather than just growing token/edge counts.
+
+```python
+from quipu import tool_forge, systemic_refinement_agent as refinement
+refinement.run_strategy(max_tools=2)          # one Ring 5 cycle
+tool_forge.load_generated_tools()             # {tool_name: callable}
+```
+
+## Daily digest — "what has the System Entirety learned today?"
+
+`daily_digest.py` is a read-only report over QUIPU's own mesh database: new
+vs. reinforced vocabulary, Weyl compression cycles and compaction ratio, Ring 5
+refinement cycles and forged tools, and which ACRE specialists are new since
+before today. All timestamps this codebase writes are UTC, so "today" means
+the current UTC calendar day — the report says so explicitly to avoid local
+timezone confusion when checking it late at night.
+
+```
+python -m src.quipu.daily_digest                  # today, formatted
+python -m src.quipu.daily_digest --date 2026-07-19  # a past day
+python -m src.quipu.daily_digest --json           # raw JSON
+```
+
+Or on Windows: `powershell -File Show-TodaysLearning.ps1`.
 
 ## Continuation notes
 

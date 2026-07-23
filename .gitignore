@@ -14,6 +14,9 @@ venv/
 *.log
 logs/
 
+# Auto-forged tools (regenerated locally by tool_forge; not source)
+src/quipu/tools/generated/
+
 # Secrets
 .env
 *.env
