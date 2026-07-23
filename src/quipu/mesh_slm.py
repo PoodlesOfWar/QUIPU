@@ -137,7 +137,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from .local_store import open_conn as _open_conn
 from .ueqgm_engine import (
@@ -2044,6 +2044,110 @@ def _proximity(a: tuple[int, int], b: tuple[int, int]) -> float:
 
 
 # ---------------------------------------------------------------------------
+# STP-style geodesic diagnostic (docs/STP_DIAGNOSTIC_PLAN.md)
+#
+# A passive, flagged observation that samples s < r < t from each round's
+# token trajectories and measures the Semantic-Tube-Prediction gap
+# ``1 - cos(h_t - h_r, h_r - h_s)`` in two spaces:
+#   * the learned 7-D embedding (paper-faithful analogue of a hidden state)
+#   * an isometric R^4 flat-torus embedding of each token's (i, j) vocab cell
+#     (wrap-aware by construction — the QUIPU-native test with no paper analogue)
+# Purely read-only: computing it cannot change training outcomes, so it
+# defaults on like phase_weight/overlap/mesh_field_8d, and every sample path
+# fails toward legacy behaviour. Folding the signal into eta is a deliberately
+# deferred Phase 2 (see the plan), never done here.
+# ---------------------------------------------------------------------------
+_STP_DIAG_ENV: str = "QUIPU_STP_DIAGNOSTIC"
+_STP_HISTORY_CAP: int = 200          # rolling window kept in mesh_slm_meta
+
+
+def _stp_diagnostic_enabled() -> bool:
+    """True unless ``QUIPU_STP_DIAGNOSTIC`` is explicitly falsy (default: on).
+
+    Purely observational — computing it cannot change training outcomes — so it
+    defaults on like phase_weight/overlap/mesh_field_8d. Mirrors
+    :func:`_acre_enabled`'s flag convention exactly.
+    """
+    return str(os.environ.get(_STP_DIAG_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _stp_cos_gap(
+    a: Sequence[float], b: Sequence[float], c: Sequence[float]
+) -> float | None:
+    """``1 - cos(c - b, b - a)`` — the Semantic-Tube-Prediction loss.
+
+    Generic over any equal-length vector triple (works for the 7-D embedding and
+    for the R^4 torus embedding below). Returns ``None`` when either difference
+    vector is ~0 (degenerate/duplicate points — an undefined direction, not a
+    signal). Result lies in ``[0, 2]`` (cosine-distance range).
+    """
+    bc = [ci - bi for ci, bi in zip(c, b)]
+    ab = [bi - ai for bi, ai in zip(b, a)]
+    nb = math.sqrt(sum(v * v for v in bc))
+    na = math.sqrt(sum(v * v for v in ab))
+    if nb < 1e-9 or na < 1e-9:
+        return None
+    dot = sum(x * y for x, y in zip(bc, ab))
+    cos = max(-1.0, min(1.0, dot / (nb * na)))
+    return 1.0 - cos
+
+
+def _torus_point_r4(cell: tuple[int, int]) -> list[float]:
+    """Isometric flat-torus embedding of a vocab cell into R^4.
+
+    Maps ``(i, j)`` to ``(cosθ, sinθ, cosφ, sinφ)`` with ``θ = 2π·i/_TORUS_N``,
+    ``φ = 2π·j/_TORUS_N``. Wrap-aware by construction — sin/cos are periodic, so
+    cell ``(63, 0)`` and ``(0, 0)`` map to adjacent points in R^4, unlike raw
+    ``(i, j)`` differencing which would show a jump of ``_TORUS_N - 1``.
+    """
+    theta = 2.0 * math.pi * cell[0] / float(_TORUS_N)
+    phi = 2.0 * math.pi * cell[1] / float(_TORUS_N)
+    return [math.cos(theta), math.sin(theta), math.cos(phi), math.sin(phi)]
+
+
+def _sample_stp_triplet(n: int) -> tuple[int, int, int] | None:
+    """Random ``0 <= s < r < t < n``. ``None`` if ``n < 3`` (chunk too short)."""
+    if n < 3:
+        return None
+    s, r, t = sorted(random.sample(range(n), 3))
+    return s, r, t
+
+
+def _embed7_for_token(
+    cn: sqlite3.Connection, token_id: int
+) -> list[float] | None:
+    """Fetch a single token's 7-D embedding row, or ``None`` if absent."""
+    row = cn.execute(
+        "SELECT e_vision, e_touch, e_smell, e_body, e_brain, e_perception, "
+        "e_entirety FROM mesh_slm_embed WHERE token_id=?",
+        (token_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return [
+        float(row[k] or 0.0)
+        for k in (
+            "e_vision", "e_touch", "e_smell", "e_body",
+            "e_brain", "e_perception", "e_entirety",
+        )
+    ]
+
+
+def _torus_cell_for_token(
+    cn: sqlite3.Connection, token_id: int
+) -> tuple[int, int] | None:
+    """Fetch a single token's ``(i, j)`` torus cell, or ``None`` if absent."""
+    row = cn.execute(
+        "SELECT i, j FROM mesh_slm_vocab WHERE token_id=?", (token_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    return int(row["i"]), int(row["j"])
+
+
+# ---------------------------------------------------------------------------
 # Corpus stream — pull training text from the Brain's own state
 # ---------------------------------------------------------------------------
 def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[tuple[str, str]]:
@@ -2194,6 +2298,11 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
         loss_acc = 0.0
         n_loss = 0
 
+        # STP-style geodesic diagnostic accumulators (docs/STP_DIAGNOSTIC_PLAN.md).
+        stp_embed_samples: list[float] = []
+        stp_torus_samples: list[float] = []
+        stp_diag_on = _stp_diagnostic_enabled()
+
         with _conn() as cn:
             # Compute 8th-D field once so it can be stored in meta
             mesh_field = _mesh_field_8d(cn, mesh)
@@ -2244,6 +2353,42 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                     )
                     n_tokens += 1
 
+                # Step 1.5: STP-style geodesic diagnostic — sample once per
+                # chunk from the just-updated trajectory. Sampling *after* the
+                # embedding update means h_r/h_t reflect the same post-update
+                # state the paper's teacher-forced h_t represents. Read-only;
+                # both try/except blocks are unconditional pass-throughs by
+                # design — the diagnostic must never fail a training round,
+                # mirroring the ACRE step's discipline below.
+                if stp_diag_on:
+                    triplet = _sample_stp_triplet(len(ids))
+                    if triplet is not None:
+                        si, ri, ti = triplet
+                        try:
+                            h_s = _embed7_for_token(cn, ids[si])
+                            h_r = _embed7_for_token(cn, ids[ri])
+                            h_t = _embed7_for_token(cn, ids[ti])
+                            if h_s is not None and h_r is not None and h_t is not None:
+                                gap = _stp_cos_gap(h_s, h_r, h_t)
+                                if gap is not None:
+                                    stp_embed_samples.append(gap)
+                        except Exception:
+                            pass
+                        try:
+                            cell_s = _torus_cell_for_token(cn, ids[si])
+                            cell_r = _torus_cell_for_token(cn, ids[ri])
+                            cell_t = _torus_cell_for_token(cn, ids[ti])
+                            if cell_s and cell_r and cell_t:
+                                gap_t = _stp_cos_gap(
+                                    _torus_point_r4(cell_s),
+                                    _torus_point_r4(cell_r),
+                                    _torus_point_r4(cell_t),
+                                )
+                                if gap_t is not None:
+                                    stp_torus_samples.append(gap_t)
+                        except Exception:
+                            pass
+
                 # Step 2: quipu bigrams (src → dst weight += eta_q · (1 − w))
                 for src, dst in zip(ids, ids[1:]):
                     row = cn.execute(
@@ -2282,6 +2427,34 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             _meta_set(cn, "last_phase_weight", phase_weight)
             _meta_set(cn, "last_wavefunction_overlap", round(overlap, 4))
             _meta_set(cn, "last_mesh_field_8d", round(mesh_field, 4))
+
+            # ── STP-style geodesic diagnostic — aggregate + persist ───────────
+            # Rolling histories let the paper's P1 signature (loss plateaus while
+            # the STP gap keeps falling) be checked at all; both are additive
+            # meta keys (nothing removed or altered).
+            avg_stp_embed = (
+                sum(stp_embed_samples) / len(stp_embed_samples)
+                if stp_embed_samples else None
+            )
+            avg_stp_torus = (
+                sum(stp_torus_samples) / len(stp_torus_samples)
+                if stp_torus_samples else None
+            )
+            if avg_stp_embed is not None:
+                _meta_set(cn, "last_stp_embed_gap", round(avg_stp_embed, 6))
+                hist = _meta_get(cn, "stp_embed_gap_history", []) or []
+                hist.append(round(avg_stp_embed, 6))
+                _meta_set(cn, "stp_embed_gap_history", hist[-_STP_HISTORY_CAP:])
+            if avg_stp_torus is not None:
+                _meta_set(cn, "last_stp_torus_gap", round(avg_stp_torus, 6))
+                hist_t = _meta_get(cn, "stp_torus_gap_history", []) or []
+                hist_t.append(round(avg_stp_torus, 6))
+                _meta_set(cn, "stp_torus_gap_history", hist_t[-_STP_HISTORY_CAP:])
+            # last_loss is a single overwritten scalar today; you cannot detect a
+            # plateau from one number, so keep a capped rolling loss history too.
+            loss_hist = _meta_get(cn, "loss_history", []) or []
+            loss_hist.append(round(avg_loss, 6))
+            _meta_set(cn, "loss_history", loss_hist[-_STP_HISTORY_CAP:])
 
             # ── ACRE — accumulate multi-axial interaction; attempt emergence ──
             try:
@@ -2341,6 +2514,12 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             "phase_weight": round(phase_weight, 4),
             "wavefunction_overlap": round(overlap, 4),
             "mesh_field_8d": round(mesh_field, 4),
+            "stp_embed_gap": (
+                round(avg_stp_embed, 6) if avg_stp_embed is not None else None
+            ),
+            "stp_torus_gap": (
+                round(avg_stp_torus, 6) if avg_stp_torus is not None else None
+            ),
             "acre": acre,
             "mcd": mcd_result,
             "elapsed_ms": elapsed_ms,
@@ -2934,6 +3113,67 @@ def _hostname() -> str:
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
+def stp_diagnostic_trend(
+    cn: sqlite3.Connection | None = None,
+    window: int = 20,
+    loss_epsilon: float = 1e-3,
+) -> dict:
+    """Check the paper's P1 signature from accumulated STP diagnostic history.
+
+    Compares the trailing-window slope of ``loss_history`` against the slopes of
+    ``stp_embed_gap_history`` / ``stp_torus_gap_history``. Slope is defined as
+    ``mean(last window) - mean(previous window)``. The P1 signature holds for a
+    series when the ordinary loss has plateaued (``|loss_slope| < loss_epsilon``)
+    while the STP gap keeps falling (``stp_slope < 0``) over the same window.
+
+    Read-only and standalone — used for manual/notebook validation once enough
+    rounds have accumulated, deliberately **not** called from ``train_round``.
+    Returns per-series slopes plus boolean P1 flags; ``insufficient_data`` is
+    True when any series has fewer than ``2 * window`` points to compare.
+    """
+    def _slope(series: list[float]) -> float | None:
+        if len(series) < 2 * window:
+            return None
+        prev = series[-2 * window:-window]
+        last = series[-window:]
+        return (sum(last) / len(last)) - (sum(prev) / len(prev))
+
+    own_conn = cn is None
+    if own_conn:
+        _cm = _conn()
+        cn = _cm.__enter__()
+    try:
+        loss_hist = _meta_get(cn, "loss_history", []) or []
+        embed_hist = _meta_get(cn, "stp_embed_gap_history", []) or []
+        torus_hist = _meta_get(cn, "stp_torus_gap_history", []) or []
+    finally:
+        if own_conn:
+            _cm.__exit__(None, None, None)
+
+    loss_slope = _slope([float(x) for x in loss_hist])
+    embed_slope = _slope([float(x) for x in embed_hist])
+    torus_slope = _slope([float(x) for x in torus_hist])
+    loss_flat = loss_slope is not None and abs(loss_slope) < loss_epsilon
+
+    def _p1(stp_slope: float | None) -> bool:
+        return bool(loss_flat and stp_slope is not None and stp_slope < 0.0)
+
+    return {
+        "window": window,
+        "loss_epsilon": loss_epsilon,
+        "n_loss": len(loss_hist),
+        "n_stp_embed": len(embed_hist),
+        "n_stp_torus": len(torus_hist),
+        "loss_slope": loss_slope,
+        "loss_plateaued": loss_flat,
+        "stp_embed_slope": embed_slope,
+        "stp_torus_slope": torus_slope,
+        "p1_embed": _p1(embed_slope),
+        "p1_torus": _p1(torus_slope),
+        "insufficient_data": None in (loss_slope, embed_slope, torus_slope),
+    }
+
+
 def state_summary() -> dict:
     """Return a snapshot of SLM state for diagnostics / dashboards."""
     with _conn() as cn:
@@ -2952,6 +3192,8 @@ def state_summary() -> dict:
         last_phase_weight = _meta_get(cn, "last_phase_weight", None)
         last_overlap = _meta_get(cn, "last_wavefunction_overlap", None)
         last_mesh_field = _meta_get(cn, "last_mesh_field_8d", None)
+        last_stp_embed_gap = _meta_get(cn, "last_stp_embed_gap", None)
+        last_stp_torus_gap = _meta_get(cn, "last_stp_torus_gap", None)
         mesh = _mesh_state_7d()
         mesh_field = _mesh_field_8d(cn, mesh)
         try:
@@ -2978,6 +3220,8 @@ def state_summary() -> dict:
         "last_mesh_field_8d":    last_mesh_field,
         "last_phase_weight":     last_phase_weight,
         "last_wavefunction_overlap": last_overlap,
+        "last_stp_embed_gap":    last_stp_embed_gap,
+        "last_stp_torus_gap":    last_stp_torus_gap,
         "patched_local_executor": _PATCHED,
         "resuscitation_quipu":   resuscitation,
         "acre_specialists":      emergent,

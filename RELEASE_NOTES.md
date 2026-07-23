@@ -1,5 +1,30 @@
 # Release Notes
 
+## v0.25.0 - 2026-07-23
+
+**STP-Style Geodesic Diagnostic in `train_round()`**
+
+### Added
+
+- **Passive geodesic diagnostic** - each training round now samples `s < r < t` token triplets and measures the Semantic-Tube-Prediction gap `1 − cos(h_t − h_r, h_r − h_s)` in two spaces: the learned 7-D embedding and an isometric R^4 flat-torus embedding of each token's vocab cell. Reporting both lets us tell whether any geodesic signal comes from the learned embedding, the torus placement (graph topology), or both — the empirical test of whether the torus placement is doing real geodesic work.
+- **Rolling histories + trend check** - `stp_embed_gap_history`, `stp_torus_gap_history`, and `loss_history` (capped at 200) persist in `mesh_slm_meta`, and a read-only `stp_diagnostic_trend()` compares their trailing-window slopes to test the paper's P1 signature (loss plateaus while the STP gap keeps falling).
+- **7 focused tests** - summary-field presence/range, collinear→0, orthogonal→1, degenerate→None, R^4 wrap-awareness, disabled-by-flag, and history-cap enforcement.
+
+### Changed
+
+- **`train_round()` and `state_summary()`** now surface `stp_embed_gap` / `stp_torus_gap` next to the existing UEQGM fields.
+- **Version metadata** - synchronized root `VERSION` and canonical `src/quipu/_version.py` at `0.25.0`.
+
+### Compatibility
+
+- Opt-out via `QUIPU_STP_DIAGNOSTIC` (default on). Purely observational and wrapped in fail-safe `try/except` — it can never alter or fail a training round. No schema migration; no learning-rate coupling (that is a deferred Phase 2). The only change touching prior behavior is the additive `loss_history` meta key, needed so a plateau is detectable at all.
+
+### Verification
+
+- Python compilation and the 7 new focused tests should be run locally (`python3 -m py_compile src/quipu/mesh_slm.py`; `pytest tests/test_mesh_slm.py`). The authoring environment's sandboxed shell was unavailable at commit time.
+
+---
+
 ## v0.24.1 - 2026-07-10
 
 **MESH-Conditioned Sigmoidal Realization for Paired Agents**
