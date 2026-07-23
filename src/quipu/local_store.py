@@ -39,21 +39,16 @@ def _conn():
         cn.close()
 
 
-def open_conn(timeout: float = 20, path: str | Path | None = None) -> sqlite3.Connection:
-    """Return a WAL-mode sqlite3 connection to the Brain DB.
-
-    Callers are responsible for closing the connection.  Use this instead of
-    calling ``sqlite3.connect(db_path(), ...)`` directly so that WAL mode and
-    synchronous=NORMAL are applied uniformly, even if the database file is
-    recreated from a backup.
-    """
+def open_conn(timeout: float = 60, path: str | Path | None = None) -> sqlite3.Connection:
     target = Path(path).expanduser().resolve() if path is not None else db_path()
     cn = sqlite3.connect(str(target), timeout=timeout)
     cn.execute("PRAGMA journal_mode=WAL")
     cn.execute("PRAGMA synchronous=NORMAL")
-    cn.execute("PRAGMA wal_autocheckpoint=100")  # checkpoint every ~400 KB
+    cn.execute("PRAGMA busy_timeout=60000")
+    cn.execute("PRAGMA wal_autocheckpoint=100")
     cn.row_factory = sqlite3.Row
     return cn
+
 
 
 def _migrate_part_category(cn: sqlite3.Connection) -> None:

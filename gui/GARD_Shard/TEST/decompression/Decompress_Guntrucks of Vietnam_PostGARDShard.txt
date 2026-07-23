@@ -1,0 +1,14 @@
+Decompress fileok · 0.008s
+Jul 23, 02:52 PM
+
+{
+ "engine": "QUIPU High-Performance Neural Memory & GARD Shard Unpacking",
+ "source": "Gun Trucks of Vietnam.pptx.weyl.bin",
+ "bytes": 20,
+ "data_consistency_statistics": {
+  "dissociation_error_percent": "0.000000%",
+  "data_consistency_score": "1.000000",
+  "integrity_status": "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
+ },
+ "status": "reconstituted neural state from memory"
+}

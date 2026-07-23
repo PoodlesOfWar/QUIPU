@@ -1,0 +1,16 @@
+Decompress fileok · 0.01s
+Jul 23, 03:10 PM
+
+{
+ "engine": "QUIPU High-Performance Neural Memory & GARD Shard Unpacking",
+ "source": "Gun Trucks of Vietnam.pptx.gard.weyl.bin",
+ "output_decompressed": "gui\\GARD_Shard\\decompression\\Gun Trucks of Vietnam.pptx",
+ "in_bytes": 645880,
+ "restored_bytes": 703908,
+ "gard_shard_info": {
+  "protocol": "gard-shard/v1",
+  "domain": "SiCi_SQRT(-1)",
+  "shard_folder": "gui\\GARD_Shard\\decompression",
+  "reconstituted_file": "Gun Trucks of Vietnam.pptx",
+  "reconstituted_path": "gui\\GARD_Shard\\decompression\\Gun Trucks of Vietnam.pptx",
+  "payload_sha256": "5bba26aadfa310cfb42372add63c6f218a9c

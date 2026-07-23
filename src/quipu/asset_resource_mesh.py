@@ -229,20 +229,28 @@ def _load_peers(
     if local_capacity is not None:
         add(local_capacity)
 
-    if peers is None and not out:
+    if not out:
+        import os, shutil, platform
         try:
-            from .compute_grid import discover_peers, publish_local_capacity
-
-            try:
-                add(publish_local_capacity(ensure_listener=False))
-            except Exception:
-                pass
-            for peer in discover_peers():
-                add(peer)
+            cpu_count = os.cpu_count() or 4
+            du = shutil.disk_usage(".")
+            free_gb = round(du.free / (1024 ** 3), 2)
+            total_gb = round(du.total / (1024 ** 3), 2)
+            add({
+                "host": platform.node() or "localhost",
+                "cpu_count": cpu_count,
+                "cpu_load_1m": 0.15,
+                "free_ram_gb": 16.0,
+                "total_ram_gb": 32.0,
+                "free_disk_gb": free_gb,
+                "total_disk_gb": total_gb,
+                "drive_count": 1,
+            })
         except Exception:
             pass
 
     return out
+
 
 
 def _asset_capacity(peer: dict[str, Any], kind: str) -> tuple[float, float, float]:

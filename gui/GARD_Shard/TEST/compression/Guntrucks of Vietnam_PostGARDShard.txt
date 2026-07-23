@@ -1,0 +1,19 @@
+Compress fileok · 0.1s
+Jul 23, 02:50 PM
+
+{
+ "engine": "QUIPU High-Performance Neural Memory & GARD Shard Binary Tensor Packing",
+ "source": "Gun Trucks of Vietnam.pptx",
+ "output_gard_shard": "gui\\GARD_Shard\\Gun Trucks of Vietnam.pptx.gard.weyl.bin",
+ "format": ".pptx",
+ "in_bytes": 703908,
+ "out_bytes": 20,
+ "ratio": 0.0000284,
+ "compaction_factor": "35195.4x",
+ "gard_shard_info": {
+  "protocol": "gard-shard/v1",
+  "domain": "SiCi_SQRT(-1)",
+  "shard_folder": "gui\\GARD_Shard",
+  "shard_file": "Gun Trucks of Vietnam.pptx.gard.weyl.bin",
+  "shard_path": "gui\\GARD_Shard\\Gun Trucks of Vietnam.pptx.gard.weyl.bin",
+  "shard_count

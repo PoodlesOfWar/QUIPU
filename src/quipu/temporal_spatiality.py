@@ -50,7 +50,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .local_store import db_path as _local_db_path
@@ -135,6 +135,58 @@ def _safe_scalar(cn, sql: str, default: float = 0.0) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Live corpus-ingest feed — the one signal actually written every cycle
+# ---------------------------------------------------------------------------
+# vision/touch/brain used to read corpus_round_log / touch_pressure_field,
+# neither of which anything in this repo ever creates or writes — so all
+# three senses were structurally dead (permanently 0, independent of real
+# activity). corpus_ingest.py's "corpus_ingest:history" key in brain_kv is
+# populated on every ingest run and is what daily_digest.py's own report
+# (documents condensed, Weyl cycles, per-source breakdown) is built from, so
+# it's a live, confirmed-real feed to route these senses off instead.
+#
+# Routing mirrors mesh_slm._SOURCE_AXIS_MAP's convention (code/"stack" -> touch):
+#   vision <- overall recent document throughput (breadth of what was seen)
+#   touch  <- share of that throughput from code/construction sources
+#   brain  <- ingest-run cadence (how often the pipeline has fired lately)
+_INGEST_WINDOW_HOURS: float = 1.0
+_TOUCH_SOURCES: tuple[str, ...] = ("stack", "code", "github")
+_VISION_DOC_SCALE: float = 1500.0   # docs/window that counts as "fully active"
+_BRAIN_CYCLE_SCALE: float = 6.0     # ingest runs/window that counts as "fully active"
+
+
+def _recent_ingest_cycles(hours: float = _INGEST_WINDOW_HOURS) -> list[dict]:
+    """Return ``corpus_ingest:history`` entries from the last *hours* hours.
+
+    Tolerant of a missing/unimportable ``brain_kv`` module, an absent key,
+    a malformed history list, or unparsable per-entry timestamps — degrades
+    to ``[]`` (senses fed by this read as 0, same as "no recent activity").
+    """
+    try:
+        from . import brain_kv
+        history = brain_kv.kv_get_json("corpus_ingest:history", [])
+    except Exception:
+        return []
+    if not isinstance(history, list):
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    recent: list[dict] = []
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            when = datetime.fromisoformat(str(entry.get("ts") or "").replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if when >= cutoff:
+            recent.append(entry)
+    return recent
+
+
+# ---------------------------------------------------------------------------
 # Sense state extraction
 # ---------------------------------------------------------------------------
 
@@ -154,37 +206,49 @@ def _sense_signals() -> dict:
         "perception": 0.0,
     }
 
-    with _conn() as cn:
-        # Vision — recent corpus_round activity (entities discovered).
-        v = _safe_scalar(
-            cn,
-            """SELECT MIN(1.0, COALESCE(SUM(entities_added), 0) / 50.0)
-                 FROM corpus_round_log
-                WHERE ran_at >= datetime('now', '-1 hour')""",
+    recent_cycles = _recent_ingest_cycles()
+    docs_recent = sum(int(e.get("total_condensed") or 0) for e in recent_cycles)
+
+    # Vision — recent document throughput (breadth of what was seen).
+    out["vision"] = max(0.0, min(1.0, docs_recent / _VISION_DOC_SCALE))
+
+    # Touch — share of that throughput from code/construction sources.
+    if docs_recent > 0:
+        touch_docs = sum(
+            int((e.get("per_source") or {}).get(src, 0) or 0)
+            for e in recent_cycles
+            for src in _TOUCH_SOURCES
         )
-        out["vision"] = max(0.0, min(1.0, v))
+        out["touch"] = max(0.0, min(1.0, touch_docs / docs_recent))
 
-        # Touch — current pressure field magnitude (read from brain_kv).
-        try:
-            field = _kv_read(cn, "touch_pressure_field") or {}
-            if field:
-                pmax = max(float(p) for p in field.values())
-                out["touch"] = max(0.0, min(1.0, pmax))
-        except Exception:
-            pass
+    # Brain — ingest-run cadence (how often the pipeline has fired lately).
+    out["brain"] = max(0.0, min(1.0, len(recent_cycles) / _BRAIN_CYCLE_SCALE))
 
+    with _conn() as cn:
         # Smell — recent reading carrier mass (high mass = fresh signal).
+        # Default is the *neutral* midpoint (0.5), not the old 1.0 — the
+        # bell-curve formula below reads m=1.0 as "maximally fresh/active",
+        # so defaulting a missing/empty sense_of_smell table to 1.0 was
+        # silently pinning smell at 100% on every run (nothing in this repo
+        # writes that table either, so it's always been "missing").
         m = _safe_scalar(
             cn,
             """SELECT carrier_mass FROM sense_of_smell
                 ORDER BY id DESC LIMIT 1""",
-            default=1.0,
+            default=0.5,
         )
         # Map carrier mass into "active sense" — both very-high (fresh)
-        # and very-low (decaying fast) count as active.
-        out["smell"] = max(0.0, min(1.0, abs(m - 0.5) * 2.0)) if m else 0.0
+        # and very-low (decaying fast) count as active. (Dropped the old
+        # `if m else 0.0` guard: it silently zeroed out a genuine mass=0.0
+        # reading too, which this formula is supposed to treat as maximally
+        # active — not indistinguishable from "no data".)
+        out["smell"] = max(0.0, min(1.0, abs(m - 0.5) * 2.0))
 
-        # Body — open-directive activity, capped at 25.
+        # Body — open-directive activity, capped at 25. (body_directives is
+        # also never written anywhere in this repo, so this reads 0 for now;
+        # body's real emergent signal today comes from
+        # system_entirety._material_bifurcation_state()'s axis injection,
+        # which activates once asset/material tracking goes eligible.)
         b = _safe_scalar(
             cn,
             """SELECT MIN(1.0, CAST(COUNT(*) AS REAL) / 25.0)
@@ -192,15 +256,6 @@ def _sense_signals() -> dict:
                 WHERE status IN ('open','ack','in_progress')""",
         )
         out["body"] = b
-
-        # Brain — round cadence (more rounds in last hour → more active).
-        n = _safe_scalar(
-            cn,
-            """SELECT MIN(1.0, COUNT(*) / 60.0)
-                 FROM corpus_round_log
-                WHERE ran_at >= datetime('now', '-1 hour')""",
-        )
-        out["brain"] = n
 
     # Perception Mk1 — visual analysis activity (images/videos processed).
     try:
