@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import math
+import random
 import sqlite3
 import pytest
 @pytest.fixture
@@ -347,3 +349,98 @@ def test_mean_embed_7d_uses_highest_freq_tokens(isolated_slm_db):
     assert all(v > 0.9 for v in result), (
         f"Expected high-freq embedding (≈1.0), got {result}"
     )
+
+
+# ---------------------------------------------------------------------------
+# STP-style geodesic diagnostic tests (docs/STP_DIAGNOSTIC_PLAN.md)
+# ---------------------------------------------------------------------------
+
+def test_train_round_reports_stp_diagnostic_fields(isolated_slm_db):
+    """train_round summary must carry stp_embed_gap / stp_torus_gap; when not
+    None each is a float in [0, 2] (cosine-distance range)."""
+    slm = isolated_slm_db
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert "stp_embed_gap" in summary
+    assert "stp_torus_gap" in summary
+    for key in ("stp_embed_gap", "stp_torus_gap"):
+        val = summary[key]
+        if val is not None:
+            assert isinstance(val, float)
+            assert 0.0 <= val <= 2.0, f"{key} out of range: {val}"
+
+
+def test_stp_cos_gap_collinear_is_zero(isolated_slm_db):
+    """Three collinear equally-spaced points → gap ≈ 0 (same direction)."""
+    slm = isolated_slm_db
+    a = [0.0, 0.0, 0.0]
+    b = [1.0, 1.0, 1.0]
+    c = [2.0, 2.0, 2.0]
+    gap = slm._stp_cos_gap(a, b, c)
+    assert gap is not None
+    assert abs(gap) < 1e-9
+
+
+def test_stp_cos_gap_orthogonal_is_one(isolated_slm_db):
+    """(c − b) ⊥ (b − a) → cos = 0 → gap ≈ 1.0."""
+    slm = isolated_slm_db
+    a = [0.0, 0.0]
+    b = [1.0, 0.0]   # b - a = (1, 0)
+    c = [1.0, 1.0]   # c - b = (0, 1), orthogonal to (1, 0)
+    gap = slm._stp_cos_gap(a, b, c)
+    assert gap is not None
+    assert abs(gap - 1.0) < 1e-9
+
+
+def test_stp_cos_gap_degenerate_returns_none(isolated_slm_db):
+    """a == b → zero-length difference vector → None, not 0/1 or an exception."""
+    slm = isolated_slm_db
+    assert slm._stp_cos_gap([1.0, 2.0], [1.0, 2.0], [3.0, 4.0]) is None
+    # also the other side: c == b
+    assert slm._stp_cos_gap([0.0, 0.0], [1.0, 1.0], [1.0, 1.0]) is None
+
+
+def test_torus_point_r4_wraps(isolated_slm_db):
+    """Adjacent cells across the wrap boundary map to nearby R^4 points, unlike
+    naive (i, j) subtraction which would show a jump of _TORUS_N - 1."""
+    slm = isolated_slm_db
+    p0 = slm._torus_point_r4((0, 0))
+    pn = slm._torus_point_r4((slm._TORUS_N - 1, 0))
+    r4_dist = math.dist(p0, pn)
+    # One cell apart on a unit circle: chord = 2·sin(π/N) — small.
+    assert r4_dist < 0.2, f"wrap neighbours too far in R^4: {r4_dist}"
+    # Contrast: the naive coordinate jump the embedding is designed to avoid.
+    naive_jump = abs(0 - (slm._TORUS_N - 1))
+    assert naive_jump == slm._TORUS_N - 1
+
+
+def test_stp_diagnostic_disabled_by_flag(isolated_slm_db, monkeypatch):
+    """QUIPU_STP_DIAGNOSTIC=0 → round still ok, gap fields None (fail-to-legacy)."""
+    slm = isolated_slm_db
+    monkeypatch.setenv("QUIPU_STP_DIAGNOSTIC", "0")
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert summary.get("stp_embed_gap") is None
+    assert summary.get("stp_torus_gap") is None
+
+
+def test_stp_diagnostic_history_capped(isolated_slm_db):
+    """Rolling STP history must never exceed _STP_HISTORY_CAP."""
+    slm = isolated_slm_db
+    random.seed(1234)
+    cap = slm._STP_HISTORY_CAP
+    # Pre-fill to the cap so any further append must be sliced back down.
+    with slm._conn() as cn:
+        slm._meta_set(cn, "stp_torus_gap_history", [0.5] * cap)
+        slm._meta_set(cn, "stp_embed_gap_history", [0.5] * cap)
+        slm._meta_set(cn, "loss_history", [0.1] * cap)
+    for _ in range(5):
+        slm._LAST_TRAIN_TS = 0.0
+        slm.train_round(max_seconds=10.0, max_chunks=50)
+    with slm._conn() as cn:
+        hist_t = slm._meta_get(cn, "stp_torus_gap_history", [])
+        hist_e = slm._meta_get(cn, "stp_embed_gap_history", [])
+        hist_l = slm._meta_get(cn, "loss_history", [])
+    assert len(hist_t) <= cap
+    assert len(hist_e) <= cap
+    assert len(hist_l) <= cap

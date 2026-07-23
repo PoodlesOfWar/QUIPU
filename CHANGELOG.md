@@ -4,6 +4,29 @@ All notable changes to **Supply Chain Brain** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.25.0] STP-Style Geodesic Diagnostic in `train_round()` (2026-07-23)
+
+### Added
+
+- **`src/quipu/mesh_slm.py` — STP-style geodesic diagnostic** *(passive, flagged)* — a read-only observation gated by `QUIPU_STP_DIAGNOSTIC` (default **on**, mirroring `_acre_enabled()`). Each training round samples a random `0 <= s < r < t` triplet from every chunk's token trajectory and computes the Semantic-Tube-Prediction gap `1 − cos(h_t − h_r, h_r − h_s)` in two spaces: the learned 7-D embedding (a paper-faithful hidden-state analogue) and an isometric R^4 flat-torus embedding `u = (cosθ, sinθ, cosφ, sinφ)` of each token's `(i, j)` vocab cell. The torus embedding is wrap-aware by construction — cell `(63, 0)` and `(0, 0)` map to adjacent R^4 points, unlike raw coordinate differencing.
+- **New pure helpers** — `_stp_cos_gap` (generic vector-triple STP loss, returns `None` for degenerate/duplicate points), `_torus_point_r4`, `_sample_stp_triplet`, `_embed7_for_token`, `_torus_cell_for_token`, `_stp_diagnostic_enabled`. All stdlib (`math`, `random`), no numpy.
+- **`stp_diagnostic_trend()`** — a standalone, read-only trend check that compares the trailing-window slope of `loss_history` against the STP gap histories to test the paper's **P1 signature** (loss plateaus while the STP gap keeps falling). Not called from `train_round()`; intended for manual/notebook validation.
+- **`tests/test_mesh_slm.py`** — 7 focused tests: summary-field presence/range, collinear→0, orthogonal→1, degenerate→None, R^4 wrap-awareness, disabled-by-flag fail-to-legacy, and rolling-history cap enforcement.
+
+### Changed
+
+- **`src/quipu/mesh_slm.py` — `train_round()` summary and `state_summary()`** now expose `stp_embed_gap` / `stp_torus_gap` (per-round averages) alongside the existing `phase_weight` / `wavefunction_overlap` / `mesh_field_8d` fields.
+- **Rolling histories in `mesh_slm_meta`** — added `stp_embed_gap_history`, `stp_torus_gap_history`, and `loss_history` (each capped at `_STP_HISTORY_CAP = 200`). The `loss_history` addition is the only change touching pre-existing behavior: `last_loss` was a single overwritten scalar, insufficient to detect a plateau. It is purely additive — a new meta key, nothing removed or altered.
+
+### Compatibility
+
+- The diagnostic is opt-out via `QUIPU_STP_DIAGNOSTIC` set to any falsy value (`0`, `false`, `no`, `off`); disabled, the gap fields are `None` and no histories are written. Every sample path is wrapped in unconditional `try/except` pass-throughs — the diagnostic can never fail a training round. No schema migration: all state lives in the existing generic `mesh_slm_meta` key/value store.
+- No eta/eta_q coupling: folding the signal into the learning rate is a deliberately deferred Phase 2, contingent on `stp_diagnostic_trend()` first confirming P1 on real corpus data.
+
+### Verified
+
+- `python3 -m py_compile src/quipu/mesh_slm.py` and the 7 new focused tests in `tests/test_mesh_slm.py` (run these locally; the authoring environment's sandboxed shell was unavailable at commit time).
+
 ## [0.24.1] MESH-Conditioned Sigmoidal Realization for Paired Agents (2026-07-10)
 
 ### Added
