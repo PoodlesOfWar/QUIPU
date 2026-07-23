@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-__version__ = "0.25.0"
+__version__ = "0.26.0"
 __release__ = (
-    "STP-style geodesic diagnostic in train_round(): a passive, flagged observation "
-    "(QUIPU_STP_DIAGNOSTIC, default on) that samples s<r<t token triplets each round and "
-    "measures the Semantic-Tube-Prediction gap 1-cos(h_t-h_r, h_r-h_s) in both the learned "
-    "7-D embedding and an isometric R^4 flat-torus embedding of each token's vocab cell. "
-    "Rolling loss/embed/torus histories make the paper's P1 signature checkable via a "
-    "read-only stp_diagnostic_trend(). Additive, fails toward legacy, no schema migration. "
-    "7 focused tests added."
+    "Doc annealing worker integrated into QUIPU: src/quipu/doc_annealing.py regenerates "
+    "docs/system_entirety_map.md from the live System Entirety state (system_entirety_state + "
+    "mesh_slm.state_summary + stp_diagnostic_trend), gated by a SHA-256 structural fingerprint "
+    "over version/bridge-root/mesh-density/UEQGM-certainty/nodal-bifurcation so only structural "
+    "moves trip a rewrite. CLI (--once/--loop/--force) plus Start-/Register-DocAnnealing.ps1 keep "
+    "it running as a 30-min recurring Windows task. 5 focused tests added."
 )
 __build_date__ = "2026-07-23"
 
 PHASES = {
+    "0.26.0": "Doc annealing worker integrated (src/quipu/doc_annealing.py), the clean-room QUIPU reimplementation of the SCB living-map annealer. Each cycle reads the live 7+1-D System Entirety state, the MESH-SLM predictor snapshot, and the STP P1 trend, computes a SHA-256 structural fingerprint over version + bridge primary root + mesh_density + UEQGM certainty + nodal_bifurcation (each 2 dp), and rewrites docs/system_entirety_map.md only on structural change (or --force), bumping brain_kv['doc:system_map_version'] and appending a bounded doc_annealing:history entry. No RAG re-index (QUIPU ships none). anneal_docs/structural_change_review/render_system_map/run_loop public API + argparse CLI (--once/--loop/--interval/--force). Start-DocAnnealing.ps1 runs the loop; Register-DocAnnealing.ps1 installs a recurring 30-min Windows Scheduled Task. 5 focused tests in tests/test_doc_annealing.py.",
     "0.25.0": "STP-style geodesic diagnostic wired into mesh_slm.train_round() behind the QUIPU_STP_DIAGNOSTIC flag (default on, purely observational so it fails toward legacy like phase_weight/overlap). Each round samples a random 0<=s<r<t trajectory triplet per chunk and computes the Semantic-Tube-Prediction gap 1-cos(h_t-h_r, h_r-h_s) twice: over the learned 7-D embedding (paper-faithful hidden-state analogue) and over an isometric R^4 flat-torus embedding u=(cosθ,sinθ,cosφ,sinφ) of each token's (i,j) vocab cell (the QUIPU-native, wrap-aware-by-construction test). Per-round averages surface in the train_round summary (stp_embed_gap/stp_torus_gap) and state_summary, and capped rolling histories (stp_embed_gap_history, stp_torus_gap_history, loss_history) persist in mesh_slm_meta so the paper's P1 signature — ordinary loss plateaus while the STP gap keeps falling — is checkable via the read-only stp_diagnostic_trend() utility. No eta coupling (deliberately deferred Phase 2). Pure stdlib, no schema migration. 7 focused tests in tests/test_mesh_slm.py.",
     "0.24.1": "MESH-conditioned sigmoidal realization coupling for paired Vision and Touch agents. realized_potential.py adds a true logistic eligibility gate that requires bilateral evidence, prunes non-realized gradients before rADAM, retains them as bounded signed latent potential, and releases that potential when later evidence makes the interaction realizable. network_observer.py records a bounded 64-snapshot MESH history and exposes an exponentially weighted reader that admits only observations strictly before the forward decision time. brain_body_signals.py integrates the gate behind BRAIN_USE_REALIZATION_GATE=1, preserves legacy trajectories when disabled or history is absent, keeps quiet maintenance decay eligible, and persists per-pair diagnostics. 17 focused tests and adjacent observer/rADAM/learning-drive coverage pass (65 total).",
     "0.22.247": "mesh_compression_model.jl: added pack_weyl/unpack_weyl (20-byte v2.2 float-dimension brain_kv record, 5 x Float32 LE) plus the MESH_BRAIN_KV_WEYL_PACKED_BYTES constant, matching the ContosoHub v2.2 JS plane wire format. selftest() gained LE-canary, round-trip, and golden-base64 coverage for the new pack/unpack pair without altering the existing reconciled compaction-ratio/scalar assertions relied on by pipeline/tests/test_gard_shard_model.py.",
