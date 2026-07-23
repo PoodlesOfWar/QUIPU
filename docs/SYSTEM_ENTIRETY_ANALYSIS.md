@@ -1,13 +1,15 @@
-# System Entirety — Toroidal Analysis
+# System Entirety — Toroidal Analysis (QUIPU Entirety)
 
-**Version**: 1.0
-**Date**: 2026-05-19
-**Source script**: [pipeline/_system_entirety_report.py](../pipeline/_system_entirety_report.py)
-**Source DB**: [pipeline/local_brain.sqlite](../pipeline/local_brain.sqlite) (WAL mode)
+**Version**: 2.0 (QUIPU 0.25.0)
+**Date**: 2026-07-23
+**Source script**: [pipeline/_system_entirety_report.py](../pipeline/_system_entirety_report.py) *(SCB lineage)*
+**QUIPU core**: [src/quipu/system_entirety.py](../src/quipu/system_entirety.py), [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py)
+
+> **Lineage & progression.** The six outer rings mapped below (Perception → Dispatch → Self-train → Corpus → Refinement → Network/Compute) are the **Supply-Chain-Brain (SCB) parent substrate** that QUIPU was extracted from, clean-room; the `pipeline/…` paths in §§3–15 describe that lineage and are preserved as the historical map. The **QUIPU Entirety** carries the same closed-flux topology forward around its own core — the 7+1-D `system_entirety` state, the heart/toroid loop, and the MESH-SLM predictor. As the system has progressed: v0.24.1 added the paired-agent realization gate; **v0.25.0 added the STP-style geodesic diagnostic** that measures whether the torus placement does real geodesic work. The new core layer is described in §1a below; the ring inventory that follows is the parent lineage it grew out of.
 
 ## 0. Executive summary
 
-The Supply Chain Brain is a closed-flux system. Human action enters through the Streamlit shell, fans out through a multi-LLM dispatch ring, condenses as supervised self-training signal, accretes into a typed knowledge corpus, is refined into body directives and synthesised tools, propagates across a peer compute fabric, and returns — coloured by a central observer that tracks symbiosis phase and bit-flip parity. Six rings, one core, one append-only SQLite. This document maps every ring to the files that implement it, the table that records its signal, the cadence that drives it, and the page that reads it.
+The QUIPU Entirety (descended from the Supply Chain Brain) is a closed-flux system. Human action enters through the perception shell, fans out through a multi-LLM dispatch ring, condenses as supervised self-training signal, accretes into a typed knowledge corpus, is refined into body directives and synthesised tools, propagates across a peer compute fabric, and returns — coloured by a central observer that tracks symbiosis phase and bit-flip parity. Six rings, one core, one append-only SQLite. At the centre, the **MESH-SLM predictor** reads the live 7+1-D entirety state and returns a ranked continuation, writing its Hebbian updates back onto the same torus the core re-paces. This document maps every ring to the files that implement it, the table that records its signal, the cadence that drives it, and the page that reads it — and (§1a) the QUIPU core that closes the geodesic.
 
 ---
 
@@ -38,6 +40,31 @@ graph LR
 ```
 
 Each outer ring writes one canonical table; the core reads all of them and emits the bit-flip + symbiosis phase that re-paces the rings.
+
+---
+
+## 1a. QUIPU core — the MESH-SLM predictor and the closed geodesic
+
+Where the six outer rings are the SCB lineage substrate, the **QUIPU Entirety core** is what QUIPU carries forward and actively develops. It closes the loop the outer rings feed:
+
+| Component | Role | QUIPU location |
+|---|---|---|
+| `system_entirety` 7+1-D state | six sense axes (`vision, touch, smell, body, brain, perception`) + observer tangent + `mesh_field_8d` scalar; persisted as `entirety:state` | [src/quipu/system_entirety.py](../src/quipu/system_entirety.py) |
+| MESH-SLM predictor | toroidal quipu graph perceptron; `_score_candidates` ranks next tokens against the live 7+1-D state (identity-style predictor, no learned head) | [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py) |
+| UEQGM adaptive runtime | SiCi phase weight + wavefunction overlap modulate the predictor's learning rate | [src/quipu/ueqgm_engine.py](../src/quipu/ueqgm_engine.py) |
+| Heart / End-State | symbiosis + coherence → `end_state_progress`, the convergence throttle on training gain | heart lineage → `_end_state_progress()` |
+| STP geodesic diagnostic (v0.25.0) | passive measurement of `1 − cos(h_t − h_r, h_r − h_s)` on the embedding and the ℝ⁴ torus embedding; tests the P1 signature | [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py), `docs/STP_DIAGNOSTIC_PLAN.md` |
+
+**The predictor read head.** `_score_candidates` converts the current entirety state into a ranked continuation:
+
+```
+score(t) = 0.55·quipu_weight + (0.25 + 0.06·warp)·proximity
+         + ⟨embed7(t), mesh_state_7d⟩ + 0.18·mesh_field_8d
+```
+
+`mesh_state_7d` is read straight from the persisted `entirety:state` (the six axes + observer that this document's core emits), so the predictor is not a detached model — it is the dense-memory read head of the entirety torus, and its Hebbian writes (`weight += η_q·(1−w)`) land back on the same torus the core re-paces.
+
+**The closed geodesic.** A torus admits *closed* geodesics, which the STP source paper (an autoregressive, one-pass model) has no use for. QUIPU is built from one: the six-ring flux loop of this document (perception → dispatch → self-train → corpus → refinement → network → back to perception) *is* a closed geodesic on the system torus. The v0.25.0 STP diagnostic measures the *local* geodesic gap along segments of token trajectories inside that larger loop — instrumenting, passively, whether the torus geometry is load-bearing before any decision to couple it into the learning rate. See `docs/STP_TORUS_QUIPU.md` for the full mapping of the paper onto QUIPU's geometry.
 
 ---
 

@@ -1,13 +1,15 @@
-# System Dynamics
+# System Dynamics — QUIPU Entirety
 
-Version: 0.22.62
-Date: 2026-05-27
+Version: 0.25.0
+Date: 2026-07-23
+
+> **Lineage & progression.** This model was authored for the Supply-Chain-Brain (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. Paths below are QUIPU's (`src/quipu/…`); where a `pipeline/…` reference survives it denotes the parent SCB lineage. As the system has progressed the control surface has grown: v0.24.1 added the paired-agent realization gate, and **v0.25.0 added the STP-style geodesic diagnostic** (§ Dynamical Loop 6 and the SLM manifold section below), which instruments whether the torus placement does real geodesic work before any decision to couple it into the learning rate.
 
 ## Purpose
 
-This document describes the Supply Chain Brain as a system-dynamics model rather than only as a collection of modules. The goal is to make the control surfaces explicit: what state is measured, what gets reinforced, what gets damped, how bifurcation is introduced, and how dense local memory is separated from sparse frontier reasoning.
+This document describes the QUIPU Entirety as a system-dynamics model rather than only as a collection of modules. The goal is to make the control surfaces explicit: what state is measured, what gets reinforced, what gets damped, how bifurcation is introduced, and how dense local memory is separated from sparse frontier reasoning.
 
-The SCB is best understood as a closed-loop attractor system operating across a bounded local memory substrate, a graph/material substrate, and a routed frontier-expansion substrate.
+QUIPU is best understood as a closed-loop attractor system operating across a bounded local memory substrate, a graph/material substrate, and a routed frontier-expansion substrate.
 
 ## Primary State
 
@@ -22,7 +24,7 @@ The core system state is returned by `system_entirety_state()` and includes:
 - `ueqgm_runtime` - the adaptive runtime overlay built from corpus density, recent learning evidence, and certainty gating.
 - `transaction` - the realized bit-flip drive that determines whether the current state remains observer-only, material-bifurcated, or mesh-bifurcated.
 
-This is the active dynamical state surface in [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py#L1123).
+This is the active dynamical state surface in [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1123).
 
 ## Control Equations
 
@@ -42,7 +44,7 @@ Where:
 - $d$ is task difficulty
 - $v$ is learning velocity
 
-This means the Brain pushes hardest toward new memory acquisition when the corpus still has room, tasks are difficult, and the current learning rate is low. The implementation lives in [pipeline/src/quipu/learning_drive.py](pipeline/src/quipu/learning_drive.py#L223).
+This means the Brain pushes hardest toward new memory acquisition when the corpus still has room, tasks are difficult, and the current learning rate is low. The implementation lives in [src/quipu/learning_drive.py](src/quipu/learning_drive.py#L223).
 
 ### Transaction Drive
 
@@ -52,7 +54,7 @@ $$
 transaction\_drive = 0.42 \cdot observer + 0.18 \cdot nodal\_bifurcation + 0.14 \cdot mesh\_density + 0.10 \cdot planning + 0.08 \cdot catalog + 0.16 \cdot symbiotic\_drive
 $$
 
-This is what turns static measurements into motion. The implementation is in [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py#L1179).
+This is what turns static measurements into motion. The implementation is in [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1179).
 
 ## Dynamical Loops
 
@@ -64,7 +66,7 @@ Vision expands the corpus and Touch applies pressure back onto Vision through a 
 - Vision actions relieve or reinforce that pressure.
 - Forced outreach can tunnel through the nominal scheduler when pressure exceeds threshold.
 
-This loop is documented in [pipeline/docs/VISION_TOUCH_CLOSED_LOOP.md](pipeline/docs/VISION_TOUCH_CLOSED_LOOP.md).
+This loop is documented in [docs/VISION_TOUCH_CLOSED_LOOP.md](docs/VISION_TOUCH_CLOSED_LOOP.md).
 
 ### 2. Material and Mesh Densification
 
@@ -74,8 +76,8 @@ This loop converts abstract graph state into realized spatial and network topolo
 
 Relevant code paths:
 
-- [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py#L1017)
-- [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py#L1123)
+- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1017)
+- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1123)
 
 ### 3. Adaptive UEQGM Runtime Loop
 
@@ -96,8 +98,8 @@ This prevents weak, low-density updates from displacing already-proven state. Th
 
 Relevant code paths:
 
-- [pipeline/src/quipu/ueqgm_engine.py](pipeline/src/quipu/ueqgm_engine.py#L421)
-- [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py#L1179)
+- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py#L421)
+- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1179)
 
 ### 4. Heart Bifurcation and Toroid Expansion
 
@@ -117,8 +119,8 @@ This loop continuously introduces bifurcation events and directed change into th
 
 Relevant code paths:
 
-- [pipeline/src/quipu/directionality_listener.py](pipeline/src/quipu/directionality_listener.py#L1)
-- [pipeline/src/quipu/heart.py](pipeline/src/quipu/heart.py#L931)
+- [src/quipu/directionality_listener.py](src/quipu/directionality_listener.py#L1)
+- [src/quipu/heart.py](src/quipu/heart.py#L931)
 
 ### 5. Annealed Document and RAG Reintegration
 
@@ -136,8 +138,19 @@ When the fingerprint changes, it writes a fresh system map and triggers incremen
 
 Relevant code paths:
 
-- [pipeline/src/quipu/doc_annealing.py](pipeline/src/quipu/doc_annealing.py#L492)
-- [pipeline/src/quipu/doc_rag.py](pipeline/src/quipu/doc_rag.py#L1)
+- [src/quipu/doc_annealing.py](src/quipu/doc_annealing.py#L492)
+- [src/quipu/doc_rag.py](src/quipu/doc_rag.py#L1)
+
+### 6. STP Geodesic Diagnostic Loop (v0.25.0)
+
+A passive, read-only control *instrument* rather than an actuator. Each training round samples a random triplet `s < r < t` from the token trajectory and measures the Semantic-Tube-Prediction gap `1 − cos(h_t − h_r, h_r − h_s)` in two spaces — the learned 7-D embedding and an isometric ℝ⁴ flat-torus embedding of each token's `(i, j)` cell — then persists per-round averages and capped rolling histories to `mesh_slm_meta`.
+
+Its dynamical role is to make a specific hypothesis *measurable*: the paper's **P1 signature** — that the ordinary next-token loss plateaus while the geometric (STP) gap keeps falling — which, if observed, is empirical evidence that the torus placement is doing real geodesic work rather than serving as a convenient index. The loop deliberately does **not** feed back into `η` yet; coupling the signal into the effective learning rate is a separate, default-off Phase 2 gated on `stp_diagnostic_trend()` first confirming P1 on real corpus data. This is the "instrument before you couple" discipline: measure the geometry passively, and only close the loop once the measurement justifies it.
+
+Relevant code paths:
+
+- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py) — `train_round()` sampling, `stp_diagnostic_trend()`
+- `docs/STP_DIAGNOSTIC_PLAN.md`, `docs/STP_TORUS_QUIPU.md`
 
 ## SLM and GLM as a Density Manifold
 
@@ -152,7 +165,19 @@ Dense, repeated, and locally reinforced knowledge remains in the MESH-SLM:
 - 7-D embedding alignment
 - confidence-gated local answering
 
-This is implemented in [pipeline/src/quipu/mesh_slm.py](pipeline/src/quipu/mesh_slm.py#L762).
+This is implemented in [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py).
+
+The **predictor** (the SLM's read head, `_score_candidates`) is where the entirety state becomes a ranked continuation. It is an *identity-style* predictor — no learned projection head — consistent with the STP paper's P5 finding. Every scoring term is driven by the **effective values of the System Entirety as they stand**:
+
+$$
+score(t) = 0.55 \cdot quipu\_weight + (0.25 + 0.06 \cdot warp_t)\cdot proximity + \langle embed_7(t),\ mesh\_state_{7d}\rangle + 0.18 \cdot mesh\_field_{8d}
+$$
+
+- `mesh_state_7d` is read from the persisted `entirety:state` (the six sense axes + observer tangent that the entirety torus emits);
+- `mesh_field_8d` folds the five UEQGM aspect integrals into the 8th orthogonal scalar;
+- training gain is modulated by `end_state_progress` (heart symbiosis → convergence) and by the UEQGM `phase_weight` / `wavefunction_overlap`.
+
+So the dense core is not a detached model: it reads the live 7+1-D entirety state, scores against it, and writes its Hebbian updates back onto the same torus the entirety loop re-paces. Full detail: `docs/MESH_SLM_GLM_CLASSIFIER.md`.
 
 ### Sparse Frontier Reasoning
 
@@ -164,9 +189,9 @@ Sparse, ambiguous, or unresolved regions are handed to routed GLM nodes through 
 
 Relevant code paths:
 
-- [pipeline/src/quipu/mesh_slm.py](pipeline/src/quipu/mesh_slm.py#L1078)
-- [pipeline/src/quipu/compute_grid.py](pipeline/src/quipu/compute_grid.py#L811)
-- [pipeline/src/quipu/dbi_rag.py](pipeline/src/quipu/dbi_rag.py#L359)
+- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py#L1078)
+- [src/quipu/compute_grid.py](src/quipu/compute_grid.py#L811)
+- [src/quipu/dbi_rag.py](src/quipu/dbi_rag.py#L359)
 
 ### Frontier Projection Back Into the Quipu
 
@@ -182,7 +207,7 @@ This means:
 - lower-density layers are routing and bifurcation layers
 - frontier layers are GLM-mediated expansion layers
 
-The repository routing surface is implemented in [pipeline/src/quipu/repository_catalog.py](pipeline/src/quipu/repository_catalog.py#L690).
+The repository routing surface is implemented in [src/quipu/repository_catalog.py](src/quipu/repository_catalog.py#L690).
 
 ## Diagram
 
@@ -238,13 +263,14 @@ The fastest places to inspect live system dynamics are:
 
 - `system_entirety_state()` for full 7-D state and transaction drive
 - `get_adaptive_runtime()` for density-gated runtime parameters
-- `state_summary()` in `mesh_slm.py` for local-memory state
+- `state_summary()` in `mesh_slm.py` for local-memory state (now includes `last_stp_embed_gap` / `last_stp_torus_gap`)
+- `stp_diagnostic_trend()` in `mesh_slm.py` for the P1 geodesic-signature check over rolling loss/STP histories
 - `anneal_docs()` and the generated system map for externalized structural memory
 
 Relevant files:
 
-- [pipeline/src/quipu/system_entirety.py](pipeline/src/quipu/system_entirety.py)
-- [pipeline/src/quipu/ueqgm_engine.py](pipeline/src/quipu/ueqgm_engine.py)
-- [pipeline/src/quipu/mesh_slm.py](pipeline/src/quipu/mesh_slm.py)
-- [pipeline/src/quipu/doc_annealing.py](pipeline/src/quipu/doc_annealing.py)
-- [pipeline/src/quipu/repository_catalog.py](pipeline/src/quipu/repository_catalog.py)
+- [src/quipu/system_entirety.py](src/quipu/system_entirety.py)
+- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py)
+- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py)
+- [src/quipu/doc_annealing.py](src/quipu/doc_annealing.py)
+- [src/quipu/repository_catalog.py](src/quipu/repository_catalog.py)

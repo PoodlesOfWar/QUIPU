@@ -1,5 +1,32 @@
 # Release Notes
 
+## v0.26.0 - 2026-07-23
+
+**Doc Annealing Worker — Living System Map Regeneration**
+
+### Added
+
+- **`src/quipu/doc_annealing.py`** - QUIPU's own living-map annealer. It reads the live System Entirety state, the MESH-SLM predictor snapshot, and the STP P1 trend, and regenerates `docs/system_entirety_map.md` whenever a SHA-256 structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation, each 2 dp) changes. Structural change bumps `brain_kv["doc:system_map_version"]` and records a bounded history.
+- **Runners** - `Start-DocAnnealing.ps1` (30-min loop, `-Once`/`-Force`) and `Register-DocAnnealing.ps1` (recurring Windows Scheduled Task) so the map stays current without manual runs.
+- **5 focused tests** covering fingerprint behavior, structural-change detection, rendered sections, and write/increment/idempotence.
+
+### Compatibility
+
+- Read-only except three `brain_kv` bookkeeping keys and the map file. No RAG re-index (QUIPU ships none). Defensive against a cold mesh. No schema migration.
+
+### Activate
+
+```
+powershell -ExecutionPolicy Bypass -File Register-DocAnnealing.ps1   # install recurring task
+python -m src.quipu.doc_annealing --once                              # or run one cycle by hand
+```
+
+### Verification
+
+- Compile + the 5 new tests should be run locally; the authoring environment's sandboxed shell was unavailable at commit time.
+
+---
+
 ## v0.25.0 - 2026-07-23
 
 **STP-Style Geodesic Diagnostic in `train_round()`**

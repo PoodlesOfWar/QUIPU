@@ -1,15 +1,16 @@
-# Supply Chain Brain — Living System Map
+# QUIPU Entirety — Living System Map
 
-> **Version**: 0.24.1  
-> **Annealed**: 2026-07-21T01:50:21.348244+00:00  
-> **Auto-generated** by `doc_annealing.py` — do not edit by hand.  
-> This document is indexed by the Brain RAG and updated every ~30 min.
+> **Version**: 0.26.0  
+> **Updated**: 2026-07-23  
+> **Maintenance**: As of **v0.26.0 the QUIPU annealer is integrated** — `src/quipu/doc_annealing.py` regenerates this file from the live System Entirety state whenever its structural fingerprint changes (run `Register-DocAnnealing.ps1` to schedule it, or `python -m src.quipu.doc_annealing --once`). The body below is the last hand-maintained revision; the **first anneal run replaces it with live-state tables** and takes over ongoing maintenance. Once the annealer is running, edit `src/quipu/doc_annealing.py` (not this file).
+>
+> **Progression.** v0.24.1 added the paired-agent realization gate; v0.25.0 added the STP-style geodesic diagnostic in the MESH-SLM predictor; **v0.26.0 integrated this doc-annealing worker.**
 
 ---
 
 ## 1. Architecture Overview
 
-The SCB operates as a **closed-loop attractor system** across four interacting layers:
+The QUIPU Entirety (descended from the SCB) operates as a **closed-loop attractor system**. The bridge/material/entirety/bit-flip stack below densifies the torus; at the centre the **MESH-SLM predictor** reads the resulting 7+1-D state and returns a ranked continuation, writing its Hebbian updates back onto the same torus — the dense-memory read head of the loop:
 
 ```
 BRIDGE MESH SPACE V1
@@ -41,7 +42,18 @@ Bit Flip / SiCi Axial Channel
   └─ Δλ_axial = Si(φ)·Ci(φ)·tan(φ)·Γ₀
   └─ Floquet cos(ω·t) modulation of coupling strength
 
+    ↓  entirety:state (6 axes + observer + mesh_field_8d) read by the predictor
+
+MESH-SLM predictor  [src/quipu/mesh_slm.py]
+  └─ score(t) = 0.55·quipu + (0.25 + 0.06·warp)·prox
+                + ⟨embed7(t), mesh_state_7d⟩ + 0.18·mesh_field_8d
+  └─ identity-style predictor (no learned head) — STP paper P5
+  └─ Hebbian write-back: weight += η_q·(1 − w)  → same torus
+  └─ STP geodesic diagnostic (v0.25.0): 1 − cos(h_t−h_r, h_r−h_s)
+       on the 7-D embedding and the ℝ⁴ torus embedding (passive)
+
     ↑  loop closes: materialization → bridge bifurcation → denser mesh
+                    → predictor reads state → Hebbian write-back → denser torus
 ```
 
 ---
@@ -273,17 +285,18 @@ bridge_targets.yaml ─▶ _materialize_bridge_targets_into_corpus()
 
 ## 9. Module Inventory
 
-| Module | Role | Cycle |
-|---|---|---|
-| `synaptic_workers.py` | Worker orchestration, bridge bifurcation, vision, UEQGM, doc annealing | 5–30 min |
-| `system_entirety.py` | 7-D state, material bifurcation, bit flip, observer tangent | on-demand |
-| `ueqgm_engine.py` | SiCi axial decay, adaptive runtime, coherence, Floquet | ~7 min |
-| `asset_resource_mesh.py` | Physical realization, compute asset mesh, tunnel density | periodic |
-| `doc_annealing.py` | Living map generation, structural change review, RAG re-index | ~30 min |
-| `doc_rag.py` | TF-IDF + OpenRouter RAG over `data/documents/` | on-demand |
-| `temporal_spatiality.py` | Sense signals, weight prior, torus boundary | ~30 s |
-| `local_store.py` | SQLite connection manager (corpus, brain_kv, kv_store) | always |
+| Module | Role | Cycle | In QUIPU |
+|---|---|---|---|
+| `mesh_slm.py` | **MESH-SLM predictor**: toroidal quipu graph, `_score_candidates`, `train_round`, STP geodesic diagnostic (v0.25.0) | per train round | ✅ `src/quipu/` |
+| `system_entirety.py` | 7+1-D state, material bifurcation, bit flip, observer tangent; persists `entirety:state` | on-demand | ✅ `src/quipu/` |
+| `ueqgm_engine.py` | SiCi axial decay, adaptive runtime, coherence, Floquet | ~7 min | ✅ `src/quipu/` |
+| `asset_resource_mesh.py` | Physical realization, compute asset mesh, tunnel density | periodic | ✅ `src/quipu/` |
+| `temporal_spatiality.py` | Sense signals, weight prior, torus boundary | ~30 s | ✅ `src/quipu/` |
+| `local_store.py` | SQLite connection manager (corpus, brain_kv, kv_store) | always | ✅ `src/quipu/` |
+| `synaptic_workers.py` | Worker orchestration, bridge bifurcation, vision, UEQGM, doc annealing | 5–30 min | SCB lineage |
+| `doc_annealing.py` | Living-map auto-generation, structural change review, RAG re-index | ~30 min | SCB lineage (not shipped — this map is hand-maintained in QUIPU) |
+| `doc_rag.py` | TF-IDF + OpenRouter RAG over `data/documents/` | on-demand | SCB lineage |
 
 ---
 
-*End of living system map — next annealing in ~30 min.*
+*End of living system map — hand-maintained in the QUIPU Entirety (no auto-annealer shipped). Update this document directly as the architecture progresses.*
