@@ -79,6 +79,7 @@
 
     .header-badges {
       display: flex;
+      align-items: center;
       gap: 12px;
     }
     .badge {
@@ -98,6 +99,22 @@
       border-radius: 50%;
       background: var(--accent-green);
       box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .btn-stop-server {
+      background: rgba(255, 82, 82, 0.15);
+      color: var(--accent-red);
+      border: 1px solid rgba(255, 82, 82, 0.3);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-stop-server:hover {
+      background: rgba(255, 82, 82, 0.3);
+      box-shadow: 0 0 12px rgba(255, 82, 82, 0.4);
     }
 
     .main-grid {
@@ -385,9 +402,9 @@
       </div>
     </div>
     <div class="header-badges">
-      <div class="badge" id="engineBadge"><div class="badge-dot"></div> ENGINE READY</div>
+      <div class="badge" id="engineBadge"><div class="badge-dot" id="badgeDot"></div> <span id="engineBadgeText">CHECKING SERVER...</span></div>
       <div class="badge" style="color: var(--accent-cyan)">GARD_WEYL_v1</div>
-      <div class="badge" style="color: var(--accent-green)">ZERO DISSOCIATION</div>
+      <button class="btn-stop-server" id="stopServerBtn" title="Click to stop background server and free port 8780">🛑 Stop Server & Free Port 8780</button>
     </div>
   </header>
 
@@ -507,6 +524,7 @@
 
   <script>
     const API = "http://127.0.0.1:8780/api";
+    let IS_SERVER_ACTIVE = false;
     let SELECTED_FILE = null;
     let LAST_BLOB = null;
     let LAST_FILENAME = "";
@@ -521,6 +539,9 @@
     const downloadBtn = document.getElementById("downloadBtn");
     const downloadBtnText = document.getElementById("downloadBtnText");
     const refreshBtn = document.getElementById("refreshBtn");
+    const stopServerBtn = document.getElementById("stopServerBtn");
+    const engineBadgeText = document.getElementById("engineBadgeText");
+    const badgeDot = document.getElementById("badgeDot");
     const logTbody = document.getElementById("logTbody");
     const toast = document.getElementById("toast");
 
@@ -529,6 +550,34 @@
       toast.style.display = "block";
       setTimeout(() => { toast.style.display = "none"; }, 3500);
     }
+
+    async function checkServerStatus() {
+      try {
+        const resp = await fetch(`${API}/state`, { signal: AbortSignal.timeout(1500) });
+        if (resp.ok) {
+          IS_SERVER_ACTIVE = true;
+          engineBadgeText.innerText = "SERVER ONLINE (PORT 8780)";
+          badgeDot.style.background = "var(--accent-green)";
+          badgeDot.style.boxShadow = "0 0 8px var(--accent-green)";
+          stopServerBtn.style.display = "inline-block";
+          return;
+        }
+      } catch (e) { }
+
+      IS_SERVER_ACTIVE = false;
+      engineBadgeText.innerText = "IN-BROWSER ENGINE (PORT 8780 FREED)";
+      badgeDot.style.background = "var(--accent-cyan)";
+      badgeDot.style.boxShadow = "0 0 8px var(--accent-cyan)";
+      stopServerBtn.style.display = "none";
+    }
+
+    stopServerBtn.onclick = async () => {
+      try {
+        await fetch(`${API}/shutdown`, { method: "POST" });
+        showToast("Server stopped cleanly. Port 8780 freed.");
+      } catch (e) { }
+      setTimeout(checkServerStatus, 500);
+    };
 
     dropzone.onclick = () => fileInput.click();
     browseBtn.onclick = () => fileInput.click();
@@ -572,24 +621,24 @@
       try {
         let resData = null;
         let isServer = false;
-        try {
-          const endpoint = actionType === "compress" ? `${API}/compress` : `${API}/decompress`;
-          const payload = { filename: fn };
-          if (SELECTED_FILE) {
-            payload.filename = SELECTED_FILE.name;
-            payload.file_b64 = await fileToBase64(SELECTED_FILE);
-          }
-          const resp = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          if (resp.ok) {
-            resData = await resp.json();
-            isServer = true;
-          }
-        } catch (e) {
-          // Server offline fallback
+        if (IS_SERVER_ACTIVE) {
+          try {
+            const endpoint = actionType === "compress" ? `${API}/compress` : `${API}/decompress`;
+            const payload = { filename: fn };
+            if (SELECTED_FILE) {
+              payload.filename = SELECTED_FILE.name;
+              payload.file_b64 = await fileToBase64(SELECTED_FILE);
+            }
+            const resp = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (resp.ok) {
+              resData = await resp.json();
+              isServer = true;
+            }
+          } catch (e) { }
         }
 
         if (!resData) {
@@ -645,7 +694,6 @@
         HISTORY.unshift(result);
         return result;
       } else {
-        // Decompress action - 100% bit-for-bit exact binary reconstruction
         LAST_BLOB = new Blob([rawBytes], { type: "application/octet-stream" });
         LAST_FILENAME = filename.replace(".gard.weyl.bin", "").replace(".weyl.bin", "").replace(".gz", "");
 
@@ -685,7 +733,6 @@
         document.getElementById(`bar${i}`).style.height = `${val * 100}%`;
       }
 
-      // Download button setup
       const targetName = data.output_decompressed || data.output_gard_shard || data.output || LAST_FILENAME;
       if (targetName) {
         downloadBtn.style.display = "inline-flex";
@@ -751,7 +798,8 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    refreshBtn.onclick = () => showToast("Activity log refreshed.");
+    checkServerStatus();
+    refreshBtn.onclick = () => { checkServerStatus(); showToast("Refreshed status."); };
   </script>
 </body>
 </html>

@@ -363,7 +363,13 @@ class GardLiteRequestHandler(BaseHTTPRequestHandler):
             body_bytes = self.rfile.read(length)
             params = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
 
+            if path == "/api/shutdown":
+                self._send_json({"status": "shutting_down", "message": "Server stopped cleanly. Port 8780 freed."})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
+
             if path == "/api/compress":
+
                 file_b64 = str(params.get("file_b64") or "").strip()
                 filename = str(params.get("filename") or params.get("path") or "").strip('\'"')
 
