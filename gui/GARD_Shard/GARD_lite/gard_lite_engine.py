@@ -151,11 +151,12 @@ def compress_gard_shard(raw_bytes: bytes, filename: str) -> dict[str, Any]:
     }
 
     res = {
-        "engine": "GARD Lite Neural Memory & Binary Tensor Packing (v2.2 LE)",
+        "engine": "GARD Lite High-Performance Neural Memory & Binary Tensor Packing (v2.2 LE)",
         "action": "compress",
         "source": fname,
         "output_gard_shard": out_file.name,
         "output_path": str(out_file),
+        "download_url": f"/api/file/{urllib.parse.quote(out_file.name)}",
         "format": Path(fname).suffix.lower() or ".bin",
         "in_bytes": in_bytes,
         "out_bytes": out_bytes,
@@ -257,6 +258,7 @@ def decompress_gard_shard(raw_bytes: bytes, filename: str) -> dict[str, Any]:
         "source": fname,
         "output_decompressed": out_file.name,
         "output_path": str(out_file),
+        "download_url": f"/api/file/{urllib.parse.quote(out_file.name)}",
         "format": Path(out_name).suffix.lower() or ".bin",
         "in_bytes": in_bytes,
         "restored_bytes": out_bytes,
@@ -299,7 +301,6 @@ class GardLiteRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_OPTIONS(self) -> None:
-
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -334,15 +335,16 @@ class GardLiteRequestHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/api/file/"):
             target_name = urllib.parse.unquote(path.replace("/api/file/", ""))
-            comp_file = _COMPRESSION_DIR / target_name
             decomp_file = _DECOMPRESSION_DIR / target_name
-            target = comp_file if comp_file.is_file() else (decomp_file if decomp_file.is_file() else None)
+            comp_file = _COMPRESSION_DIR / target_name
+            target = decomp_file if decomp_file.is_file() else (comp_file if comp_file.is_file() else None)
 
             if target and target.is_file():
                 raw = target.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
+
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
