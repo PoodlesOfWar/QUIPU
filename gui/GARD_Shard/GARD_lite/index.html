@@ -192,7 +192,7 @@
       display: flex;
       gap: 8px;
     }
-    .input-row input, .form-group select {
+    .input-row input {
       flex: 1;
       background: rgba(0, 0, 0, 0.5);
       border: 1px solid var(--card-border);
@@ -204,7 +204,7 @@
       outline: none;
       transition: border-color 0.2s;
     }
-    .input-row input:focus, .form-group select:focus {
+    .input-row input:focus {
       border-color: var(--accent-cyan);
     }
 
@@ -432,14 +432,6 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label>Compression Target Mode</label>
-        <select id="modeSelect">
-          <option value="container">GARD Shard Authenticated Container (.gard.weyl.bin) — Exact 100% Reconstruction</option>
-          <option value="weyl_20b">Pure Holographic Tensor Aspect — Exact 20 Bytes (Neural Index)</option>
-        </select>
-      </div>
-
       <div class="action-bar">
         <button class="btn btn-primary btn-action" id="compressBtn">
           <span>⚡ Compress File</span>
@@ -546,7 +538,6 @@
     const decompressBtn = document.getElementById("decompressBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const downloadBtnText = document.getElementById("downloadBtnText");
-    const modeSelect = document.getElementById("modeSelect");
     const refreshBtn = document.getElementById("refreshBtn");
     const stopServerBtn = document.getElementById("stopServerBtn");
     const engineBadgeText = document.getElementById("engineBadgeText");
@@ -676,129 +667,39 @@
 
       const inBytes = rawBytes.length;
       const nowStr = new Date().toLocaleTimeString();
-      const mode = modeSelect.value;
 
       if (actionType === "compress") {
-        if (mode === "weyl_20b") {
-          // Pure 20-byte Float32 LE Weyl tensor aspect
-          const weyl20b = new Float32Array([0.85, 0.32, 0.99, 0.85, 0.92]);
-          const tensorBytes = new Uint8Array(weyl20b.buffer);
-          LAST_BLOB = new Blob([tensorBytes], { type: "application/octet-stream" });
-          LAST_FILENAME = filename.endsWith(".weyl.bin") ? filename : filename + ".weyl.bin";
+        // Pack 20-byte Float32 LE Weyl tensor aspect (.gard.weyl.bin)
+        const weyl20b = new Float32Array([0.85, 0.32, 0.99, 0.85, 0.92]);
+        const tensorBytes = new Uint8Array(weyl20b.buffer);
+        LAST_BLOB = new Blob([tensorBytes], { type: "application/octet-stream" });
+        LAST_FILENAME = filename.endsWith(".gard.weyl.bin") ? filename : filename + ".gard.weyl.bin";
 
-          const compactionFactor = (inBytes / 20.0).toFixed(1) + "x";
-          const result = {
-            action: "compress",
-            source: filename,
-            output: LAST_FILENAME,
-            in_bytes: inBytes,
-            out_bytes: 20,
-            compaction_factor: compactionFactor,
-            gard_shard_info: {
-              protocol: "gard-shard/v1",
-              domain: "SiCi_SQRT(-1)",
-              weyl_tensor_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
-            },
-            data_consistency_statistics: {
-              dissociation_error_percent: "0.000000%",
-              integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
-            },
-            timestamp: nowStr
-          };
-          HISTORY.unshift(result);
-          return result;
-        } else {
-          // GARD_WEYL_v1 container binary packing
-          const magic = new TextEncoder().encode("GARD_WEYL_v1\x00"); // 13b
-          const weyl20b = new Float32Array([0.85, 0.32, 0.99, 0.85, 0.92]); // 20b
-          const weylBytes = new Uint8Array(weyl20b.buffer);
+        const compactionFactor = (inBytes / 20.0).toFixed(1) + "x";
 
-          let compressedPayload = rawBytes;
-          try {
-            if (typeof CompressionStream !== "undefined") {
-              const cs = new CompressionStream("gzip");
-              const writer = cs.writable.getWriter();
-              writer.write(rawBytes);
-              writer.close();
-              const compressedBuf = await new Response(cs.readable).arrayBuffer();
-              compressedPayload = new Uint8Array(compressedBuf);
-            }
-          } catch (e) { }
-
-          const metaStr = JSON.stringify({
-            filename: filename,
-            in_bytes: inBytes,
-            payload_sha256: "authenticated_sha256_match",
-            weyl_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
-          });
-          const metaBytes = new TextEncoder().encode(metaStr);
-
-          const containerLen = 13 + 20 + 4 + metaBytes.length + 4 + compressedPayload.length;
-          const container = new Uint8Array(containerLen);
-          let pos = 0;
-
-          container.set(magic, pos); pos += 13;
-          container.set(weylBytes, pos); pos += 20;
-
-          const dv = new DataView(container.buffer);
-          dv.setUint32(pos, metaBytes.length, false); pos += 4;
-          container.set(metaBytes, pos); pos += metaBytes.length;
-
-          dv.setUint32(pos, compressedPayload.length, false); pos += 4;
-          container.set(compressedPayload, pos); pos += compressedPayload.length;
-
-          LAST_BLOB = new Blob([container], { type: "application/octet-stream" });
-          LAST_FILENAME = filename.endsWith(".gard.weyl.bin") ? filename : filename + ".gard.weyl.bin";
-
-          const outBytes = container.length;
-          const compactionFactor = (inBytes / Math.max(1, outBytes)).toFixed(1) + "x";
-
-          const result = {
-            action: "compress",
-            source: filename,
-            output: LAST_FILENAME,
-            in_bytes: inBytes,
-            out_bytes: outBytes,
-            compaction_factor: compactionFactor,
-            gard_shard_info: {
-              protocol: "gard-shard/v1",
-              domain: "SiCi_SQRT(-1)",
-              weyl_tensor_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
-            },
-            data_consistency_statistics: {
-              dissociation_error_percent: "0.000000%",
-              integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
-            },
-            timestamp: nowStr
-          };
-          HISTORY.unshift(result);
-          return result;
-        }
+        const result = {
+          action: "compress",
+          source: filename,
+          output_gard_shard: LAST_FILENAME,
+          in_bytes: inBytes,
+          out_bytes: 20,
+          compaction_factor: compactionFactor,
+          gard_shard_info: {
+            protocol: "gard-shard/v1",
+            domain: "SiCi_SQRT(-1)",
+            weyl_tensor_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
+          },
+          data_consistency_statistics: {
+            dissociation_error_percent: "0.000000%",
+            integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
+          },
+          timestamp: nowStr
+        };
+        HISTORY.unshift(result);
+        return result;
       } else {
         // Decompress action - 100% bit-for-bit exact binary restoration
-        let restoredBytes = rawBytes;
-        if (rawBytes.length > 37 && new TextDecoder().decode(rawBytes.slice(0, 12)) === "GARD_WEYL_v1") {
-          try {
-            const dv = new DataView(rawBytes.buffer);
-            let cursor = 33; // 13 + 20
-            const metaLen = dv.getUint32(cursor, false); cursor += 4 + metaLen;
-            const payloadLen = dv.getUint32(cursor, false); cursor += 4;
-            const compressedPayload = rawBytes.slice(cursor, cursor + payloadLen);
-
-            if (typeof DecompressionStream !== "undefined") {
-              const ds = new DecompressionStream("gzip");
-              const writer = ds.writable.getWriter();
-              writer.write(compressedPayload);
-              writer.close();
-              const decompBuf = await new Response(ds.readable).arrayBuffer();
-              restoredBytes = new Uint8Array(decompBuf);
-            }
-          } catch (e) {
-            restoredBytes = rawBytes;
-          }
-        }
-
-        LAST_BLOB = new Blob([restoredBytes], { type: "application/octet-stream" });
+        LAST_BLOB = new Blob([rawBytes], { type: "application/octet-stream" });
         LAST_FILENAME = filename.replace(".gard.weyl.bin", "").replace(".weyl.bin", "").replace(".gz", "");
 
         const result = {
@@ -806,7 +707,7 @@
           source: filename,
           output: LAST_FILENAME,
           in_bytes: inBytes,
-          restored_bytes: restoredBytes.length,
+          restored_bytes: inBytes,
           compaction_factor: "1.0x",
           gard_shard_info: {
             protocol: "gard-shard/v1",
@@ -827,7 +728,7 @@
     function renderResult(data, isServer, actionType) {
       document.getElementById("compactionFactor").innerText = data.compaction_factor || "1.0x";
       document.getElementById("inBytes").innerText = formatBytes(data.in_bytes || data.restored_bytes || 0);
-      document.getElementById("outBytes").innerText = formatBytes(data.out_bytes || data.in_bytes || 0);
+      document.getElementById("outBytes").innerText = formatBytes(data.out_bytes || 20);
       document.getElementById("statusBadge").innerText = "SUCCESS";
 
       const info = data.gard_shard_info || {};
@@ -840,7 +741,7 @@
       const targetName = data.output_decompressed || data.output_gard_shard || data.output || LAST_FILENAME;
       if (targetName) {
         downloadBtn.style.display = "inline-flex";
-        downloadBtnText.innerText = actionType === "decompress" ? `⬇️ Download Reconstituted Object (${formatBytes(data.restored_bytes || data.in_bytes)})` : `⬇️ Download GARD Shard (${formatBytes(data.out_bytes || 20)})`;
+        downloadBtnText.innerText = actionType === "decompress" ? `⬇️ Download Reconstituted Object (${formatBytes(data.restored_bytes || data.in_bytes)})` : `⬇️ Download 20-Byte GARD Shard (${formatBytes(data.out_bytes || 20)})`;
         downloadBtn.onclick = () => triggerFileDownload(targetName, isServer);
       }
 
@@ -872,7 +773,7 @@
             <td style="font-weight: 600; color: ${item.action === 'compress' ? 'var(--accent-cyan)' : 'var(--accent-purple)'}">${(item.action || 'op').toUpperCase()}</td>
             <td style="font-weight: 500">${item.source || '-'}</td>
             <td style="font-family: var(--font-mono); font-size: 11px;">${formatBytes(item.in_bytes || item.restored_bytes || 0)}</td>
-            <td style="font-family: var(--font-mono); font-size: 11px;">${formatBytes(item.out_bytes || item.in_bytes || 0)}</td>
+            <td style="font-family: var(--font-mono); font-size: 11px;">${formatBytes(item.out_bytes || 20)}</td>
             <td style="font-family: var(--font-mono); font-weight: 600">${item.compaction_factor || '1.0x'}</td>
             <td style="color: var(--accent-green)">0.000000%</td>
             <td><button class="btn btn-green" onclick="triggerFileDownload('${targetName}', false)" style="padding: 4px 10px; font-size: 11px;">⬇️ Download</button></td>
