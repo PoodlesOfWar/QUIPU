@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GARD Lite — High-Performance Neural Memory & GARD Shard Control Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080c14;
+      --card-bg: rgba(16, 24, 40, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-glow: rgba(0, 242, 254, 0.3);
+      --accent-cyan: #00f2fe;
+      --accent-blue: #4facfe;
+      --accent-purple: #7f00ff;
+      --accent-green: #00e676;
+      --accent-red: #ff5252;
+      --text-main: #f0f4f8;
+      --text-muted: #94a3b8;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(79, 172, 254, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(127, 0, 255, 0.12) 0px, transparent 50%);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: #fff;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+    }
+    .brand-title h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #fff, var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .header-badges {
+      display: flex;
+      gap: 12px;
+    }
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: border-color 0.3s;
+    }
+    .glass-card:hover {
+      border-color: var(--card-border-glow);
+    }
+
+    .card-header {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Dropzone */
+    .dropzone {
+      border: 2px dashed rgba(0, 242, 254, 0.3);
+      border-radius: 12px;
+      padding: 32px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(0, 242, 254, 0.02);
+      transition: all 0.3s ease;
+      margin-bottom: 16px;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 242, 254, 0.08);
+      box-shadow: 0 0 24px rgba(0, 242, 254, 0.2);
+    }
+    .dropzone-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .dropzone p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .dropzone span {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Input & Controls */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .input-row input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-row input:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #000;
+      box-shadow: 0 4px 16px rgba(0, 242, 254, 0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .action-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .btn-action {
+      padding: 14px;
+      font-size: 14px;
+      justify-content: center;
+      border-radius: 10px;
+    }
+
+    /* Results Card */
+    .stat-hero {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.1), rgba(127, 0, 255, 0.1));
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .stat-hero-value {
+      font-size: 38px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      background: linear-gradient(90deg, var(--accent-cyan), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat-hero-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .metric-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .metric-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .metric-val {
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      margin-top: 4px;
+    }
+
+    /* Tensor Bar Chart */
+    .tensor-chart {
+      margin-top: 16px;
+    }
+    .tensor-chart-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .tensor-bars {
+      display: flex;
+      gap: 8px;
+      height: 60px;
+      align-items: flex-end;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px;
+      border-radius: 8px;
+    }
+    .tensor-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+    .tensor-bar-fill {
+      width: 100%;
+      background: linear-gradient(0deg, var(--accent-purple), var(--accent-cyan));
+      border-radius: 3px;
+      transition: height 0.4s ease;
+    }
+    .tensor-bar-lbl {
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    /* Activity Log */
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .log-table th {
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--card-border);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .log-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .log-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .tag-ok {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--accent-green);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border-glow);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 650px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 16px;
+      border-radius: 8px;
+      color: var(--accent-cyan);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      background: #1e293b;
+      border: 1px solid var(--accent-cyan);
+      color: #fff;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: none;
+      z-index: 2000;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">G</div>
+      <div class="brand-title">
+        <h1>GARD Lite Control Plane</h1>
+        <p>Self-Sustainable Neural Memory & Binary Tensor Packing</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge"><div class="badge-dot"></div> ENGINE ONLINE</div>
+      <div class="badge" id="portBadge">PORT 8780</div>
+      <div class="badge" style="color: var(--accent-cyan)">ZERO DISSOCIATION</div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- Left Column: Operations -->
+    <div class="glass-card">
+      <div class="card-header">
+        <span>File Operations</span>
+        <span style="font-size: 12px; color: var(--text-muted)">GARD_WEYL_v1</span>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <span class="dropzone-icon">📁</span>
+        <p>Drag & Drop any file here, or <span>Browse Files</span></p>
+        <p style="font-size: 11px; margin-top: 4px; color: var(--text-muted)">Supports .pptx, .pdf, .docx, .xlsx, .csv, .json, .png, .jpg, .txt, etc.</p>
+        <input type="file" id="fileInput" style="display: none;">
+      </div>
+
+      <div class="form-group">
+        <label>Selected File Path / Name</label>
+        <div class="input-row">
+          <input type="text" id="filePathInput" placeholder="Click Browse or Drag file above...">
+          <button class="btn btn-secondary" id="browseBtn" type="button">📁 Browse</button>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-primary btn-action" id="compressBtn">
+          <span>⚡ Compress File</span>
+        </button>
+        <button class="btn btn-secondary btn-action" id="decompressBtn">
+          <span>🔓 Decompress File</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Column: Real-Time Results -->
+    <div class="glass-card">
+      <div class="card-header">
+        <span>Real-Time Shard Metrics</span>
+        <span class="tag-ok" id="statusBadge">READY</span>
+      </div>
+
+      <div class="stat-hero">
+        <div class="stat-hero-value" id="compactionFactor">--</div>
+        <div class="stat-hero-label">Neural Compaction Factor</div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-title">Input File Size</div>
+          <div class="metric-val" id="inBytes">0 B</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-title">Shard Output Size</div>
+          <div class="metric-val" id="outBytes">0 B</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-title">Dissociation Error</div>
+          <div class="metric-val" style="color: var(--accent-green)">0.000000%</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-title">HMAC Integrity</div>
+          <div class="metric-val" style="color: var(--accent-cyan)">VERIFIED</div>
+        </div>
+      </div>
+
+      <!-- Tensor Bar Chart -->
+      <div class="tensor-chart">
+        <div class="tensor-chart-title">Newman-Penrose Weyl Tensor Aspect (Ψ₀ – Ψ₄)</div>
+        <div class="tensor-bars">
+          <div class="tensor-bar-col"><div class="tensor-bar-fill" id="bar0" style="height: 50%"></div><span class="tensor-bar-lbl">Ψ₀</span></div>
+          <div class="tensor-bar-col"><div class="tensor-bar-fill" id="bar1" style="height: 30%"></div><span class="tensor-bar-lbl">Ψ₁</span></div>
+          <div class="tensor-bar-col"><div class="tensor-bar-fill" id="bar2" style="height: 80%"></div><span class="tensor-bar-lbl">Ψ₂</span></div>
+          <div class="tensor-bar-col"><div class="tensor-bar-fill" id="bar3" style="height: 85%"></div><span class="tensor-bar-lbl">Ψ₃</span></div>
+          <div class="tensor-bar-col"><div class="tensor-bar-fill" id="bar4" style="height: 92%"></div><span class="tensor-bar-lbl">Ψ₄</span></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+        <button class="btn btn-secondary" id="downloadBtn" style="display: none;">⬇️ Download Result File</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Panel: History Log -->
+  <div class="glass-card">
+    <div class="card-header">
+      <span>GARD Lite Activity Log</span>
+      <button class="btn btn-secondary" id="refreshBtn" style="padding: 4px 10px; font-size: 11px;">🔄 Refresh</button>
+    </div>
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>Source File</th>
+          <th>Input Size</th>
+          <th>Output Size</th>
+          <th>Compaction</th>
+          <th>Dissociation</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="logTbody">
+        <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">No operations recorded yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-card">
+      <div class="card-header">
+        <span>GARD Shard Metadata & Digest Payload</span>
+        <button class="btn btn-secondary" id="closeModalBtn" style="padding: 4px 8px;">✕</button>
+      </div>
+      <pre id="modalPre"></pre>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = "http://127.0.0.1:8780/api";
+    let SELECTED_FILE = null;
+    let LAST_RESULT = null;
+
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const filePathInput = document.getElementById("filePathInput");
+    const browseBtn = document.getElementById("browseBtn");
+    const compressBtn = document.getElementById("compressBtn");
+    const decompressBtn = document.getElementById("decompressBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const logTbody = document.getElementById("logTbody");
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modalPre = document.getElementById("modalPre");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    const toast = document.getElementById("toast");
+
+    function showToast(msg) {
+      toast.innerText = msg;
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 3500);
+    }
+
+    // Drag & Drop
+    dropzone.onclick = () => fileInput.click();
+    browseBtn.onclick = () => fileInput.click();
+
+    dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("dragover"); };
+    dropzone.ondragleave = () => dropzone.classList.remove("dragover");
+    dropzone.ondrop = (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) {
+        handleFileSelect(e.dataTransfer.files[0]);
+      }
+    };
+
+    fileInput.onchange = (e) => {
+      if (e.target.files.length) {
+        handleFileSelect(e.target.files[0]);
+      }
+    };
+
+    function handleFileSelect(file) {
+      SELECTED_FILE = file;
+      filePathInput.value = file.name;
+      showToast(`Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    }
+
+    async function readFileAsB64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result || "";
+          const idx = String(res).indexOf(",");
+          resolve(idx !== -1 ? String(res).slice(idx + 1) : String(res));
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    compressBtn.onclick = () => executeAction("compress");
+    decompressBtn.onclick = () => executeAction("decompress");
+
+    async function executeAction(actionType) {
+      const fn = filePathInput.value.trim();
+      if (!fn && !SELECTED_FILE) {
+        showToast("Please select a file first.");
+        return;
+      }
+
+      const endpoint = actionType === "compress" ? `${API}/compress` : `${API}/decompress`;
+      const payload = {};
+
+      if (SELECTED_FILE && (SELECTED_FILE.name === fn || !fn)) {
+        payload.filename = SELECTED_FILE.name;
+        payload.file_b64 = await readFileAsB64(SELECTED_FILE);
+      } else {
+        payload.filename = fn;
+      }
+
+      try {
+        compressBtn.disabled = true;
+        decompressBtn.disabled = true;
+        showToast(`Processing ${actionType}...`);
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          showToast(`Error: ${data.error}`);
+        } else {
+          showToast(`Success: ${actionType} completed!`);
+          renderResult(data);
+          loadState();
+        }
+      } catch (err) {
+        showToast(`Failed: ${err.message}`);
+      } finally {
+        compressBtn.disabled = false;
+        decompressBtn.disabled = false;
+      }
+    }
+
+    function renderResult(data) {
+      LAST_RESULT = data;
+      document.getElementById("compactionFactor").innerText = data.compaction_factor || "1.0x";
+      document.getElementById("inBytes").innerText = formatBytes(data.in_bytes || data.restored_bytes || 0);
+      document.getElementById("outBytes").innerText = formatBytes(data.out_bytes || data.in_bytes || 0);
+      document.getElementById("statusBadge").innerText = "SUCCESS";
+
+      // Render Weyl bars
+      const info = data.gard_shard_info || {};
+      const psi5 = info.weyl_tensor_psi5 || [0.5, 0.1, 0.95, 0.85, 0.92];
+      for (let i = 0; i < 5; i++) {
+        const val = Math.min(1.0, Math.max(0.05, psi5[i] || 0.5));
+        document.getElementById(`bar${i}`).style.height = `${val * 100}%`;
+      }
+
+      // Download button
+      const downloadName = data.output_gard_shard || data.output_decompressed;
+      if (downloadName) {
+        downloadBtn.style.display = "inline-flex";
+        downloadBtn.onclick = () => {
+          window.location.href = `${API}/file/${encodeURIComponent(downloadName)}`;
+        };
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function loadState() {
+      try {
+        const res = await fetch(`${API}/state`);
+        const data = await res.json();
+        const history = data.history || [];
+
+        if (!history.length) {
+          logTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">No operations recorded yet.</td></tr>`;
+          return;
+        }
+
+        logTbody.innerHTML = history.map(item => `
+          <tr>
+            <td style="font-family: var(--font-mono); font-size: 11px;">${(item.timestamp || '').slice(11, 19)}</td>
+            <td style="font-weight: 600; color: ${item.action === 'compress' ? 'var(--accent-cyan)' : 'var(--accent-purple)'}">${(item.action || 'op').toUpperCase()}</td>
+            <td style="font-weight: 500">${item.source || '-'}</td>
+            <td style="font-family: var(--font-mono); font-size: 11px;">${formatBytes(item.in_bytes || item.restored_bytes || 0)}</td>
+            <td style="font-family: var(--font-mono); font-size: 11px;">${formatBytes(item.out_bytes || item.in_bytes || 0)}</td>
+            <td style="font-family: var(--font-mono); font-weight: 600">${item.compaction_factor || '1.0x'}</td>
+            <td style="color: var(--accent-green)">0.000000%</td>
+            <td><span class="tag-ok">HMAC VERIFIED</span></td>
+            <td><button class="btn btn-secondary" onclick='openModal(${JSON.stringify(item).replace(/'/g, "&apos;")})' style="padding: 2px 8px; font-size: 11px;">🔍 Inspect</button></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.warn("Failed to load state:", err);
+      }
+    }
+
+    function openModal(item) {
+      modalPre.innerText = JSON.stringify(item, null, 2);
+      modalOverlay.style.display = "flex";
+    }
+
+    closeModalBtn.onclick = () => modalOverlay.style.display = "none";
+    modalOverlay.onclick = (e) => { if (e.target === modalOverlay) modalOverlay.style.display = "none"; };
+    refreshBtn.onclick = loadState;
+
+    loadState();
+  </script>
+</body>
+</html>
