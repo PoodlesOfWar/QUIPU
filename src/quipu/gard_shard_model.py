@@ -396,6 +396,10 @@ def langevin_sigma_from_weyl(
         return float(sigma_base)
 
 
+# GARD information-science alias (same function, compression/information naming).
+langevin_sigma_from_gard = langevin_sigma_from_weyl
+
+
 def build_model_context(
     *,
     mesh_state7: Sequence[float] | None = None,
@@ -459,6 +463,8 @@ def build_model_context(
                 "hawking_remnant_score",
             )
         }
+        if "gard_crb" in raw_compaction:
+            compaction["gard_crb"] = raw_compaction["gard_crb"]
     except Exception:
         compaction = {}
 
@@ -477,6 +483,7 @@ def build_model_context(
         "architecture": "MESH-SLM-SCM-GLM-Quipu-GNN",
         "mesh_state7": mesh,
         "weyl_psi5": weyl,
+        "gard_state5": weyl,
         "scm": {
             "phase_weight": scm.get("phase_weight", 1.0),
             "coherence_depth": scm.get("coherence_depth", 0),
@@ -1055,6 +1062,7 @@ __all__ = [
     "canonical_json_bytes",
     "sha256_hex",
     "langevin_sigma_from_weyl",
+    "langevin_sigma_from_gard",
     "verification_enabled_from_env",
     "build_model_context",
     "encrypt_json",
