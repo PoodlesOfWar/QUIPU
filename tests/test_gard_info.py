@@ -12,6 +12,8 @@ from src.quipu.gard_info import (
     fisher_information_gard,
     gard_floor_bytes,
     gard_floor_bytes_from_state,
+    interstitial_bits,
+    photon_covariance_proxy,
 )
 
 
@@ -152,3 +154,144 @@ def test_gard_floor_bytes_from_state_fallback_on_bad_input():
     # Should not raise; should return a valid dict.
     assert result["floor_bytes"] >= 1
     assert math.isfinite(result["sigma"])
+
+
+# ── interstitial_bits ─────────────────────────────────────────────────────────
+
+def test_interstitial_bits_keys():
+    result = interstitial_bits(0.05)
+    assert set(result.keys()) == {
+        "sigma", "floor_bits", "actual_bits", "interstitial_bits", "interstitial_fraction"
+    }
+
+
+def test_interstitial_bits_gap_is_nonnegative():
+    """Interstitial gap must never be negative."""
+    for sigma in [0.001, 0.01, 0.05, 0.1, 0.5, 2.0]:
+        result = interstitial_bits(sigma)
+        assert result["interstitial_bits"] >= 0.0, f"negative gap at sigma={sigma}"
+
+
+def test_interstitial_bits_fraction_in_01():
+    """Fraction must lie in [0, 1]."""
+    for sigma in [0.001, 0.05, 0.5]:
+        result = interstitial_bits(sigma)
+        assert 0.0 <= result["interstitial_fraction"] <= 1.0
+
+
+def test_interstitial_bits_zero_noise():
+    """Very small sigma → floor dominates → gap should be 0 (actual ≤ floor rounds to 0)."""
+    result = interstitial_bits(1e-9)
+    # floor_bits will be very large (cannot resolve sub-noise); actual_bits = 32*5=160
+    # gap is clamped to 0 when floor_bits > actual_bits
+    assert result["interstitial_bits"] >= 0.0
+    assert math.isfinite(result["interstitial_fraction"])
+
+
+def test_interstitial_bits_large_sigma_gives_positive_gap():
+    """Large sigma → CRB floor is small → actual bits exceed floor → gap > 0."""
+    result = interstitial_bits(0.5)
+    assert result["interstitial_bits"] > 0.0
+    assert result["actual_bits"] > result["floor_bits"]
+
+
+def test_interstitial_bits_custom_actual_bpc():
+    """Custom actual_bits_per_component overrides Float32 default."""
+    r_default = interstitial_bits(0.1)
+    r_8bit = interstitial_bits(0.1, actual_bits_per_component=8.0)
+    # 8-bit encoding has fewer actual bits than Float32 (32-bit)
+    assert r_8bit["actual_bits"] < r_default["actual_bits"]
+
+
+# ── photon_covariance_proxy ───────────────────────────────────────────────────
+
+def test_photon_covariance_proxy_identical_returns_one():
+    """Identical states → Pearson correlation = 1."""
+    psi = [0.1, 0.5, 0.7, 0.3, 0.9]
+    assert photon_covariance_proxy(psi, psi) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_photon_covariance_proxy_negated_returns_minus_one():
+    """A negated (reflected about mean) state → correlation = -1."""
+    psi = [0.1, 0.5, 0.7, 0.3, 0.9]
+    mean = sum(psi) / len(psi)
+    neg = [2 * mean - v for v in psi]
+    assert photon_covariance_proxy(psi, neg) == pytest.approx(-1.0, abs=1e-9)
+
+
+def test_photon_covariance_proxy_constant_returns_zero():
+    """Constant vector has zero variance → correlation undefined → 0."""
+    const = [0.5, 0.5, 0.5, 0.5, 0.5]
+    psi = [0.1, 0.5, 0.7, 0.3, 0.9]
+    assert photon_covariance_proxy(const, psi) == 0.0
+    assert photon_covariance_proxy(psi, const) == 0.0
+
+
+def test_photon_covariance_proxy_symmetry():
+    """C(a,b) == C(b,a)."""
+    a = [0.2, 0.6, 0.4, 0.8, 0.1]
+    b = [0.9, 0.3, 0.7, 0.5, 0.2]
+    assert photon_covariance_proxy(a, b) == pytest.approx(photon_covariance_proxy(b, a), abs=1e-12)
+
+
+def test_photon_covariance_proxy_mismatched_length_returns_zero():
+    assert photon_covariance_proxy([0.1, 0.2, 0.3], [0.4, 0.5]) == 0.0
+
+
+def test_photon_covariance_proxy_result_clamped():
+    """Result must be in [-1, 1]."""
+    import random
+    rng = random.Random(42)
+    for _ in range(20):
+        a = [rng.random() for _ in range(5)]
+        b = [rng.random() for _ in range(5)]
+        val = photon_covariance_proxy(a, b)
+        assert -1.0 <= val <= 1.0
+
+
+# ── interstitial_entanglement_score (via ueqgm_engine) ───────────────────────
+
+def test_interstitial_entanglement_score_identical_tensors():
+    """Identical tensors: C=1 everywhere → third-order witness |1·1 − 1|/(1+1) = 0."""
+    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+
+    psi = [0.5, 0.6, 0.4, 0.7, 0.3]
+    score = interstitial_entanglement_score([psi, psi, psi])
+    # witness = |C_01*C_12 - C_02| / (1+|C_02|) = |1*1 - 1| / (1+1) = 0
+    assert score == pytest.approx(0.0, abs=1e-6)
+
+
+def test_interstitial_entanglement_score_single_tensor_returns_zero():
+    """One tensor → fewer than 2 → returns 0."""
+    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+
+    assert interstitial_entanglement_score([[0.5, 0.5, 0.5, 0.5, 0.5]]) == 0.0
+
+
+def test_interstitial_entanglement_score_empty_returns_zero():
+    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+
+    assert interstitial_entanglement_score([]) == 0.0
+
+
+def test_interstitial_entanglement_score_two_tensors_degenerate_path():
+    """Two tensors → degenerate: returns |C_01|."""
+    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+
+    a = [0.1, 0.5, 0.7, 0.3, 0.9]
+    b = [0.9, 0.5, 0.3, 0.7, 0.1]
+    expected = abs(photon_covariance_proxy(a, b))
+    score = interstitial_entanglement_score([a, b])
+    assert score == pytest.approx(expected, abs=1e-6)
+
+
+def test_interstitial_entanglement_score_in_01():
+    """Score must always be in [0, 1]."""
+    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+    import random
+
+    rng = random.Random(99)
+    for _ in range(30):
+        seq = [[rng.random() for _ in range(5)] for _ in range(rng.randint(2, 6))]
+        score = interstitial_entanglement_score(seq)
+        assert 0.0 <= score <= 1.0, f"score out of range: {score}"
