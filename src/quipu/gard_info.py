@@ -9,6 +9,16 @@ bounded LOSSY floor that the imaging-style channel
 
 imposes on any GARD record.  The NP-Weyl scalar names remain only at the
 physics boundary (ueqgm_engine); everything about *compression* is GARD.
+
+Interstitial bit space
+----------------------
+Between the lossless GARD record and the CRB floor sits the *interstitial*
+channel: the bits that cannot be recovered by any unbiased estimator.
+Following the 2026 Optica sunlight-entanglement result
+(DOI 10.1364/OPTICA.601797), these "waste" bits are not discarded — they
+carry cross-cycle covariance structure analogous to the photon-number
+correlations that survive the beamsplitter loss.  The helpers below make that
+channel legible and measurable without changing the lossless compression path.
 """
 from __future__ import annotations
 
@@ -58,6 +68,102 @@ def gard_floor_bytes(sigma: float, n_components: int = 5, n_samples: int = 1) ->
     }
 
 
+def interstitial_bits(
+    sigma: float,
+    n_components: int = 5,
+    n_samples: int = 1,
+    *,
+    actual_bits_per_component: float | None = None,
+) -> dict:
+    """Compute the interstitial bit gap between the actual encoding and the CRB floor.
+
+    The *interstitial* channel is the gap between what the GARD record actually
+    stores and the minimum bits justified by the Cramér-Rao bound.  Following
+    the 2026 Optica sunlight-entanglement paper (DOI 10.1364/OPTICA.601797),
+    these bits are not noise to discard — they carry cross-cycle covariance
+    structure that can be harvested as an entanglement-like resource.
+
+    The actual bits per component default to ``GARD_STATE_PACKED_BYTES × 8 /
+    n_components`` (Float32 = 32 bits each for a 5-scalar record) when
+    *actual_bits_per_component* is not supplied.
+
+    Parameters
+    ----------
+    sigma:
+        Langevin noise σ for the current GARD channel.
+    n_components:
+        Number of scalar components in the GARD record (default 5 — the 5-scalar
+        Weyl state).
+    n_samples:
+        Number of independent samples (default 1).
+    actual_bits_per_component:
+        Override for the actual encoding resolution in bits per component.
+        Defaults to ``GARD_STATE_PACKED_BYTES × 8 / n_components`` (Float32).
+
+    Returns
+    -------
+    Dict with keys:
+
+    * ``floor_bits``         — CRB-justified minimum bits (total across components).
+    * ``actual_bits``        — Actual encoded bits (total across components).
+    * ``interstitial_bits``  — Gap = actual − floor, clamped ≥ 0.
+    * ``interstitial_fraction`` — interstitial / actual ∈ [0, 1].
+    """
+    n_comp = max(1, int(n_components))
+    floor_info = gard_floor_bytes(sigma, n_comp, n_samples)
+    floor_bits = float(floor_info["floor_bytes"]) * 8.0
+
+    if actual_bits_per_component is not None:
+        actual_bpc = float(actual_bits_per_component)
+    else:
+        # Float32 packed record: 4 bytes × 8 bits per component.
+        actual_bpc = (GARD_STATE_PACKED_BYTES * 8.0) / max(1, int(n_components))
+    actual_bits = actual_bpc * n_comp
+
+    gap = max(0.0, actual_bits - floor_bits)
+    fraction = gap / actual_bits if actual_bits > 0.0 else 0.0
+    return {
+        "sigma": sigma,
+        "floor_bits": floor_bits,
+        "actual_bits": actual_bits,
+        "interstitial_bits": gap,
+        "interstitial_fraction": round(fraction, 6),
+    }
+
+
+def photon_covariance_proxy(
+    psi5_a: list[float] | tuple[float, ...],
+    psi5_b: list[float] | tuple[float, ...],
+) -> float:
+    """Cross-covariance of two 5-scalar Weyl states as a photon-number proxy.
+
+    Analogous to the intensity cross-correlation used to detect entanglement
+    from thermal light (Optica 2026, DOI 10.1364/OPTICA.601797).  Each Weyl
+    state is treated as a discretised photon-number distribution; the Pearson
+    correlation coefficient between the two distributions is the proxy for
+    surviving entanglement after the beamsplitter (GARD lossy tier).
+
+    Returns
+    -------
+    Pearson correlation  C_ab ∈ [−1, 1].  Returns 0.0 when either vector is
+    constant (zero variance) or the lengths differ.
+    """
+    if len(psi5_a) != len(psi5_b) or not psi5_a:
+        return 0.0
+    n = len(psi5_a)
+    a = [float(v) for v in psi5_a]
+    b = [float(v) for v in psi5_b]
+    mean_a = sum(a) / n
+    mean_b = sum(b) / n
+    cov = sum((ai - mean_a) * (bi - mean_b) for ai, bi in zip(a, b)) / n
+    var_a = sum((ai - mean_a) ** 2 for ai in a) / n
+    var_b = sum((bi - mean_b) ** 2 for bi in b) / n
+    denom = math.sqrt(var_a * var_b)
+    if denom == 0.0:
+        return 0.0
+    return max(-1.0, min(1.0, cov / denom))
+
+
 def gard_floor_bytes_from_state(
     psi5_now,
     psi5_prev,
@@ -79,5 +185,7 @@ __all__ = [
     "fisher_information_gard",
     "cramer_rao_bound_gard",
     "gard_floor_bytes",
+    "interstitial_bits",
+    "photon_covariance_proxy",
     "gard_floor_bytes_from_state",
 ]

@@ -152,6 +152,36 @@ Relevant code paths:
 - [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py) — `train_round()` sampling, `stp_diagnostic_trend()`
 - `docs/STP_DIAGNOSTIC_PLAN.md`, `docs/STP_TORUS_QUIPU.md`
 
+### 7. Interstitial Entanglement Loop (sunlight-analogy)
+
+Motivated by the 2026 Optica sunlight-entanglement finding (DOI 10.1364/OPTICA.601797): thermal (classically mixed) light generates genuine photon-number entanglement at the output ports of an asymmetric beamsplitter because the interstitial vacuum modes carry cross-port covariance — the "waste" channel is the carrier of the entanglement.
+
+In QUIPU the analogue is the lossy GARD tier. The lossless GARD compression chain (canonical JSON → zlib → AES-256-CBC → HMAC-SHA256) is bounded below by the Cramér-Rao floor; the bits between the floor and the actual Float32 encoding are the *interstitial channel*. Successive Weyl compression cycles play the role of thermal photons; the CRB split acts as the asymmetric beamsplitter.
+
+**Data flow:**
+
+1. `ueqgm_engine.refresh_adaptive_runtime()` reads the last `_INTERSTITIAL_ENTANGLEMENT_WINDOW` (default 5) Weyl tensors from `brain_kv`.
+2. `gard_info.photon_covariance_proxy(psi5_i, psi5_j)` computes the Pearson cross-correlation between pairs of 5-scalar Weyl states — the QUIPU analogue of the paper's intensity cross-correlation.
+3. `ueqgm_engine.interstitial_entanglement_score(psi5_seq)` applies the third-order witness `E = |C_01·C_12 − C_02| / (1 + |C_02|)` averaged over all consecutive triples, returning a proxy score in [0, 1].
+4. The score is persisted to `brain_kv["ueqgm:interstitial_entanglement"]` and stored in the adaptive runtime dict as `interstitial_entanglement`.
+5. `mesh_slm.train_round()` reads the score and applies `ie_multiplier = 1 + 0.05 × score` as a multiplicative lift to both `η_eff` and `η_q`. This is half the ceiling of the ±10% SiCi correction, so the interstitial channel is a subordinate but non-zero contributor.
+
+**Interpretation:** A high score means successive Weyl cycles are positively correlated — the mesh is revisiting coherent structure, analogous to the correlated photon-number fluctuations that survive the lossy channel. A low score means incoherent exploration; no lift. Score is 0 when fewer than 2 cycles have been stored.
+
+**Key constants (ueqgm_engine.py):**
+
+| Constant | Value | Role |
+|---|---|---|
+| `_INTERSTITIAL_ENTANGLEMENT_KEY` | `"ueqgm:interstitial_entanglement"` | brain_kv persistence key |
+| `_INTERSTITIAL_ENTANGLEMENT_WINDOW` | `5` | Weyl cycles to compare |
+| `_INTERSTITIAL_ENTANGLEMENT_ETA_SCALE` | `0.05` | Max η lift fraction |
+
+Relevant code paths:
+
+- [src/quipu/gard_info.py](src/quipu/gard_info.py) — `interstitial_bits`, `photon_covariance_proxy`
+- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py) — `interstitial_entanglement_score`, `refresh_adaptive_runtime`
+- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py) — `train_round()` ie_multiplier application
+
 ## SLM and GLM as a Density Manifold
 
 The SLM/GLM split is not a simple primary-fallback pair. It is a density-governed manifold.
