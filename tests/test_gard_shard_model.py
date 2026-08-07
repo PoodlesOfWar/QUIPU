@@ -273,3 +273,48 @@ def test_mesh_compression_julia_declares_packed_weyl_kv_record():
     # New pack/unpack pair is additive; the corrected compaction reference
     # this module already guarantees stays byte-identical.
     assert "@assert s.compaction_ratio == 14_967_705" in compression_julia
+
+# ── GARD rename additive tests ────────────────────────────────────────────────
+
+def test_langevin_sigma_from_gard_alias_matches_weyl():
+    """langevin_sigma_from_gard is an alias for langevin_sigma_from_weyl."""
+    from src.quipu.gard_shard_model import langevin_sigma_from_gard
+
+    psi5_now = [0.5, 0.8, 0.7, 0.9, 0.8]
+    psi5_prev = [0.5, 0.4, 0.7, 0.6, 0.3]
+
+    assert langevin_sigma_from_gard(psi5_now, psi5_prev) == langevin_sigma_from_weyl(
+        psi5_now, psi5_prev
+    )
+    assert langevin_sigma_from_gard is langevin_sigma_from_weyl
+
+
+def test_build_model_context_gard_state5_equals_weyl_psi5():
+    """gard_state5 twin key must equal weyl_psi5 in build_model_context output."""
+    weyl = [0.1, 0.2, 0.3, 0.4, 0.5]
+    context = build_model_context(
+        mesh_state7=[0.0] * 7,
+        weyl_psi5=weyl,
+    )
+    assert context["gard_state5"] == context["weyl_psi5"]
+    assert context["weyl_psi5"] == weyl  # original key still present
+
+
+def test_build_model_context_gard_crb_present_and_populated():
+    """build_model_context should include gard_crb in compaction when available."""
+    context = build_model_context(
+        mesh_state7=[0.0] * 7,
+        weyl_psi5=[0.1, 0.2, 0.3, 0.4, 0.5],
+        slm_state={"vocab_size": 100, "quipu_edges": 50},
+    )
+    compaction = context["quipu_gnn"]["compaction"]
+    assert "gard_crb" in compaction
+    gard_crb = compaction["gard_crb"]
+    assert gard_crb.get("sigma") == 0.05
+    assert "floor_bytes" in gard_crb
+    assert "compaction_scalar_at_crb_floor" in gard_crb
+
+
+def test_langevin_sigma_from_gard_in_all():
+    from src.quipu import gard_shard_model
+    assert "langevin_sigma_from_gard" in gard_shard_model.__all__
