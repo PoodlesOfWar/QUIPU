@@ -1382,13 +1382,16 @@ def weyl_scalar_tensor(
 def information_compaction_scalar(
     source_bytes: float,
     mesh_bytes: float,
+    *,
+    floor_bytes: float | None = None,
 ) -> float:
     """Log-normalised scalar measuring how efficiently the MESH compacts the source.
 
     Measures the achieved compaction ratio *R = source_bytes / mesh_bytes*
     against the theoretical maximum *R_max*, where *R_max* is the ratio of
     the source to the smallest viable MESH representation (the 5-float Weyl
-    tensor, ``_MESH_BRAIN_KV_WEYL_BYTES = 50 bytes``).
+    tensor, ``_MESH_BRAIN_KV_WEYL_BYTES = 50 bytes`` when *floor_bytes* is
+    ``None``, or the supplied CRB-derived floor otherwise).
 
     .. math::
 
@@ -1397,13 +1400,16 @@ def information_compaction_scalar(
         \\right)
 
     A value of **1.0** means the corpus has been distilled all the way to its
-    irreducible Weyl-tensor boundary encoding.  A value of **0.0** indicates
-    no compression (or degenerate inputs).
+    irreducible boundary encoding.  A value of **0.0** indicates no compression
+    (or degenerate inputs).
 
     Parameters
     ----------
     source_bytes:  Total raw corpus size in bytes (e.g. ``15 × 2**40`` for 15 TB).
     mesh_bytes:    Total MESH representation size in bytes (from :func:`mesh_compaction_summary`).
+    floor_bytes:   Optional CRB-derived floor (bytes).  When ``None`` the legacy
+                   ``_MESH_BRAIN_KV_WEYL_BYTES = 50`` floor is used, preserving
+                   byte-identical behaviour with existing callers.
 
     Returns
     -------
@@ -1412,10 +1418,40 @@ def information_compaction_scalar(
     if source_bytes <= 0.0 or mesh_bytes <= 0.0:
         return 0.0
     ratio = source_bytes / mesh_bytes
-    max_ratio = source_bytes / max(float(_MESH_BRAIN_KV_WEYL_BYTES), 1.0)
+    _floor = float(floor_bytes) if floor_bytes is not None else float(_MESH_BRAIN_KV_WEYL_BYTES)
+    max_ratio = source_bytes / max(_floor, 1.0)
     if max_ratio <= 1.0:
         return 0.0
     return _clip01(math.log1p(ratio) / math.log1p(max_ratio))
+
+
+def information_compaction_scalar_gard(
+    source_bytes: float,
+    mesh_bytes: float,
+    *,
+    sigma: float,
+    n_samples: int = 1,
+) -> float:
+    """CRB-bounded compaction scalar using the GARD information floor.
+
+    Computes the floor via :func:`gard_info.gard_floor_bytes` (σ-derived CRB)
+    and delegates to :func:`information_compaction_scalar` with that floor.
+
+    Parameters
+    ----------
+    source_bytes:  Total raw corpus size in bytes.
+    mesh_bytes:    Total MESH representation size in bytes.
+    sigma:         Langevin noise σ for the current GARD channel.
+    n_samples:     Number of independent samples (default 1).
+
+    Returns
+    -------
+    Compaction scalar in ``[0, 1]``.
+    """
+    from . import gard_info
+
+    fb = gard_info.gard_floor_bytes(sigma, n_samples=n_samples)["floor_bytes"]
+    return information_compaction_scalar(source_bytes, mesh_bytes, floor_bytes=float(fb))
 
 
 def mesh_compaction_summary(
@@ -1485,6 +1521,25 @@ def mesh_compaction_summary(
         total_tb=source_tb,
     )
 
+    # GARD CRB block — additive; does not affect existing keys.
+    # Reference σ = 0.05 (langevin_sigma_from_weyl base coefficient).
+    _gard_crb_sigma = 0.05
+    try:
+        from . import gard_info as _gard_info
+        _gard_floor = _gard_info.gard_floor_bytes(_gard_crb_sigma)
+        _gard_crb_scalar = information_compaction_scalar(
+            source_bytes, float(mesh_bytes_total),
+            floor_bytes=float(_gard_floor["floor_bytes"]),
+        )
+        gard_crb: dict = {
+            "sigma": _gard_crb_sigma,
+            "cramer_rao_var": _gard_floor["cramer_rao_var"],
+            "floor_bytes": _gard_floor["floor_bytes"],
+            "compaction_scalar_at_crb_floor": round(_gard_crb_scalar, 6),
+        }
+    except Exception:
+        gard_crb = {}
+
     return {
         "source_tb":              source_tb,
         "source_bytes":           int(source_bytes),
@@ -1506,6 +1561,8 @@ def mesh_compaction_summary(
         "compaction_scalar":      round(compaction_scalar_val, 6),
         # Holographic information surface
         "hawking_remnant_score":  round(remnant_score, 6),
+        # GARD CRB information floor (additive; reference σ = 0.05)
+        "gard_crb":               gard_crb,
     }
 
 
@@ -1716,6 +1773,7 @@ __all__ = [
     "hawking_information_remnant_score",
     "weyl_scalar_tensor",
     "information_compaction_scalar",
+    "information_compaction_scalar_gard",
     "mesh_compaction_summary",
     "metric_perturbation",
     # Full UEQGM dynamics

@@ -674,3 +674,69 @@ def test_weyl_scalar_tensor_psi2_exact_formula():
 def test_weyl_scalar_tensor_in_all():
     from src.quipu import ueqgm_engine
     assert "weyl_scalar_tensor" in ueqgm_engine.__all__
+
+
+# ── GARD CRB + compaction additive tests ──────────────────────────────────────
+
+def test_information_compaction_scalar_floor_bytes_optional():
+    """With floor_bytes=None, result is byte-identical to the legacy call."""
+    from src.quipu.ueqgm_engine import information_compaction_scalar
+
+    src = 16_492_674_416_640.0   # 15 TB
+    mesh = 1_101_884.0
+
+    legacy = information_compaction_scalar(src, mesh)
+    explicit_none = information_compaction_scalar(src, mesh, floor_bytes=None)
+    assert legacy == explicit_none
+
+
+def test_information_compaction_scalar_custom_floor_differs_from_default():
+    """Providing a floor_bytes different from default changes the scalar value."""
+    from src.quipu.ueqgm_engine import information_compaction_scalar
+
+    src = 16_492_674_416_640.0
+    mesh = 1_101_884.0
+
+    default_val = information_compaction_scalar(src, mesh)
+    # floor=5 bytes (smaller than default 50) → R_max larger → denominator larger → scalar lower
+    small_floor = information_compaction_scalar(src, mesh, floor_bytes=5.0)
+    # floor=500 bytes (larger than default 50) → R_max smaller → scalar higher
+    large_floor = information_compaction_scalar(src, mesh, floor_bytes=500.0)
+    assert small_floor < default_val < large_floor
+
+
+def test_information_compaction_scalar_gard_returns_in_unit_interval():
+    """information_compaction_scalar_gard output is in [0, 1]."""
+    from src.quipu.ueqgm_engine import information_compaction_scalar_gard
+
+    val = information_compaction_scalar_gard(
+        16_492_674_416_640.0, 1_101_884.0, sigma=0.05
+    )
+    assert 0.0 <= val <= 1.0
+
+
+def test_mesh_compaction_summary_canonical_ratio_unchanged():
+    """Additive gard_crb key must not change compaction_ratio == 14_967_705."""
+    from src.quipu.ueqgm_engine import mesh_compaction_summary
+
+    summary = mesh_compaction_summary()
+    assert summary["compaction_ratio"] == 14_967_705
+
+
+def test_mesh_compaction_summary_gard_crb_present():
+    """gard_crb is present and has the expected keys."""
+    from src.quipu.ueqgm_engine import mesh_compaction_summary
+
+    summary = mesh_compaction_summary()
+    assert "gard_crb" in summary
+    gard_crb = summary["gard_crb"]
+    assert gard_crb.get("sigma") == 0.05
+    assert "cramer_rao_var" in gard_crb
+    assert "floor_bytes" in gard_crb
+    assert "compaction_scalar_at_crb_floor" in gard_crb
+    assert 0.0 <= gard_crb["compaction_scalar_at_crb_floor"] <= 1.0
+
+
+def test_information_compaction_scalar_gard_in_all():
+    from src.quipu import ueqgm_engine
+    assert "information_compaction_scalar_gard" in ueqgm_engine.__all__
