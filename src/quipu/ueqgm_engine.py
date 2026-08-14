@@ -78,10 +78,12 @@ _WEYL_PRECISION: int = 6           # decimal places when serialising Weyl scalar
 _WEYL_UPVOTE_WEIGHT: float = 0.02  # per-upvote contribution to per-paper signal (Ψ₀)
 _WEYL_CITATION_WEIGHT: float = 0.002  # per-citation contribution to per-paper signal (Ψ₀)
 
-_INTERSTITIAL_ENTANGLEMENT_KEY: str = "ueqgm:interstitial_entanglement"
-"""brain_kv key storing the latest interstitial entanglement score."""
-_INTERSTITIAL_ENTANGLEMENT_WINDOW: int = 5  # number of successive Weyl cycles to compare
-_INTERSTITIAL_ENTANGLEMENT_ETA_SCALE: float = 0.05  # max η_eff lift from entanglement score
+_CORRELATION_TRANSITIVITY_KEY: str = "ueqgm:correlation_transitivity"
+"""brain_kv key storing the latest correlation-transitivity score."""
+
+_LEGACY_TRANSITIVITY_KEY: str = "ueqgm:interstitial_entanglement"
+"""Superseded key. Read-only fallback so existing stores still load."""
+_CORRELATION_TRANSITIVITY_WINDOW: int = 5  # number of successive Weyl cycles to compare
 
 # ---------------------------------------------------------------------------
 # MESH System Entirety — memory budget constants for compaction accounting.
@@ -316,16 +318,17 @@ UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
         "note":    "Log-normalised scalar measuring MESH compaction efficiency; "
                    "1.0 means the corpus is fully distilled into its 5-float Weyl boundary.",
     },
-    "interstitial_entanglement_score": {
+    "correlation_transitivity_score": {
         "formula": "mean_k{ clip₀₁(|C_k,k+1·C_k+1,k+2 − C_k,k+2| / (1 + |C_k,k+2|)) } "
-                   "where C_ij = photon_covariance_proxy(psi5_i, psi5_j)",
-        "range":   "[0.0, 1.0]  — 0=no cross-cycle covariance, 1=maximal entanglement proxy",
-        "note":    "Third-order intensity-moment witness derived from the 2026 Optica "
-                   "sunlight-entanglement paper (DOI 10.1364/OPTICA.601797).  Measures "
-                   "covariance structure in the interstitial bits below the CRB floor "
-                   "across consecutive Weyl compression cycles; persisted to "
-                   "_INTERSTITIAL_ENTANGLEMENT_KEY and applied as a ±5% η_eff lift in "
-                   "mesh_slm.train_round() when evidence is sufficient.",
+                   "where C_ij = state_correlation(psi5_i, psi5_j)",
+        "range":   "[0.0, 1.0]  — 0=correlations compose transitively, "
+                   "1=maximal higher-order structure",
+        "note":    "Classical third-order consistency check on Pearson correlations "
+                   "across consecutive GARD cycles. Zero when correlation composes "
+                   "multiplicatively along the chain; non-zero indicates structure "
+                   "beyond a first-order Markov relationship. Not an entanglement "
+                   "witness and not derived from any quantum-optics result. "
+                   "Persisted to _CORRELATION_TRANSITIVITY_KEY.",
     },
 }
 
@@ -471,7 +474,7 @@ def _default_adaptive_runtime() -> dict:
         "applied_parameters": [],
         "retained_parameters": [],
         "updated_at": None,
-        "interstitial_entanglement": 0.0,
+        "correlation_transitivity": 0.0,
     }
 
 
@@ -1045,11 +1048,14 @@ def refresh_adaptive_runtime(
         axis_drive = previous.get("axis_drive") or axis_drive_candidate
         retained_parameters.extend(["terrain_entropy", "symbiotic_gain", "expansion_pressure", "axis_drive"])
 
-    # -- Interstitial entanglement score (sunlight-entanglement analogy) -------
-    # Read the last _INTERSTITIAL_ENTANGLEMENT_WINDOW Weyl tensors from brain_kv
-    # to compute the third-order covariance witness.  Falls back to the previous
-    # runtime value (or 0.0) when fewer than 2 cycles are available.
-    ie_score: float = float(previous.get("interstitial_entanglement", 0.0) or 0.0)
+    # -- Correlation transitivity score (cross-cycle structure diagnostic) -----
+    # Read the last _CORRELATION_TRANSITIVITY_WINDOW Weyl tensors from brain_kv
+    # to compute the third-order non-transitivity statistic.  Falls back to the
+    # previous runtime value (or 0.0) when fewer than 2 cycles are available.
+    ct_score: float = float(
+        previous.get("correlation_transitivity",
+                     previous.get("interstitial_entanglement", 0.0)) or 0.0
+    )
     try:
         weyl_rows = cn.execute(
             "SELECT value FROM brain_kv WHERE key LIKE ? OR key=? "
@@ -1057,7 +1063,7 @@ def refresh_adaptive_runtime(
             (
                 f"{_WEYL_TENSOR_KEY}%",
                 _WEYL_TENSOR_KEY,
-                _INTERSTITIAL_ENTANGLEMENT_WINDOW,
+                _CORRELATION_TRANSITIVITY_WINDOW,
             ),
         ).fetchall()
         psi5_seq: list[list[float]] = []
@@ -1069,17 +1075,17 @@ def refresh_adaptive_runtime(
             except Exception:
                 pass
         if len(psi5_seq) >= 2:
-            ie_score = round(interstitial_entanglement_score(psi5_seq), 6)
+            ct_score = round(correlation_transitivity_score(psi5_seq), 6)
     except Exception:
-        pass  # keep ie_score from previous runtime
+        pass  # keep ct_score from previous runtime
 
-    # Persist the entanglement score separately so mesh_slm can read it quickly.
+    # Persist the score separately so mesh_slm can read it quickly.
     try:
         cn.execute(
             "INSERT OR REPLACE INTO brain_kv(key, value, updated_at) VALUES(?,?,?)",
             (
-                _INTERSTITIAL_ENTANGLEMENT_KEY,
-                json.dumps({"score": ie_score}),
+                _CORRELATION_TRANSITIVITY_KEY,
+                json.dumps({"score": ct_score}),
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
@@ -1105,7 +1111,7 @@ def refresh_adaptive_runtime(
         "ueqgm_entity_count": entity_count,
         "runtime_keywords": runtime_keywords,
         "learning_kinds": learning_kinds,
-        "interstitial_entanglement": ie_score,
+        "correlation_transitivity": ct_score,
         "axis_drive": {
             sense: round(_clip01((axis_drive or {}).get(sense, 0.0)), 4)
             for sense in _UEQGM_SENSES
@@ -1297,41 +1303,38 @@ def tantalum_intermediary_binding(
     }
 
 
-def interstitial_entanglement_score(
+def correlation_transitivity_score(
     psi5_seq: "Sequence[Sequence[float]]",
 ) -> float:
-    """Estimate entanglement surviving in the interstitial bit channel.
+    """Mean non-transitivity of correlation across consecutive state triples.
 
-    Applies the principle from the 2026 Optica sunlight-entanglement paper
-    (DOI 10.1364/OPTICA.601797): thermal (classically mixed) light generates
-    genuine photon-number entanglement at the output ports of an asymmetric
-    beamsplitter because the interstitial vacuum modes carry cross-port
-    covariance.  In QUIPU the analogue is the lossy GARD tier — successive Weyl
-    compression cycles are the "thermal photons", and the interstitial bits
-    below the Cramér-Rao floor are the vacuum modes.  Entanglement is detectable
-    as a non-trivial third-order covariance across three consecutive cycles.
+        E = |C_01 * C_12 - C_02| / (1 + |C_02|)
 
-    Concretely, for a window of N successive 5-scalar Weyl states the score is:
+    where C_ij = ``state_correlation(psi5_i, psi5_j)``.
 
-        E = |C_01 · C_12 − C_02| / (1 + |C_02|)
+    If correlation composed multiplicatively along the sequence, C_01 * C_12
+    would equal C_02 and E would be zero. Non-zero E means the relationship
+    between states 0 and 2 is not predicted by the two intervening pairwise
+    correlations — the sequence carries structure beyond a first-order chain.
+    Useful as a drift and regime-change detector. Averaged over all consecutive
+    triples for windows longer than 3.
 
-    where  C_ij = ``photon_covariance_proxy(psi5_i, psi5_j)``.  This mirrors
-    the paper's third-order intensity-moment test that is non-zero only when
-    the interstitial covariance structure persists across more than one
-    beamsplitter stage.  For windows longer than 3 the score is averaged over
-    all consecutive triples.
+    This is a classical statistic, NOT an entanglement witness. A witness is an
+    operator W with Tr(W rho) >= 0 for every separable rho, which requires a
+    density matrix on a tensor-product Hilbert space. Non-transitive correlation
+    is the ordinary condition for any non-Markovian classical process and
+    implies nothing quantum.
 
     Parameters
     ----------
     psi5_seq:
-        Sequence of at least 2 Weyl tensors, each a 5-float list/tuple.
-        Fewer than 2 tensors returns 0.0.
+        Sequence of at least 2 GARD states, each a 5-float list/tuple. Fewer
+        than 2 returns 0.0.
 
     Returns
     -------
-    Entanglement proxy score in ``[0, 1]``.  0.0 = no detectable cross-cycle
-    covariance; higher values indicate coherent correlation structure that
-    survived the lossy GARD compression.
+    Score in [0, 1]. 0.0 = correlations compose transitively; higher values
+    indicate higher-order structure across cycles.
     """
     from . import gard_info as _gard_info
 
@@ -1339,9 +1342,9 @@ def interstitial_entanglement_score(
     if len(seq) < 2:
         return 0.0
 
-    # Pairwise covariances for all adjacent and skip-1 pairs.
+    # Pairwise correlations for all adjacent and skip-1 pairs.
     def _cov(i: int, j: int) -> float:
-        return _gard_info.photon_covariance_proxy(seq[i], seq[j])
+        return _gard_info.state_correlation(seq[i], seq[j])
 
     if len(seq) == 2:
         # Only one pair available — return |C_01| directly as a degenerate score.
@@ -1357,6 +1360,10 @@ def interstitial_entanglement_score(
         triple_scores.append(_clip01(witness))
 
     return round(sum(triple_scores) / len(triple_scores), 6)
+
+
+# Deprecated alias. Retained one release for import compatibility.
+interstitial_entanglement_score = correlation_transitivity_score
 
 
 def holographic_entropy(n_edges: int, n_nodes: int) -> float:

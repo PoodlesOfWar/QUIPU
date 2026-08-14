@@ -12,13 +12,16 @@ physics boundary (ueqgm_engine); everything about *compression* is GARD.
 
 Interstitial bit space
 ----------------------
-Between the lossless GARD record and the CRB floor sits the *interstitial*
-channel: the bits that cannot be recovered by any unbiased estimator.
-Following the 2026 Optica sunlight-entanglement result
-(DOI 10.1364/OPTICA.601797), these "waste" bits are not discarded — they
-carry cross-cycle covariance structure analogous to the photon-number
-correlations that survive the beamsplitter loss.  The helpers below make that
-channel legible and measurable without changing the lossless compression path.
+Between the CRB floor and the actual GARD encoding sits the *interstitial* gap:
+bits of precision the record stores beyond what the noisy channel can justify.
+
+This is over-provisioning, not a side channel. Information below the CRB floor
+was never resolvable from the measurement — it was not diverted somewhere else
+to be recovered later. A large interstitial gap is a reason to spend fewer bits,
+not a reason to look for signal in them.
+
+The helpers below make that gap measurable so encoding width can be chosen
+against the channel rather than by habit.
 """
 from __future__ import annotations
 
@@ -75,13 +78,17 @@ def interstitial_bits(
     *,
     actual_bits_per_component: float | None = None,
 ) -> dict:
-    """Compute the interstitial bit gap between the actual encoding and the CRB floor.
+    """Bits of precision the encoding spends beyond the Cramér-Rao floor.
 
-    The *interstitial* channel is the gap between what the GARD record actually
-    stores and the minimum bits justified by the Cramér-Rao bound.  Following
-    the 2026 Optica sunlight-entanglement paper (DOI 10.1364/OPTICA.601797),
-    these bits are not noise to discard — they carry cross-cycle covariance
-    structure that can be harvested as an entanglement-like resource.
+    The *interstitial* gap is the difference between what the GARD record
+    actually stores and the minimum justified by the CRB. It quantifies
+    over-provisioning: precision spent resolving distinctions the channel noise
+    cannot support.
+
+    This is a budgeting diagnostic, not a channel. Bits below the floor do not
+    hold recoverable structure — the information they would encode was never
+    resolvable from the measurement in the first place. A large gap means the
+    encoding can be narrowed without loss.
 
     The actual bits per component default to ``GARD_STATE_PACKED_BYTES × 8 /
     n_components`` (Float32 = 32 bits each for a 5-scalar record) when
@@ -131,21 +138,26 @@ def interstitial_bits(
     }
 
 
-def photon_covariance_proxy(
+def state_correlation(
     psi5_a: list[float] | tuple[float, ...],
     psi5_b: list[float] | tuple[float, ...],
 ) -> float:
-    """Cross-covariance of two 5-scalar Weyl states as a photon-number proxy.
+    """Pearson correlation between two 5-scalar GARD states.
 
-    Analogous to the intensity cross-correlation used to detect entanglement
-    from thermal light (Optica 2026, DOI 10.1364/OPTICA.601797).  Each Weyl
-    state is treated as a discretised photon-number distribution; the Pearson
-    correlation coefficient between the two distributions is the proxy for
-    surviving entanglement after the beamsplitter (GARD lossy tier).
+    Measures whether two states co-vary across their components. Useful for
+    detecting drift, spotting cycles that have collapsed onto a degenerate
+    state, and as the input to ``correlation_transitivity_score``.
+
+    NOT a photon-number correlation and NOT an entanglement measure. These are
+    five real floats, not a quantum state: there is no Hilbert space, no tensor
+    product, and so nothing that could be separable or entangled. Detecting
+    entanglement requires coincidence measurement across separated detectors
+    with independent basis choice and a Bell violation; a correlation
+    coefficient between classical vectors cannot do it, however large.
 
     Returns
     -------
-    Pearson correlation  C_ab ∈ [−1, 1].  Returns 0.0 when either vector is
+    Pearson correlation C_ab in [-1, 1]. Returns 0.0 when either vector is
     constant (zero variance) or the lengths differ.
     """
     if len(psi5_a) != len(psi5_b) or not psi5_a:
@@ -162,6 +174,12 @@ def photon_covariance_proxy(
     if denom == 0.0:
         return 0.0
     return max(-1.0, min(1.0, cov / denom))
+
+
+# Deprecated alias. Retained one release for import compatibility; the name
+# asserted a photon-number/entanglement interpretation the function does not
+# support. Use state_correlation.
+photon_covariance_proxy = state_correlation
 
 
 def gard_floor_bytes_from_state(
@@ -186,6 +204,7 @@ __all__ = [
     "cramer_rao_bound_gard",
     "gard_floor_bytes",
     "interstitial_bits",
-    "photon_covariance_proxy",
+    "state_correlation",
+    "photon_covariance_proxy",  # deprecated alias
     "gard_floor_bytes_from_state",
 ]
