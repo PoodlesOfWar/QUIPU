@@ -5,10 +5,11 @@ The real condensation mechanism
 -------------------------------
 QUIPU already implements "The Well" as **holographic compression**: an entire
 learning cycle is distilled to a 5-float Newman-Penrose Weyl tensor Ψ₀–Ψ₄
-(~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record), and the
-achieved compression is scored by ``mesh_compaction_summary`` (compaction ratio
-+ scalar) and ``hawking_information_remnant_score`` (the Bekenstein-Hawking
-information surface). See ``ueqgm_engine`` and the Julia ``mesh_compression_model``.
+(~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record before
+encoding), and the achieved compression is scored by ``mesh_compaction_summary``
+(compaction ratio + scalar) and ``hawking_information_remnant_score`` (the
+Bekenstein-Hawking information surface). See ``ueqgm_engine`` and the Julia
+``mesh_compression_model``.
 
 This module drives that mechanism from live data:
 
@@ -18,8 +19,9 @@ This module drives that mechanism from live data:
    (tokens → 7-D torus, Hebbian quipu edges), settled by ``train_round``.
 3. **Compress** each cycle to its Weyl tensor with ``weyl_scalar_tensor`` over
    five observables (signal flux, topic entropy, corpus volume, mesh alignment,
-   Hawking remnant), persist it to ``brain_kv["learnings:weyl_tensor"]`` and as a
-   20-byte packed record, and report the compaction ratio/scalar.
+   Hawking remnant), persist it to ``brain_kv["learnings:weyl_tensor"]`` and, as
+   base64 text (``brain_kv`` values are TEXT, so the 20 raw packed bytes become
+   28 stored bytes), report the compaction ratio/scalar.
 4. **Decompress** — the Weyl tensor re-radiates dynamics: ``langevin_sigma_from_weyl``
    turns the current/previous tensors back into the diffusion reference σ that
    drives emission. The tensor is the boundary encoding; σ is what it reconstitutes.
@@ -29,9 +31,10 @@ Honest scope
 Holographic compression here is *boundary distillation*, not literal document
 reconstruction. You cannot decompress the Weyl tensor back into the original
 web pages — the point (as with Hawking radiation) is that the irreducible
-information remnant is retained in ~20–50 bytes per cycle while the mesh bulk
-accretes structure. Access is via sanctioned dataset interfaces only; HTTP
-sources are rate-limited.
+information remnant is retained in ~28–50 bytes per cycle as actually stored
+(28-byte base64 packed record, or 50-byte JSON) while the mesh bulk accretes
+structure. Access is via sanctioned dataset interfaces only; HTTP sources are
+rate-limited.
 
 CLI
 ---
@@ -99,8 +102,14 @@ _INGEST_HISTORY_CAP = 200
 # The Well reference geometry (matches ueqgm_engine constants): 16 datasets, 4-D.
 _THE_WELL_SPATIAL_DIMS = 4
 
-# 20-byte packed record: 5 x Float32, explicit little-endian.
+# 20-byte packed record: 5 x Float32, explicit little-endian. This is the raw
+# struct.pack() size, not what lands in brain_kv — see MESH_BRAIN_KV_WEYL_STORED_BYTES.
 MESH_BRAIN_KV_WEYL_PACKED_BYTES = 20
+
+# brain_kv values are TEXT, so _persist_weyl base64-encodes the packed record
+# before storing it (learnings:weyl_tensor_packed_b64). ceil(20/3)*4 = 28 is
+# the actual on-disk footprint of that key, not MESH_BRAIN_KV_WEYL_PACKED_BYTES.
+MESH_BRAIN_KV_WEYL_STORED_BYTES = 4 * -(-MESH_BRAIN_KV_WEYL_PACKED_BYTES // 3)
 
 
 # ===========================================================================
@@ -447,7 +456,7 @@ def compress_cycle_to_weyl(
 
 
 def _persist_weyl(psi5: Sequence[float]) -> str | None:
-    """Write the tensor to brain_kv (canonical key + prev + 20-byte packed b64)."""
+    """Write the tensor to brain_kv (canonical key + prev + 28-byte base64-packed record)."""
     if brain_kv is None:
         return None
     import base64
@@ -722,7 +731,7 @@ def _cli() -> None:
         print(f"  compaction ratio        : {w.get('compaction_ratio')}")
         print(f"  compaction scalar       : {w.get('compaction_scalar')}")
         print(f"  hawking remnant score   : {w.get('hawking_remnant_score')}")
-        print(f"  packed 20-byte (b64)    : {w.get('packed_b64')}")
+        print(f"  packed 28-byte b64      : {w.get('packed_b64')}")
         print(f"  reconstituted sigma     : {w.get('sigma_reconstituted')}")
     print(f"\nRing 5: {len(res['refinement_cycles'])} refinement cycles, "
           f"{res['tools_forged_total']} tools forged")

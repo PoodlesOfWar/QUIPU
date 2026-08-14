@@ -8,6 +8,7 @@ import pytest
 from src.quipu.gard_info import (
     GARD_STATE_JSON_BYTES,
     GARD_STATE_PACKED_BYTES,
+    GARD_STATE_STORED_BYTES,
     cramer_rao_bound_gard,
     fisher_information_gard,
     gard_floor_bytes,
@@ -22,6 +23,15 @@ from src.quipu.gard_info import (
 def test_constants_match_weyl_spec():
     assert GARD_STATE_JSON_BYTES == 50
     assert GARD_STATE_PACKED_BYTES == 20
+
+
+def test_stored_bytes_is_base64_of_packed_bytes():
+    """brain_kv is TEXT, so the packed record is base64-encoded before storage:
+    the real on-disk footprint is bigger than the raw Float32 pack size."""
+    import base64
+    assert GARD_STATE_STORED_BYTES == len(base64.b64encode(b"\x00" * GARD_STATE_PACKED_BYTES))
+    assert GARD_STATE_STORED_BYTES == 28
+    assert GARD_STATE_STORED_BYTES > GARD_STATE_PACKED_BYTES
 
 
 # ── fisher_information_gard ───────────────────────────────────────────────────
@@ -182,7 +192,7 @@ def test_interstitial_bits_fraction_in_01():
 def test_interstitial_bits_zero_noise():
     """Very small sigma → floor dominates → gap should be 0 (actual ≤ floor rounds to 0)."""
     result = interstitial_bits(1e-9)
-    # floor_bits will be very large (cannot resolve sub-noise); actual_bits = 32*5=160
+    # floor_bits will be very large (cannot resolve sub-noise); actual_bits = 44.8*5=224
     # gap is clamped to 0 when floor_bits > actual_bits
     assert result["interstitial_bits"] >= 0.0
     assert math.isfinite(result["interstitial_fraction"])
@@ -193,6 +203,15 @@ def test_interstitial_bits_large_sigma_gives_positive_gap():
     result = interstitial_bits(0.5)
     assert result["interstitial_bits"] > 0.0
     assert result["actual_bits"] > result["floor_bits"]
+
+
+def test_interstitial_bits_default_actual_bits_uses_stored_footprint():
+    """Default actual_bits reflects the base64 text actually written to
+    brain_kv (GARD_STATE_STORED_BYTES), not the smaller pre-encoding
+    Float32 pack (GARD_STATE_PACKED_BYTES)."""
+    result = interstitial_bits(0.1)
+    assert result["actual_bits"] == pytest.approx(GARD_STATE_STORED_BYTES * 8.0)
+    assert result["actual_bits"] > GARD_STATE_PACKED_BYTES * 8.0
 
 
 def test_interstitial_bits_custom_actual_bpc():
