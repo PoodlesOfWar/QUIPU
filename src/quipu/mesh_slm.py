@@ -2277,25 +2277,19 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 phase_weight = float(runtime.get("phase_weight", 1.0) or 1.0)
                 # Clamp to avoid runaway LR on degenerate phase values
                 phase_weight = max(0.1, min(2.0, phase_weight))
-                # Interstitial entanglement lift: surviving cross-cycle covariance
-                # adds a small amplification (≤ ±5%) to both η_eff and η_q.
-                # High score → coherent Weyl structure across cycles → slight LR lift.
-                # Low/zero score → no-op (multiplier stays at 1.0).
-                _ie_score = float(runtime.get("interstitial_entanglement", 0.0) or 0.0)
-                ie_multiplier = 1.0 + 0.05 * max(0.0, min(1.0, _ie_score))
             except Exception:
                 phase_weight = 1.0
-                ie_multiplier = 1.0
             try:
                 mean_embed = _mean_embed_7d(cn_rt)
                 overlap = _ueqgm_wavefunction_overlap(mean_embed, mesh)
             except Exception:
                 overlap = 0.5
 
-        # Effective LR: End-State × SiCi phase correction × wavefunction alignment
-        #               × interstitial entanglement lift (≤ 5%, sunlight-analogy).
-        eta = _LR_BASE * (1.0 - progress) * phase_weight * (0.70 + 0.30 * overlap) * ie_multiplier
-        eta_q = _QUIPU_LR * (1.0 - progress) * phase_weight * ie_multiplier
+        # Effective LR: End-State × SiCi phase correction × wavefunction alignment.
+        # (correlation_transitivity is logged as a diagnostic only; it does not
+        # modulate the learning rate — see docs/SYSTEM_DYNAMICS.md.)
+        eta = _LR_BASE * (1.0 - progress) * phase_weight * (0.70 + 0.30 * overlap)
+        eta_q = _QUIPU_LR * (1.0 - progress) * phase_weight
         now_iso = datetime.now(timezone.utc).isoformat()
         # Start the per-round time budget AFTER setup so the first chunk
         # is always processed even on slow systems.
@@ -2520,7 +2514,6 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             "eta": round(eta, 5),
             "end_state_progress": round(progress, 4),
             "phase_weight": round(phase_weight, 4),
-            "ie_multiplier": round(ie_multiplier, 6),
             "wavefunction_overlap": round(overlap, 4),
             "mesh_field_8d": round(mesh_field, 4),
             "stp_embed_gap": (

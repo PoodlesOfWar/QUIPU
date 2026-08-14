@@ -13,7 +13,7 @@ from src.quipu.gard_info import (
     gard_floor_bytes,
     gard_floor_bytes_from_state,
     interstitial_bits,
-    photon_covariance_proxy,
+    state_correlation,
 )
 
 
@@ -203,95 +203,119 @@ def test_interstitial_bits_custom_actual_bpc():
     assert r_8bit["actual_bits"] < r_default["actual_bits"]
 
 
-# ── photon_covariance_proxy ───────────────────────────────────────────────────
+# ── state_correlation ────────────────────────────────────────────────────────
 
-def test_photon_covariance_proxy_identical_returns_one():
+def test_state_correlation_identical_returns_one():
     """Identical states → Pearson correlation = 1."""
     psi = [0.1, 0.5, 0.7, 0.3, 0.9]
-    assert photon_covariance_proxy(psi, psi) == pytest.approx(1.0, abs=1e-9)
+    assert state_correlation(psi, psi) == pytest.approx(1.0, abs=1e-9)
 
 
-def test_photon_covariance_proxy_negated_returns_minus_one():
+def test_state_correlation_negated_returns_minus_one():
     """A negated (reflected about mean) state → correlation = -1."""
     psi = [0.1, 0.5, 0.7, 0.3, 0.9]
     mean = sum(psi) / len(psi)
     neg = [2 * mean - v for v in psi]
-    assert photon_covariance_proxy(psi, neg) == pytest.approx(-1.0, abs=1e-9)
+    assert state_correlation(psi, neg) == pytest.approx(-1.0, abs=1e-9)
 
 
-def test_photon_covariance_proxy_constant_returns_zero():
+def test_state_correlation_constant_returns_zero():
     """Constant vector has zero variance → correlation undefined → 0."""
     const = [0.5, 0.5, 0.5, 0.5, 0.5]
     psi = [0.1, 0.5, 0.7, 0.3, 0.9]
-    assert photon_covariance_proxy(const, psi) == 0.0
-    assert photon_covariance_proxy(psi, const) == 0.0
+    assert state_correlation(const, psi) == 0.0
+    assert state_correlation(psi, const) == 0.0
 
 
-def test_photon_covariance_proxy_symmetry():
+def test_state_correlation_symmetry():
     """C(a,b) == C(b,a)."""
     a = [0.2, 0.6, 0.4, 0.8, 0.1]
     b = [0.9, 0.3, 0.7, 0.5, 0.2]
-    assert photon_covariance_proxy(a, b) == pytest.approx(photon_covariance_proxy(b, a), abs=1e-12)
+    assert state_correlation(a, b) == pytest.approx(state_correlation(b, a), abs=1e-12)
 
 
-def test_photon_covariance_proxy_mismatched_length_returns_zero():
-    assert photon_covariance_proxy([0.1, 0.2, 0.3], [0.4, 0.5]) == 0.0
+def test_state_correlation_mismatched_length_returns_zero():
+    assert state_correlation([0.1, 0.2, 0.3], [0.4, 0.5]) == 0.0
 
 
-def test_photon_covariance_proxy_result_clamped():
+def test_state_correlation_result_clamped():
     """Result must be in [-1, 1]."""
     import random
     rng = random.Random(42)
     for _ in range(20):
         a = [rng.random() for _ in range(5)]
         b = [rng.random() for _ in range(5)]
-        val = photon_covariance_proxy(a, b)
+        val = state_correlation(a, b)
         assert -1.0 <= val <= 1.0
 
 
-# ── interstitial_entanglement_score (via ueqgm_engine) ───────────────────────
+def test_state_correlation_is_plain_pearson():
+    assert state_correlation([1, 2, 3, 4, 5], [2, 4, 6, 8, 10]) == pytest.approx(1.0)
+    assert state_correlation([1, 2, 3, 4, 5], [5, 4, 3, 2, 1]) == pytest.approx(-1.0)
+    assert state_correlation([1, 1, 1, 1, 1], [1, 2, 3, 4, 5]) == 0.0
 
-def test_interstitial_entanglement_score_identical_tensors():
-    """Identical tensors: C=1 everywhere → third-order witness |1·1 − 1|/(1+1) = 0."""
-    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+
+# ── correlation_transitivity_score (via ueqgm_engine) ────────────────────────
+
+def test_correlation_transitivity_score_identical_tensors():
+    """Identical states: C=1 everywhere → witness |1·1 − 1|/(1+1) = 0."""
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
 
     psi = [0.5, 0.6, 0.4, 0.7, 0.3]
-    score = interstitial_entanglement_score([psi, psi, psi])
+    score = correlation_transitivity_score([psi, psi, psi])
     # witness = |C_01*C_12 - C_02| / (1+|C_02|) = |1*1 - 1| / (1+1) = 0
     assert score == pytest.approx(0.0, abs=1e-6)
 
 
-def test_interstitial_entanglement_score_single_tensor_returns_zero():
-    """One tensor → fewer than 2 → returns 0."""
-    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+def test_correlation_transitivity_score_single_tensor_returns_zero():
+    """One state → fewer than 2 → returns 0."""
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
 
-    assert interstitial_entanglement_score([[0.5, 0.5, 0.5, 0.5, 0.5]]) == 0.0
-
-
-def test_interstitial_entanglement_score_empty_returns_zero():
-    from src.quipu.ueqgm_engine import interstitial_entanglement_score
-
-    assert interstitial_entanglement_score([]) == 0.0
+    assert correlation_transitivity_score([[0.5, 0.5, 0.5, 0.5, 0.5]]) == 0.0
 
 
-def test_interstitial_entanglement_score_two_tensors_degenerate_path():
-    """Two tensors → degenerate: returns |C_01|."""
-    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+def test_correlation_transitivity_score_empty_returns_zero():
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
+
+    assert correlation_transitivity_score([]) == 0.0
+
+
+def test_correlation_transitivity_score_two_tensors_degenerate_path():
+    """Two states → degenerate: returns |C_01|."""
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
 
     a = [0.1, 0.5, 0.7, 0.3, 0.9]
     b = [0.9, 0.5, 0.3, 0.7, 0.1]
-    expected = abs(photon_covariance_proxy(a, b))
-    score = interstitial_entanglement_score([a, b])
+    expected = abs(state_correlation(a, b))
+    score = correlation_transitivity_score([a, b])
     assert score == pytest.approx(expected, abs=1e-6)
 
 
-def test_interstitial_entanglement_score_in_01():
+def test_correlation_transitivity_score_in_01():
     """Score must always be in [0, 1]."""
-    from src.quipu.ueqgm_engine import interstitial_entanglement_score
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
     import random
 
     rng = random.Random(99)
     for _ in range(30):
         seq = [[rng.random() for _ in range(5)] for _ in range(rng.randint(2, 6))]
-        score = interstitial_entanglement_score(seq)
+        score = correlation_transitivity_score(seq)
         assert 0.0 <= score <= 1.0, f"score out of range: {score}"
+
+
+def test_transitive_sequence_scores_zero():
+    """Perfectly correlated states compose transitively, so the score vanishes.
+    This is what makes it a structure detector rather than a magnitude."""
+    from src.quipu.ueqgm_engine import correlation_transitivity_score
+
+    seq = [[1, 2, 3, 4, 5], [2, 4, 6, 8, 10], [3, 6, 9, 12, 15]]
+    assert correlation_transitivity_score(seq) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_deprecated_aliases_still_resolve():
+    from src.quipu.gard_info import photon_covariance_proxy, state_correlation
+    from src.quipu.ueqgm_engine import (
+        correlation_transitivity_score, interstitial_entanglement_score,
+    )
+    assert photon_covariance_proxy is state_correlation
+    assert interstitial_entanglement_score is correlation_transitivity_score
