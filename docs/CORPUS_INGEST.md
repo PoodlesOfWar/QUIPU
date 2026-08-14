@@ -3,8 +3,9 @@
 `src/quipu/corpus_ingest.py` streams the openly published corpora that pretrain
 current SOTA language models and folds them into QUIPU using the mesh's own
 **holographic compression** — "The Well." An entire ingest cycle is distilled to
-a 5-float Newman-Penrose Weyl tensor (~50 bytes as JSON, or a 20-byte packed
-record), scored by the Bekenstein-Hawking information surface.
+a 5-float Newman-Penrose Weyl tensor (~50 bytes as JSON, or a 28-byte
+base64-packed record as actually stored), scored by the Bekenstein-Hawking
+information surface.
 
 ## The mechanism
 
@@ -30,7 +31,7 @@ Each cycle runs four stages:
    > stopword-stripped feed is what keeps the vocabulary meaningful.
 3. **Compress** the cycle to its Weyl tensor Ψ₀–Ψ₄ with
    `ueqgm_engine.weyl_scalar_tensor` over five observables, persist it to
-   `brain_kv["learnings:weyl_tensor"]` and as a 20-byte packed record, and report
+   `brain_kv["learnings:weyl_tensor"]` and as a 28-byte base64-packed record, and report
    `mesh_compaction_summary` (compaction ratio + scalar) and
    `hawking_information_remnant_score`.
 4. **Decompress** — `gard_shard_model.langevin_sigma_from_weyl` lifts the
@@ -58,18 +59,19 @@ Each cycle runs four stages:
 
 ### Packed record (cross-language)
 
-`pack_weyl` / `unpack_weyl` serialise the tensor to **20 bytes (5 × Float32,
-little-endian)** — byte-for-byte identical to the Julia
-`mesh_compression_model.jl` peer and the v2.2 KV wire format. Golden vector
-`(0.0, 0.25, 0.5, 0.75, 1.0)` → base64 `AAAAAAAAgD4AAAA/AABAPwAAgD8=` on every
-peer.
+`pack_weyl` / `unpack_weyl` serialise the tensor to **20 raw bytes (5 ×
+Float32, little-endian)** — byte-for-byte identical to the Julia
+`mesh_compression_model.jl` peer and the v2.2 KV wire format. `brain_kv`
+values are TEXT, so what's actually stored is the base64 encoding of those 20
+bytes: **28 bytes**. Golden vector `(0.0, 0.25, 0.5, 0.75, 1.0)` → base64
+`AAAAAAAAgD4AAAA/AABAPwAAgD8=` (28 chars) on every peer.
 
 ## Honest scope
 
 Holographic compression here is **boundary distillation, not document
 reconstruction**. You cannot decompress the Weyl tensor back into the original
 web pages — as with Hawking radiation, the irreducible information remnant is
-retained in ~20–50 bytes per cycle while the mesh bulk accretes structure. A
+retained in ~28–50 stored bytes per cycle while the mesh bulk accretes structure. A
 frontier pretraining set is petabyte-scale and is never ingested whole; this
 streams and distills a continuous sample. Access is via sanctioned dataset
 interfaces only; HTTP sources are rate-limited.
@@ -137,7 +139,7 @@ The tensor lands in the shared mesh SQLite `brain_kv` table (added as
 
 - `learnings:weyl_tensor` — current Ψ₀–Ψ₄ (JSON)
 - `learnings:weyl_tensor_prev` — previous cycle (for the σ delta)
-- `learnings:weyl_tensor_packed_b64` — 20-byte packed record, base64
+- `learnings:weyl_tensor_packed_b64` — 28-byte base64 encoding of the 20-byte packed record
 
 `gard_shard_model` reads `learnings:weyl_tensor` back through `brain_kv`, so the
 compressed corpus state feeds the model context and the Langevin emission path.

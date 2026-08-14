@@ -410,22 +410,45 @@ def coherence_to_phi(coherence: int) -> float:
     return _PHI_BASE + coherence * _PHI_STEP
 
 
-def _raw_sici(phi: float) -> tuple[float, float]:
-    """Return (Si(φ), Ci(φ)) using scipy if available, else series approx.
+_EULER_MASCHERONI: float = 0.5772156649015329
 
-    The power-series fallback is accurate to roughly four significant
-    figures for |φ| ≤ 2π.  For φ outside that range scipy is preferred.
+
+def _raw_sici(phi: float) -> tuple[float, float]:
+    """Return (Si(φ), Ci(φ)) using scipy if available, else numeric quadrature.
+
+    Si(x) = ∫₀ˣ sin(t)/t dt and Ci(x) = γ + ln|x| + ∫₀ˣ (cos(t) − 1)/t dt are
+    both entire/well-behaved under the integral sign (the t=0 singularities are
+    removable: sin(t)/t → 1 and (cos(t)−1)/t → 0), so composite Simpson's rule
+    with a period-scaled number of subdivisions stays accurate for any |φ|,
+    unlike a fixed-order power series truncated at |φ| ≈ 2π.
     """
     if _HAS_SCIPY:
         si, ci = _scipy_sici(phi)
         return float(si), float(ci)
-    # ── Series approximation (small/moderate φ) ──────────────────────────
-    # Si(x) = x − x³/18 + x⁵/600 − x⁷/35280 + …
-    # Ci(x) = γ + ln|x| − x²/4 + x⁴/96 − …   (γ ≈ 0.5772, x ≠ 0)
     x = abs(phi) if phi != 0.0 else 1.0e-12
-    si_val = x - x**3 / 18.0 + x**5 / 600.0 - x**7 / 35280.0
-    euler_mascheroni = 0.5772156649
-    ci_val = euler_mascheroni + math.log(x) - x**2 / 4.0 + x**4 / 96.0
+
+    # ~40 subdivisions per 2π period keeps the oscillatory integrand resolved
+    # at any magnitude of x; Simpson's rule requires an even interval count.
+    n = max(64, int(x / (2.0 * math.pi) * 40.0))
+    if n % 2:
+        n += 1
+    h = x / n
+
+    def _si_integrand(t: float) -> float:
+        return 1.0 if t == 0.0 else math.sin(t) / t
+
+    def _ci_integrand(t: float) -> float:
+        return 0.0 if t == 0.0 else (math.cos(t) - 1.0) / t
+
+    si_sum = _si_integrand(0.0) + _si_integrand(x)
+    ci_sum = _ci_integrand(0.0) + _ci_integrand(x)
+    for i in range(1, n):
+        t = i * h
+        weight = 4.0 if i % 2 else 2.0
+        si_sum += weight * _si_integrand(t)
+        ci_sum += weight * _ci_integrand(t)
+    si_val = (h / 3.0) * si_sum
+    ci_val = _EULER_MASCHERONI + math.log(x) + (h / 3.0) * ci_sum
     # Si is an odd function; Ci is even.
     return (si_val if phi >= 0 else -si_val), ci_val
 
