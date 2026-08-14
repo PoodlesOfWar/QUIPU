@@ -78,6 +78,11 @@ _WEYL_PRECISION: int = 6           # decimal places when serialising Weyl scalar
 _WEYL_UPVOTE_WEIGHT: float = 0.02  # per-upvote contribution to per-paper signal (Ψ₀)
 _WEYL_CITATION_WEIGHT: float = 0.002  # per-citation contribution to per-paper signal (Ψ₀)
 
+_INTERSTITIAL_ENTANGLEMENT_KEY: str = "ueqgm:interstitial_entanglement"
+"""brain_kv key storing the latest interstitial entanglement score."""
+_INTERSTITIAL_ENTANGLEMENT_WINDOW: int = 5  # number of successive Weyl cycles to compare
+_INTERSTITIAL_ENTANGLEMENT_ETA_SCALE: float = 0.05  # max η_eff lift from entanglement score
+
 # ---------------------------------------------------------------------------
 # MESH System Entirety — memory budget constants for compaction accounting.
 #
@@ -311,6 +316,17 @@ UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
         "note":    "Log-normalised scalar measuring MESH compaction efficiency; "
                    "1.0 means the corpus is fully distilled into its 5-float Weyl boundary.",
     },
+    "interstitial_entanglement_score": {
+        "formula": "mean_k{ clip₀₁(|C_k,k+1·C_k+1,k+2 − C_k,k+2| / (1 + |C_k,k+2|)) } "
+                   "where C_ij = photon_covariance_proxy(psi5_i, psi5_j)",
+        "range":   "[0.0, 1.0]  — 0=no cross-cycle covariance, 1=maximal entanglement proxy",
+        "note":    "Third-order intensity-moment witness derived from the 2026 Optica "
+                   "sunlight-entanglement paper (DOI 10.1364/OPTICA.601797).  Measures "
+                   "covariance structure in the interstitial bits below the CRB floor "
+                   "across consecutive Weyl compression cycles; persisted to "
+                   "_INTERSTITIAL_ENTANGLEMENT_KEY and applied as a ±5% η_eff lift in "
+                   "mesh_slm.train_round() when evidence is sufficient.",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -455,6 +471,7 @@ def _default_adaptive_runtime() -> dict:
         "applied_parameters": [],
         "retained_parameters": [],
         "updated_at": None,
+        "interstitial_entanglement": 0.0,
     }
 
 
@@ -1028,6 +1045,47 @@ def refresh_adaptive_runtime(
         axis_drive = previous.get("axis_drive") or axis_drive_candidate
         retained_parameters.extend(["terrain_entropy", "symbiotic_gain", "expansion_pressure", "axis_drive"])
 
+    # -- Interstitial entanglement score (sunlight-entanglement analogy) -------
+    # Read the last _INTERSTITIAL_ENTANGLEMENT_WINDOW Weyl tensors from brain_kv
+    # to compute the third-order covariance witness.  Falls back to the previous
+    # runtime value (or 0.0) when fewer than 2 cycles are available.
+    ie_score: float = float(previous.get("interstitial_entanglement", 0.0) or 0.0)
+    try:
+        weyl_rows = cn.execute(
+            "SELECT value FROM brain_kv WHERE key LIKE ? OR key=? "
+            "ORDER BY updated_at DESC LIMIT ?",
+            (
+                f"{_WEYL_TENSOR_KEY}%",
+                _WEYL_TENSOR_KEY,
+                _INTERSTITIAL_ENTANGLEMENT_WINDOW,
+            ),
+        ).fetchall()
+        psi5_seq: list[list[float]] = []
+        for row in weyl_rows:
+            try:
+                parsed = json.loads(row[0])
+                if isinstance(parsed, list) and len(parsed) == 5:
+                    psi5_seq.append([float(v) for v in parsed])
+            except Exception:
+                pass
+        if len(psi5_seq) >= 2:
+            ie_score = round(interstitial_entanglement_score(psi5_seq), 6)
+    except Exception:
+        pass  # keep ie_score from previous runtime
+
+    # Persist the entanglement score separately so mesh_slm can read it quickly.
+    try:
+        cn.execute(
+            "INSERT OR REPLACE INTO brain_kv(key, value, updated_at) VALUES(?,?,?)",
+            (
+                _INTERSTITIAL_ENTANGLEMENT_KEY,
+                json.dumps({"score": ie_score}),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+    except Exception:
+        pass
+
     runtime_state = {
         "active": True,
         "certainty": round(certainty, 4),
@@ -1047,6 +1105,7 @@ def refresh_adaptive_runtime(
         "ueqgm_entity_count": entity_count,
         "runtime_keywords": runtime_keywords,
         "learning_kinds": learning_kinds,
+        "interstitial_entanglement": ie_score,
         "axis_drive": {
             sense: round(_clip01((axis_drive or {}).get(sense, 0.0)), 4)
             for sense in _UEQGM_SENSES
@@ -1238,6 +1297,68 @@ def tantalum_intermediary_binding(
     }
 
 
+def interstitial_entanglement_score(
+    psi5_seq: "Sequence[Sequence[float]]",
+) -> float:
+    """Estimate entanglement surviving in the interstitial bit channel.
+
+    Applies the principle from the 2026 Optica sunlight-entanglement paper
+    (DOI 10.1364/OPTICA.601797): thermal (classically mixed) light generates
+    genuine photon-number entanglement at the output ports of an asymmetric
+    beamsplitter because the interstitial vacuum modes carry cross-port
+    covariance.  In QUIPU the analogue is the lossy GARD tier — successive Weyl
+    compression cycles are the "thermal photons", and the interstitial bits
+    below the Cramér-Rao floor are the vacuum modes.  Entanglement is detectable
+    as a non-trivial third-order covariance across three consecutive cycles.
+
+    Concretely, for a window of N successive 5-scalar Weyl states the score is:
+
+        E = |C_01 · C_12 − C_02| / (1 + |C_02|)
+
+    where  C_ij = ``photon_covariance_proxy(psi5_i, psi5_j)``.  This mirrors
+    the paper's third-order intensity-moment test that is non-zero only when
+    the interstitial covariance structure persists across more than one
+    beamsplitter stage.  For windows longer than 3 the score is averaged over
+    all consecutive triples.
+
+    Parameters
+    ----------
+    psi5_seq:
+        Sequence of at least 2 Weyl tensors, each a 5-float list/tuple.
+        Fewer than 2 tensors returns 0.0.
+
+    Returns
+    -------
+    Entanglement proxy score in ``[0, 1]``.  0.0 = no detectable cross-cycle
+    covariance; higher values indicate coherent correlation structure that
+    survived the lossy GARD compression.
+    """
+    from . import gard_info as _gard_info
+
+    seq = [list(t) for t in psi5_seq if t]
+    if len(seq) < 2:
+        return 0.0
+
+    # Pairwise covariances for all adjacent and skip-1 pairs.
+    def _cov(i: int, j: int) -> float:
+        return _gard_info.photon_covariance_proxy(seq[i], seq[j])
+
+    if len(seq) == 2:
+        # Only one pair available — return |C_01| directly as a degenerate score.
+        return round(abs(_cov(0, 1)), 6)
+
+    # Average third-order witness over all consecutive triples.
+    triple_scores: list[float] = []
+    for k in range(len(seq) - 2):
+        c01 = _cov(k, k + 1)
+        c12 = _cov(k + 1, k + 2)
+        c02 = _cov(k, k + 2)
+        witness = abs(c01 * c12 - c02) / (1.0 + abs(c02))
+        triple_scores.append(_clip01(witness))
+
+    return round(sum(triple_scores) / len(triple_scores), 6)
+
+
 def holographic_entropy(n_edges: int, n_nodes: int) -> float:
     """Bekenstein-Hawking inspired entropy  S ∝ boundary area.
 
@@ -1382,13 +1503,16 @@ def weyl_scalar_tensor(
 def information_compaction_scalar(
     source_bytes: float,
     mesh_bytes: float,
+    *,
+    floor_bytes: float | None = None,
 ) -> float:
     """Log-normalised scalar measuring how efficiently the MESH compacts the source.
 
     Measures the achieved compaction ratio *R = source_bytes / mesh_bytes*
     against the theoretical maximum *R_max*, where *R_max* is the ratio of
     the source to the smallest viable MESH representation (the 5-float Weyl
-    tensor, ``_MESH_BRAIN_KV_WEYL_BYTES = 50 bytes``).
+    tensor, ``_MESH_BRAIN_KV_WEYL_BYTES = 50 bytes`` when *floor_bytes* is
+    ``None``, or the supplied CRB-derived floor otherwise).
 
     .. math::
 
@@ -1397,13 +1521,16 @@ def information_compaction_scalar(
         \\right)
 
     A value of **1.0** means the corpus has been distilled all the way to its
-    irreducible Weyl-tensor boundary encoding.  A value of **0.0** indicates
-    no compression (or degenerate inputs).
+    irreducible boundary encoding.  A value of **0.0** indicates no compression
+    (or degenerate inputs).
 
     Parameters
     ----------
     source_bytes:  Total raw corpus size in bytes (e.g. ``15 × 2**40`` for 15 TB).
     mesh_bytes:    Total MESH representation size in bytes (from :func:`mesh_compaction_summary`).
+    floor_bytes:   Optional CRB-derived floor (bytes).  When ``None`` the legacy
+                   ``_MESH_BRAIN_KV_WEYL_BYTES = 50`` floor is used, preserving
+                   byte-identical behaviour with existing callers.
 
     Returns
     -------
@@ -1412,10 +1539,40 @@ def information_compaction_scalar(
     if source_bytes <= 0.0 or mesh_bytes <= 0.0:
         return 0.0
     ratio = source_bytes / mesh_bytes
-    max_ratio = source_bytes / max(float(_MESH_BRAIN_KV_WEYL_BYTES), 1.0)
+    _floor = float(floor_bytes) if floor_bytes is not None else float(_MESH_BRAIN_KV_WEYL_BYTES)
+    max_ratio = source_bytes / max(_floor, 1.0)
     if max_ratio <= 1.0:
         return 0.0
     return _clip01(math.log1p(ratio) / math.log1p(max_ratio))
+
+
+def information_compaction_scalar_gard(
+    source_bytes: float,
+    mesh_bytes: float,
+    *,
+    sigma: float,
+    n_samples: int = 1,
+) -> float:
+    """CRB-bounded compaction scalar using the GARD information floor.
+
+    Computes the floor via :func:`gard_info.gard_floor_bytes` (σ-derived CRB)
+    and delegates to :func:`information_compaction_scalar` with that floor.
+
+    Parameters
+    ----------
+    source_bytes:  Total raw corpus size in bytes.
+    mesh_bytes:    Total MESH representation size in bytes.
+    sigma:         Langevin noise σ for the current GARD channel.
+    n_samples:     Number of independent samples (default 1).
+
+    Returns
+    -------
+    Compaction scalar in ``[0, 1]``.
+    """
+    from . import gard_info
+
+    fb = gard_info.gard_floor_bytes(sigma, n_samples=n_samples)["floor_bytes"]
+    return information_compaction_scalar(source_bytes, mesh_bytes, floor_bytes=float(fb))
 
 
 def mesh_compaction_summary(
@@ -1485,6 +1642,25 @@ def mesh_compaction_summary(
         total_tb=source_tb,
     )
 
+    # GARD CRB block — additive; does not affect existing keys.
+    # Reference σ = 0.05 (langevin_sigma_from_weyl base coefficient).
+    _gard_crb_sigma = 0.05
+    try:
+        from . import gard_info as _gard_info
+        _gard_floor = _gard_info.gard_floor_bytes(_gard_crb_sigma)
+        _gard_crb_scalar = information_compaction_scalar(
+            source_bytes, float(mesh_bytes_total),
+            floor_bytes=float(_gard_floor["floor_bytes"]),
+        )
+        gard_crb: dict = {
+            "sigma": _gard_crb_sigma,
+            "cramer_rao_var": _gard_floor["cramer_rao_var"],
+            "floor_bytes": _gard_floor["floor_bytes"],
+            "compaction_scalar_at_crb_floor": round(_gard_crb_scalar, 6),
+        }
+    except Exception:
+        gard_crb = {}
+
     return {
         "source_tb":              source_tb,
         "source_bytes":           int(source_bytes),
@@ -1506,6 +1682,8 @@ def mesh_compaction_summary(
         "compaction_scalar":      round(compaction_scalar_val, 6),
         # Holographic information surface
         "hawking_remnant_score":  round(remnant_score, 6),
+        # GARD CRB information floor (additive; reference σ = 0.05)
+        "gard_crb":               gard_crb,
     }
 
 
@@ -1716,6 +1894,7 @@ __all__ = [
     "hawking_information_remnant_score",
     "weyl_scalar_tensor",
     "information_compaction_scalar",
+    "information_compaction_scalar_gard",
     "mesh_compaction_summary",
     "metric_perturbation",
     # Full UEQGM dynamics

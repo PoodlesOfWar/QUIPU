@@ -456,6 +456,8 @@ def _persist_weyl(psi5: Sequence[float]) -> str | None:
         if isinstance(prev, list) and len(prev) == 5:
             brain_kv.kv_set_json(_WEYL_PREV_KEY, prev)
         brain_kv.kv_set_json(_WEYL_TENSOR_KEY, [float(x) for x in psi5])
+        # GARD information-science mirror key (additive; weyl key kept for wire compat).
+        brain_kv.kv_set_json("learnings:gard_state", [float(x) for x in psi5])
         packed_b64 = base64.b64encode(pack_weyl(psi5)).decode("ascii")
         brain_kv.kv_set(_WEYL_PACKED_KEY, packed_b64)
         return packed_b64
