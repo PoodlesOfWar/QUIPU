@@ -54,6 +54,11 @@ export
     mesh_read_write_compression,
     emission_mode_from_weyl,
     langevin_sigma_from_weyl,
+    # GARD information-science aliases (additive; weyl names kept for wire compat)
+    MESH_BRAIN_KV_GARD_BYTES,
+    MESH_BRAIN_KV_GARD_PACKED_BYTES,
+    pack_gard,
+    unpack_gard,
     selftest
 
 # ---------------------------------------------------------------------------
@@ -77,6 +82,12 @@ const MESH_BRAIN_KV_WEYL_BYTES     = 50    # Weyl tensor 5-float JSON
 const MESH_BRAIN_KV_WEYL_PACKED_BYTES = 20 # v2.2 float-dimension KV record: 5 x Float32 LE
 const MESH_BRAIN_KV_REMNANT_BYTES  = 10    # remnant score float string
 const MESH_BRAIN_KV_RUNTIME_BYTES  = 3_072 # adaptive runtime state dict
+
+# GARD information-science aliases (additive; weyl names kept for wire compat).
+const MESH_BRAIN_KV_GARD_BYTES        = MESH_BRAIN_KV_WEYL_BYTES          # 50
+const MESH_BRAIN_KV_GARD_PACKED_BYTES = MESH_BRAIN_KV_WEYL_PACKED_BYTES   # 20
+pack_gard(psi5)  = pack_weyl(psi5)
+unpack_gard(b)   = unpack_weyl(b)
 
 # quipu_minimal.py read-side resource ceilings (asset_resource_mesh._asset_capacity)
 const NORM_CORES       = 16.0
