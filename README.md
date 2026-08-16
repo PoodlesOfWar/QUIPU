@@ -10,8 +10,9 @@ All employer-specific identifiers from the parent project were redacted at extra
 src/quipu/          Python model core (package: src.quipu)
   mesh_slm.py             MESH SLM - online token-level learner over SQLite
   quipu_minimal.py        Quipu minimal knotted-memory model (builds on mesh_slm)
-  ueqgm_engine.py         UEQGM v0.9.x engine - SiCi axial decay, wavefunction overlap,
-                          Floquet modulation, holographic entropy, coherence scoring
+  ueqgm_engine.py         Bounded scoring/weighting helpers - Si/Ci phase term, cosine
+                          similarity, graph-density ratio, coverage scoring (see its
+                          module docstring: these are heuristics, not physics)
   system_entirety.py      System Entirety self-model (bit-flip parity, certainty axes)
   mesh_entirety.py        Mesh-level entirety aggregation
   asset_resource_mesh.py  Physical realization - compute peers/assets as graph substrate
@@ -63,11 +64,12 @@ julia --project=julia julia/gard_shard_model.jl   # Julia peer selftest
 
 `src/quipu/corpus_ingest.py` streams the openly-published corpora that pretrain
 current SOTA models (FineWeb, C4, Wikipedia, Dolma, arXiv, Gutenberg, …) and
-folds them into the mesh using QUIPU's **holographic compression**: each cycle
-is distilled to a 5-float Newman-Penrose Weyl tensor (~50 bytes, or a 20-byte
-packed `5×Float32 LE` record — byte-compatible with the Julia
-`mesh_compression_model` peer), scored by `mesh_compaction_summary` and
-`hawking_information_remnant_score`. The tensor persists to
+folds them into the mesh using QUIPU's **boundary distillation**: each cycle is
+distilled to a fixed 5-float record (~50 bytes as JSON, or a 20-byte
+`5×Float32 LE` pack that is stored base64-encoded as 28 bytes — byte-compatible
+with the Julia `mesh_compression_model` peer), scored by
+`mesh_compaction_summary` and `corpus_coverage_score`. The Ψ₀–Ψ₄ slot names are
+wire-format labels, not Newman-Penrose scalars. The record persists to
 `brain_kv["learnings:weyl_tensor"]` and re-radiates dynamics via
 `langevin_sigma_from_weyl`. Boundary distillation, not document reconstruction —
 see `docs/CORPUS_INGEST.md`.
