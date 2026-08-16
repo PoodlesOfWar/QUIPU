@@ -1,3 +1,24 @@
+## 2026-08-16 — GARD Shard AES-256-GCM, Si/Ci Correctness, Physics-Claim Correction (v0.28.0)
+
+- **`src/quipu/gard_shard_model.py`**: migrated the envelope to `gard-shard/v2` (AES-256-GCM AEAD) from AES-256-CBC + PKCS#7 + separate HMAC-SHA256.
+  - Removes the padding-oracle surface, drops the second HKDF key, replaces the 32-byte HMAC with a 16-byte tag; raw per-shard crypto overhead 144 → 110 bytes.
+  - The context v1 bound into its MAC preimage is now GCM additional authenticated data (`gard-shard-aad/v2`), so shard reordering, nonce substitution, and compression-level edits fail the tag.
+  - v1 stays fully readable. Both the v1 HKDF info and MAC preimage bind the protocol string, so those paths pin `GARD_PROTOCOL_V1` instead of the module constant — bumping the constant alone would have silently changed v1 key derivation and broken every existing envelope.
+  - Assignment proofs pinned to v1 (`_ASSIGNMENT_PROOF_PROTOCOL`): independent HMAC mechanism, no ciphertext, previously issued proofs still verify.
+  - `verify_digest=False` can no longer surrender plaintext from a tampered envelope — authentication is inside the primitive.
+- **`src/quipu/ueqgm_engine.py`**: `_raw_sici` rewritten.
+  - The old fixed-order power series was valid only for small argument but was called with φ = π/4 + kπ; at coherence 20 it returned ~1.9e13 against a true value of ~1.7e-2, failing two long-standing tests.
+  - Now Taylor series below |x| = 2 and a modified-Lentz continued fraction for E₁(ix) above. Verified against `mpmath` at ≤ 6e-16 relative error for x ∈ [1e-8, 1e6]; 2657× faster at φ = 3142.
+  - New tests pin the mathematical identities (odd/even symmetry, Ci's pole and first root, O(1/x) asymptotics, branch continuity, and central-difference checks that Si′ = sin x/x, Ci′ = cos x/x) rather than the implementation.
+- **Physics-claim correction** across `gard_info.py`, `ueqgm_engine.py`, `mesh_slm.py`, and the docs. Renames carry deprecated aliases for one release and change no numeric output:
+  `photon_covariance_proxy`→`state_correlation`, `interstitial_entanglement_score`→`correlation_transitivity_score`, `wavefunction_overlap`→`cosine_similarity_squared`, `holographic_entropy`→`edge_per_node_ratio`, `hawking_information_remnant_score`→`corpus_coverage_score`, `floquet_modulation_factor`→`cosine_modulation`, `tantalum_intermediary_binding`→`intermediary_binding_profile`.
+  - DOI `10.1364/OPTICA.601797` removed: it reports SPDC in a ppKTP crystal and cannot license claims about classical scalar correlation. The SiCi formula's provenance (a chatbot conversation ID, not a paper) is documented in place.
+  - `weyl_scalar_tensor`, `sici_axial_decay`, `metric_perturbation` keep their names — load-bearing for the wire format, or correct formulas fed synthetic inputs — with corrected docstrings.
+  - `receiver_material` and the other `receiver_*` labels are **retained**: `asset_resource_mesh` matches them against materials on real supply-chain part records, so they are load-bearing lookup keys; only the claim that the function models physical hardware was removed.
+- **`src/quipu/mesh_slm.py`**: removed the ±5% `η_eff`/`η_q` lift driven by the former entanglement score — the one intentional numeric behaviour change. `correlation_transitivity` is now a logged diagnostic.
+- **`src/quipu/gard_info.py` / `corpus_ingest.py`**: added `GARD_STATE_STORED_BYTES` / `MESH_BRAIN_KV_WEYL_STORED_BYTES` (= 28). The "20-byte" designator described the raw Float32 pack, but `brain_kv` is TEXT and the record is base64-encoded before storage; `interstitial_bits` now budgets against the real stored footprint.
+- **Known divergence**: `julia/gard_shard_model.jl` is v1-only and cannot read v2 envelopes (Nettle exposes no GCM). Documented in its module docstring; Python still reads anything that peer writes.
+
 ## 2026-06-17 — MESH-SLM Modular Expert + Agentic Specialist Feedback (v0.22.307)
 
 - **`pipeline/src/quipu/mesh_slm.py`**: Added full modular expert support:

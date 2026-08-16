@@ -1,5 +1,57 @@
 # Release Notes
 
+## v0.28.0 - 2026-08-16
+
+**GARD Shard AES-256-GCM, Si/Ci Numerical Correctness, and Physics-Claim Correction**
+
+### Changed — wire protocol
+
+- **`gard-shard/v2` (AES-256-GCM)** — `gard_shard_model.encrypt_json` now seals each shard with a single AEAD primitive instead of AES-256-CBC + PKCS#7 with a separate HMAC-SHA256 encrypt-then-MAC pass. This removes the padding-oracle surface CBC carries, drops the second HKDF-derived key, replaces the 32-byte HMAC with a 16-byte tag, and cuts raw per-shard crypto overhead **144 → 110 bytes**.
+- **Cross-context binding preserved** — the context v1 bound into its MAC preimage (protocol, version, domain, compression level, model digest, salt, shard index/count, nonce) is now passed as GCM *additional authenticated data*. Reordered shards, substituted nonces, and altered compression levels all fail the tag.
+- **v1 envelopes remain fully readable.** `decrypt_json` and `verify_envelope` accept both protocols; only `encrypt_json` is v2-only.
+
+### Fixed
+
+- **Si/Ci divergence past |φ| ≈ 2π** — `_raw_sici`'s non-scipy fallback used a fixed-order power series valid only for small argument, but `sici_axial_decay` is called with φ = π/4 + kπ growing without bound. At coherence 20 it returned ~1.9e13 where the function's true value is ~1.7e-2. Replaced with the standard two-branch treatment: Taylor series below |x| = 2, modified-Lentz continued fraction for E₁(ix) above. Verified against `mpmath` at **≤ 6e-16 relative error for x ∈ [1e-8, 1e6]** and **2657× faster** at φ = 3142 (O(1) rather than O(φ)).
+- **The "20-byte" GARD/Weyl record designator** described the raw `struct.pack("<5f", …)` output, but `brain_kv` values are TEXT and `_persist_weyl` base64-encodes before storing, so the real on-disk footprint is 28 bytes. Added `GARD_STATE_STORED_BYTES` / `MESH_BRAIN_KV_WEYL_STORED_BYTES` (= 28) and switched `interstitial_bits` to budget against the stored footprint.
+
+### Changed — naming (deprecated aliases retained one release)
+
+Function names and docstrings asserted physical results the arithmetic does not compute. Renamed to describe the actual operation; **every numeric output is unchanged**.
+
+| Was | Now | Why |
+|---|---|---|
+| `photon_covariance_proxy` | `state_correlation` | Pearson correlation on five floats — no Hilbert space, nothing to entangle |
+| `interstitial_entanglement_score` | `correlation_transitivity_score` | Classical third-order consistency check, not an entanglement witness |
+| `wavefunction_overlap` | `cosine_similarity_squared` | cos²θ between real vectors, not \|⟨ψ_a\|ψ_b⟩\|² |
+| `holographic_entropy` | `edge_per_node_ratio` | A ratio of two graph counts — no log, unbounded, not over a distribution |
+| `hawking_information_remnant_score` | `corpus_coverage_score` | Saturating count transform plus a log-scaled size term |
+| `floquet_modulation_factor` | `cosine_modulation` | A cosine; no driven system, no quasi-energy spectrum |
+| `tantalum_intermediary_binding` | `intermediary_binding_profile` | Reads no sensor and models no material |
+
+Two citations are documented as unsupported: DOI `10.1364/OPTICA.601797` (a ppKTP/SPDC sunlight-entanglement result) cannot license claims about classical scalar correlation, and the SiCi axial formula traced to a chatbot conversation ID rather than any published result. `weyl_scalar_tensor`, `sici_axial_decay`, and `metric_perturbation` keep their names — load-bearing for the wire format or genuinely correct formulas — with corrected docstrings.
+
+### Removed — behaviour change
+
+- **The ±5% `η_eff`/`η_q` learning-rate lift in `mesh_slm.train_round()`.** It was justified by the entanglement claim above, which does not hold. `correlation_transitivity` is now a logged diagnostic only. This is the **one intentional numeric behaviour change** in the release.
+- `verify_digest=False` no longer yields plaintext from a tampered envelope. Under v1 it disabled the separate HMAC pass; under v2 authentication is inside the primitive, so the flag only skips a redundant pre-pass. This is a tightening, not a regression.
+
+### Compatibility
+
+- **v1 GARD envelopes decrypt unchanged.** Verified by generating an envelope with the pre-migration module and reading it with the new code; that envelope is frozen into the suite as `_LEGACY_V1_ENVELOPE`.
+- **Assignment proofs are unaffected** — an independent HMAC mechanism carrying no ciphertext, pinned to v1 so previously issued proofs still verify.
+- **Legacy `brain_kv` keys still load** via a read fallback (`ueqgm:interstitial_entanglement` → `ueqgm:correlation_transitivity`).
+- ⚠️ **`julia/gard_shard_model.jl` is v1-only and cannot read v2 envelopes.** Nettle exposes no GCM. Parity is now one-directional: Python reads anything the Julia peer writes, but not the reverse. Porting needs a GCM-capable binding (e.g. `OpenSSL.jl`), the `gard-shard-hkdf/v2` label, and the `gard-shard-aad/v2` frame. The GUI files under `gui/GARD_Shard/` likewise still declare v1.
+
+### Verification
+
+```
+python -m pytest tests/                       # no regressions; pre-existing failures unchanged
+python -m src.quipu.gard_shard_model selftest # {"ok": true, "protocol": "gard-shard/v2"}
+```
+
+---
+
 ## v0.27.0 - 2026-07-23
 
 **System Entirety Control Plane GUI & GARD Shard High-Performance Neural Tensor Compression**

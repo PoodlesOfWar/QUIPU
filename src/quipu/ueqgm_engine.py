@@ -55,8 +55,12 @@ except ImportError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 # Component identity
 # ---------------------------------------------------------------------------
-__version__: str = "0.22.306"
-"""Canonical version of this UEQGM engine component, aligned with ``_version.__version__``."""
+__version__: str = "0.28.0"
+"""Canonical version of this UEQGM engine component, aligned with ``_version.__version__``.
+
+Was pinned at 0.22.306 while the package moved to 0.27.0, so the "aligned"
+claim was stale; re-synced at the 0.28.0 release that reworked this module.
+"""
 
 __component__: str = "UEQGM-Engine"
 """Component name identifying this module within the MESH-SLM-GLM-GNN architecture.

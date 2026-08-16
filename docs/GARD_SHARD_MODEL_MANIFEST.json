@@ -128,13 +128,68 @@
     "refresh": "Launch-Loadopoly.ps1 invokes the Python publish command before starting or opening the portal."
   },
   "compatibility": {
-    "vector_id": "gard-shard-v1-fixed-001",
+    "vector_id": "gard-shard-v2-fixed-001",
     "fixture_secret_label": "public non-production test fixture only",
     "model_digest": "5bbba9598191e8e5622ffce857bf7f70af38fa964d7a0eac5be79e7c4f8bc804",
     "plaintext_sha256": "3a9d41f63f18d0ef61b631842420eff808fa97830788442c08e364c11f416d7a",
-    "compressed_sha256": "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb"
+    "compressed_sha256": "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb",
+    "legacy_vector_id": "gard-shard-v1-fixed-001",
+    "note": "Payload/context digests are protocol-independent (taken over the plaintext and compressed bytes), so they are identical under v1 and v2. 'sample_envelope' is a complete gard-shard/v2 envelope that decrypts with the public fixture secret; 'sample_envelope_legacy_v1' is a structural shape illustration of the superseded v1 field layout (it omits model_context and is not decryptable by design)."
   },
+  "verification": [
+    "Run the focused Python GARD and repository catalog tests with pytest and the workspace addopts override.",
+    "Run python -m src.quipu.gard_shard_model selftest from pipeline/.",
+    "When Julia is installed, instantiate pipeline/Project.toml and run the guarded GardShardModel selftest.",
+    "Fetch http://localhost:9080/gard-shard-model.json after Loadopoly launches and confirm the portal card renders without secrets."
+  ],
   "sample_envelope": {
+    "schema": "gard-shard-envelope/v2",
+    "protocol": "gard-shard/v2",
+    "protocol_version": 2,
+    "domain": "SiCi_SQRT(-1)",
+    "encoding": "base64",
+    "compression": {
+      "algorithm": "zlib",
+      "level": 6
+    },
+    "encryption": {
+      "algorithm": "AES-256-GCM",
+      "padding": "none"
+    },
+    "authentication": {
+      "algorithm": "AES-256-GCM",
+      "mode": "aead"
+    },
+    "model_context": {
+      "architecture": "MESH-SLM-SCM-GLM-Quipu-GNN",
+      "revision": 1
+    },
+    "model_digest": "5bbba9598191e8e5622ffce857bf7f70af38fa964d7a0eac5be79e7c4f8bc804",
+    "plaintext_sha256": "3a9d41f63f18d0ef61b631842420eff808fa97830788442c08e364c11f416d7a",
+    "compressed_sha256": "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb",
+    "plaintext_bytes": 80,
+    "compressed_bytes": 86,
+    "shard_count": 2,
+    "shards": [
+      {
+        "index": 0,
+        "count": 2,
+        "salt_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        "nonce_b64": "AAECAwQFBgcICQoL",
+        "ciphertext_b64": "ZpwXOZ/ebpcwuJSWM7R/kIw+G0ykXBdwEviR8FdOLWBoahqygkGDYQaPR2ZFePySRc00FPyQEXKgUsA=",
+        "ciphertext_sha256": "7bc76e9f1b24a0bfe5256fa9192aaccd25ba990a187cbd51daeb2646d7442ae8"
+      },
+      {
+        "index": 1,
+        "count": 2,
+        "salt_b64": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+        "nonce_b64": "DA0ODxAREhMUFRYX",
+        "ciphertext_b64": "aZTxOKmJs/34MMAAWFxrxBLNHtw3BcwIh9TIPtIgs3jN70fCLHsY/XMzu1ZuQNOisHNL9N4HFY9RwCo=",
+        "ciphertext_sha256": "bc76384b02c80fd5158dad43600593766001b723087aaa2e07991d2f19b943ae"
+      }
+    ]
+  },
+  "sample_envelope_legacy_v1": {
     "schema": "gard-shard-envelope/v1",
     "protocol": "gard-shard/v1",
     "protocol_version": 1,
@@ -164,11 +219,5 @@
         "hmac_sha256_b64": "<redacted-hmac>"
       }
     ]
-  },
-  "verification": [
-    "Run the focused Python GARD and repository catalog tests with pytest and the workspace addopts override.",
-    "Run python -m src.quipu.gard_shard_model selftest from pipeline/.",
-    "When Julia is installed, instantiate pipeline/Project.toml and run the guarded GardShardModel selftest.",
-    "Fetch http://localhost:9080/gard-shard-model.json after Loadopoly launches and confirm the portal card renders without secrets."
-  ]
+  }
 }
