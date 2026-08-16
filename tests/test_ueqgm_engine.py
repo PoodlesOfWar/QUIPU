@@ -1,8 +1,14 @@
-"""Tests for ueqgm_engine.py — UEQGM v0.9.14 physics computation layer.
+"""Tests for ueqgm_engine.py — bounded scoring and weighting helpers.
 
-Covers the SiCi axial channel, wavefunction overlap, Floquet modulation,
-holographic entropy, metric perturbation, phase evolution, entropic Bayesian
-diffusion step, and the corpus-backed coherence score.
+Covers the Si/Ci special functions and the axial phase term built on them,
+squared cosine similarity, cosine modulation, the graph-density ratio, the
+corpus coverage score, the inverse-distance scaling term, phase evolution, the
+diffusion terrain step, and the corpus-backed coherence score.
+
+Several helpers are still imported here under their deprecated physics-flavoured
+names (``wavefunction_overlap``, ``holographic_entropy``, …), which doubles as
+coverage that those aliases keep resolving. See the bottom of this file for the
+alias and behavioural-equivalence tests.
 """
 
 from __future__ import annotations
@@ -823,3 +829,75 @@ def test_mesh_compaction_summary_gard_crb_present():
 def test_information_compaction_scalar_gard_in_all():
     from src.quipu import ueqgm_engine
     assert "information_compaction_scalar_gard" in ueqgm_engine.__all__
+
+
+# ── Physics-claim de-naming: aliases and behavioural equivalence ─────────────
+
+def test_deprecated_physics_aliases_resolve_to_renamed_functions():
+    """The old physics-flavoured names stay importable for one release.
+
+    Each asserted a physical quantity the arithmetic does not compute (a
+    quantum overlap, a Bekenstein-Hawking entropy, Hawking remnants, Floquet
+    engineering, a tantalum receiver), so the functions were renamed to
+    describe what they actually do.
+    """
+    from src.quipu import ueqgm_engine as u
+
+    assert u.wavefunction_overlap is u.cosine_similarity_squared
+    assert u.floquet_modulation_factor is u.cosine_modulation
+    assert u.holographic_entropy is u.edge_per_node_ratio
+    assert u.hawking_information_remnant_score is u.corpus_coverage_score
+    assert u.tantalum_intermediary_binding is u.intermediary_binding_profile
+
+
+def test_renaming_did_not_change_any_numeric_behaviour():
+    """Pure rename: every value must be identical to the pre-rename output."""
+    from src.quipu import ueqgm_engine as u
+
+    assert u.cosine_similarity_squared([1, 2, 3], [2, 4, 6]) == 1.0
+    assert u.cosine_similarity_squared([1, 0], [0, 1]) == 0.0
+    assert u.cosine_modulation(0.0, 3.0) == 1.0
+    assert u.edge_per_node_ratio(10, 4) == 2.0
+    assert u.edge_per_node_ratio(7, 0) == 7.0
+    assert u.corpus_coverage_score(16, 4) == pytest.approx(64 / 65)
+    assert u.corpus_coverage_score(0, 4) == 0.0
+
+
+def test_renamed_functions_are_exported():
+    from src.quipu import ueqgm_engine
+
+    for name in (
+        "cosine_similarity_squared",
+        "cosine_modulation",
+        "edge_per_node_ratio",
+        "corpus_coverage_score",
+        "intermediary_binding_profile",
+    ):
+        assert name in ueqgm_engine.__all__, name
+
+
+def test_math_map_no_longer_asserts_physical_quantities():
+    """UEQGM_MATH_MAP must describe the arithmetic, under the current names."""
+    from src.quipu.ueqgm_engine import UEQGM_MATH_MAP
+
+    for renamed in ("cosine_similarity_squared", "edge_per_node_ratio", "corpus_coverage_score"):
+        assert renamed in UEQGM_MATH_MAP
+    for retired in ("wavefunction_overlap", "holographic_entropy",
+                    "hawking_information_remnant_score"):
+        assert retired not in UEQGM_MATH_MAP
+
+
+def test_intermediary_binding_keeps_receiver_lookup_labels():
+    """The receiver_* strings are consumed by asset_resource_mesh part matching.
+
+    They are lookup keys into a real parts catalogue, so the de-naming pass
+    must not drop them even though the surrounding physics claim was removed.
+    """
+    from src.quipu.ueqgm_engine import intermediary_binding_profile
+
+    profile = intermediary_binding_profile(
+        weyl_phase=0.5, coherence=2, mesh_alignment=0.6, observer_alignment=0.4,
+    )
+    assert profile["receiver_material"] == "tantalum"
+    assert 0.0 <= profile["binding_gain"] <= 1.0
+    assert profile["binding_multiplier"] >= 0.55

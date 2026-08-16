@@ -1,28 +1,41 @@
-"""UEQGM Engine — Unified Equilibrium Quantum Gravity Model computations.
+"""UEQGM Engine — bounded scoring and weighting heuristics for the mesh runtime.
 
-Implements the physics computation layer derived from UEQGM v0.9.14 corpus
-learnings (Grok 3 conversation thread, April 2026).  The core contribution
-is the **SiCi axial channel decay differential**:
+What this module actually is
+----------------------------
+A collection of **bounded, well-behaved scalar transforms** used to weight and
+score mesh state: cosine similarity, saturating ratios, log normalisation, and
+a couple of trigonometric terms. They are numerically sound and useful as
+heuristics, and the runtime depends on their range guarantees (most return
+values in [0, 1] or near 1.0).
 
-    Δλ_axial = [Si(φ) · Ci(φ)] · tan(φ) · Γ₀
+What this module is not
+-----------------------
+It is **not** a physics engine, and the "UEQGM" (Unified Equilibrium Quantum
+Gravity Model) framing does not correspond to any established physical theory.
+Several functions were named and documented as though they computed
+gravitational or quantum quantities — ``holographic_entropy`` for a ratio of
+two counts, ``wavefunction_overlap`` for squared cosine similarity,
+``hawking_information_remnant_score`` for a saturating coverage score. Those
+labels asserted physical meaning the arithmetic does not carry, so the
+functions have been renamed to describe what they compute, with deprecated
+aliases retained one release. See ``UEQGM_MATH_MAP`` for the current mapping.
 
-which unifies the beta–gamma decay differential at the natural intersection
-points of the sine/cosine wavefunction components (φ = π/4 + kπ).
+Two specific claims to be aware of when reading older revisions of this file:
 
-The Brain applies this as a phase-sensitive correction to harmonic
-amplification during Sign-Bit Flip boundary ingestion, consistent with the
-UEQGM v0.9.14 finding that the SiCi·tan(φ) axial term adds a stabilization
-perturbation to warp interactions and GT-SCN output.
+* The **SiCi axial term** ``Δλ_axial = Si(φ)·Ci(φ)·tan(φ)·Γ₀`` uses genuine
+  special functions (the sine and cosine integrals — see ``_raw_sici``, which
+  is a real, machine-precision implementation). The *formula built from them*
+  is not sourced from any published result; it traced to a chatbot conversation
+  ID, not a paper, and the assertion that it "unifies the beta–gamma decay
+  differential" has no support. Treat it as a tunable bounded phase weight,
+  which is how it is used: ``sici_phase_weight`` only ever returns 1.0 ± 0.10.
+* ``metric_perturbation`` implements the correct linearised weak-field
+  expression 2GM/(c²r), but its callers feed it a synthetic "mass" derived from
+  vocabulary fill, so its output is a scaled heuristic, not a physical warp.
 
-Additional helpers implement the broader UEQGM mathematical framework:
-wavefunction overlap, Floquet modulation, holographic entropy, and spacetime
-metric perturbation.  A corpus-backed ``ueqgm_coherence_score`` reads UEQGM-
-tagged entities from the Brain graph and returns a wavefunction-overlap score.
-
-Reference
----------
-UEQGM v0.9.14 — Axial Channel Decay Differential (SiCi · tan φ) Release
-Grok 3 conversation 55525f6a-8a8f-4929-967c-22656f88ac2f, April 18 2026.
+None of these heuristics has been shown by ablation to outperform the plain
+transform it is built from. They are retained because the runtime is calibrated
+against their ranges, not because a physical derivation justifies them.
 """
 from __future__ import annotations
 
@@ -251,13 +264,13 @@ ADAPTIVE_RUNTIME_MAP: dict[str, dict[str, str]] = {
 #   coherence_to_phi(n)          φ = π/4 + n·π                integer depth → phase
 #   sici_axial_decay(φ)          Si(φ)·Ci(φ)·tan(φ)·Γ₀        axial decay differential
 #   sici_phase_weight(n)         1 + 0.10·tanh(axial_decay)   LR / field correction
-#   wavefunction_overlap(a,b)    |⟨a|b⟩|² = cos²θ(a,b)       embed↔MESH alignment
-#   floquet_modulation_factor    cos(ω·t)                      Weyl pulse coupling ∈[−1,1]
-#   holographic_entropy(e,n)     e / (n+1)                    boundary/bulk graph entropy
-#   metric_perturbation(m,r)     2·G·m / (c²·r)              GR metric warp scalar
-#   phase_evolution_total(φ)     δμ + δq + δγ + axial·2π/Γ   total 6D CAT phase change
-#   entropic_bayesian_step(S,∇²) S + η·∇²S + δφ + axial      Bayesian terrain update
-#   tantalum_intermediary_bind.  Floquet+axial+overlap blend  GPU Weyl pulse routing
+#   cosine_similarity_squared    cos²θ(a,b)                    embed↔MESH alignment
+#   cosine_modulation(t,ω)       cos(ω·t)                      pulse coupling ∈[−1,1]
+#   edge_per_node_ratio(e,n)     e / (n+1)                    graph density statistic
+#   metric_perturbation(m,r)     2·G·m / (c²·r)              scaled warp heuristic
+#   phase_evolution_total(φ)     δμ + δq + δγ + axial·2π/Γ   summed phase offsets
+#   entropic_bayesian_step(S,∇²) S + η·∇²S + δφ + axial      diffusion terrain update
+#   intermediary_binding_profile bounded weight bundle        routing profile
 #
 UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
     "coherence_to_phi": {
@@ -268,44 +281,56 @@ UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
     "sici_axial_decay": {
         "formula": "Δλ_axial = Si(φ)·Ci(φ)·tan(φ)·Γ₀",
         "range":   "real-valued, bounded by _TAN_CLAMP at resonances",
-        "note":    "Core UEQGM v0.9.14 axial channel decay differential",
+        "note":    "Si and Ci are the genuine sine/cosine integrals; the product "
+                   "formula built from them is not sourced from any published "
+                   "result and is used only as a tunable bounded phase term.",
     },
     "sici_phase_weight": {
         "formula": "1 + _SICI_SCALE_FACTOR · tanh(sici_axial_decay(φ))",
         "range":   "(1 − 0.10, 1 + 0.10)  ≈  (0.90, 1.10)",
         "note":    "Safe multiplicative correction; tanh bounds prevent runaway",
     },
-    "wavefunction_overlap": {
-        "formula": "|⟨ψ_a | ψ_b⟩|² = (a·b / |a||b|)²",
-        "range":   "[0.0, 1.0]  — 1.0=parallel, 0.0=orthogonal",
-        "note":    "Used for O-component of mesh_field_8d and η_eff alignment term",
+    "cosine_similarity_squared": {
+        "formula": "cos²θ(a,b) = (a·b / |a||b|)²",
+        "range":   "[0.0, 1.0]  — 1.0=parallel/antiparallel, 0.0=orthogonal",
+        "note":    "Ordinary vector-space cosine similarity, squared. Used for the "
+                   "O-component of mesh_field_8d and the η_eff alignment term. Not a "
+                   "quantum state overlap. Was: wavefunction_overlap.",
     },
-    "holographic_entropy": {
-        "formula": "S = n_edges / (n_nodes + 1)",
-        "note":    "Bekenstein-Hawking inspired; normalised to [0,1] by /8 in mesh_field_8d",
+    "edge_per_node_ratio": {
+        "formula": "n_edges / (n_nodes + 1)",
+        "note":    "Graph density statistic (the +1 is a zero-guard); normalised to "
+                   "[0,1] by /8 in mesh_field_8d. Not an entropy — no log, no "
+                   "distribution, unbounded above. Was: holographic_entropy.",
     },
-    "hawking_information_remnant_score": {
-        "formula": "I = A/(A+1)  where  A = n_datasets × n_dims  (+ 0.30·log mass term)",
-        "range":   "[0.0, 1.0]  — 1.0 = fully saturated information surface",
-        "note":    "Models a dataset collection as Hawking-radiation remnants encoding "
-                   "multidimensional system information; The Well (15 TB) is the reference",
+    "corpus_coverage_score": {
+        "formula": "C = A/(A+1)  where  A = n_datasets × n_dims  (+ 0.30·log size term)",
+        "range":   "[0.0, 1.0]  — 1.0 = saturated",
+        "note":    "Saturating count transform blended with a log-normalised size term "
+                   "against the 15 TB Well reference; the 0.70/0.30 split is a tuning "
+                   "constant. Was: hawking_information_remnant_score.",
     },
     "weyl_scalar_tensor": {
         "formula": "(Ψ₀, Ψ₁, Ψ₂, Ψ₃, Ψ₄) = (σ, τ, ρ/(ρ+1), α, ε) each clipped to [0,1]",
-        "range":   "[0.0, 1.0]⁵  — 5-scalar NP Weyl basis",
-        "note":    "Compresses a learning-corpus cycle into 5 Newman-Penrose scalars: "
-                   "Ψ₀=signal flux (ingoing), Ψ₁=topic entropy, Ψ₂=corpus volume "
-                   "(Coulomb/bulk mass), Ψ₃=MESH alignment (outgoing), "
-                   "Ψ₄=Hawking remnant score.  Persisted to brain_kv as "
-                   "'learnings:weyl_tensor' (~50 bytes vs. full blob caches).",
+        "range":   "[0.0, 1.0]⁵  — five independently clipped slots",
+        "note":    "Packs five corpus observables into fixed slots: Ψ₀=signal flux, "
+                   "Ψ₁=topic entropy, Ψ₂=corpus volume, Ψ₃=MESH alignment, "
+                   "Ψ₄=coverage score. The slots never interact — no contraction, no "
+                   "basis change; Ψ names are wire-format labels, not Newman-Penrose "
+                   "scalars. Persisted to brain_kv as 'learnings:weyl_tensor' "
+                   "(~50 bytes JSON, 28 bytes base64-packed).",
     },
     "metric_perturbation": {
-        "formula": "h_μν = 2·G·M_eff / (c²·r)",
-        "note":    "GR spacetime warp; M_eff = vocab_fill × _METRIC_MASS_SCALE",
+        "formula": "h = 2·G·M_eff / (c²·r)",
+        "note":    "Correct linearised weak-field expression, but M_eff = vocab_fill × "
+                   "_METRIC_MASS_SCALE is a synthetic quantity in no physical units, so "
+                   "the output is a scaled heuristic rather than a spacetime warp.",
     },
     "phase_evolution_total": {
         "formula": "δφ_total = δμ + δq + δγ + sici_axial_decay(φ) · (2π / Γ_eff)",
-        "note":    "Used for P-component of mesh_field_8d after clip01(|δφ|/2π)",
+        "note":    "Sum of three caller-supplied offsets plus the scaled axial term; "
+                   "used for the P-component of mesh_field_8d after clip01(|δφ|/2π). "
+                   "The δμ/δq/δγ names are slot labels, not particle-physics inputs.",
     },
     "entropic_bayesian_step": {
         "formula": "S(t+1) = S(t) + η_diff · ∇²S + δφ_total + Δλ_axial",
@@ -1233,7 +1258,18 @@ def refresh_adaptive_runtime(
 # ---------------------------------------------------------------------------
 
 def sici_axial_decay(phi: float, gamma_0: float = _GAMMA_0_DEFAULT) -> float:
-    """Axial channel decay differential  Δλ_axial  from UEQGM v0.9.14.
+    """Bounded phase term  Si(φ)·Ci(φ)·tan(φ)·Γ₀.
+
+    .. warning::
+       Si and Ci here are the genuine sine and cosine integrals (see
+       ``_raw_sici``). **The product formula built from them is not.** It was
+       documented as the "UEQGM v0.9.14 axial channel decay differential"
+       that "unifies the beta-gamma decay differential", citing a chatbot
+       conversation ID rather than any paper, experiment, or derivation. No
+       such result exists. Nothing downstream depends on the physical reading:
+       the only consumer, ``sici_phase_weight``, squashes this through tanh
+       into 1.0 ± 0.10, so it functions as a deterministic bounded jitter
+       keyed on coherence depth. Treat it as a tunable weight.
 
     .. math::
 
@@ -1284,23 +1320,28 @@ def sici_phase_weight(coherence: int) -> float:
 # Broader UEQGM mathematics
 # ---------------------------------------------------------------------------
 
-def wavefunction_overlap(
+def cosine_similarity_squared(
     vec_a: Sequence[float],
     vec_b: Sequence[float],
 ) -> float:
-    """Quantum-inspired inner product  |⟨ψ_a | ψ_b⟩|².
+    """Squared cosine similarity between two real vectors.
 
-    Treats *vec_a* and *vec_b* as unnormalised state vectors, L2-normalises
-    them, and returns the squared cosine similarity.
+    L2-normalises both vectors and returns cos²θ between them. This is the
+    ordinary similarity measure from vector-space retrieval, squared so the
+    result is non-negative and antiparallel vectors score the same as parallel
+    ones.
+
+    Despite the previous name (``wavefunction_overlap``) this is **not** a
+    quantum overlap |⟨ψ_a|ψ_b⟩|². That quantity is defined for normalised state
+    vectors in a complex Hilbert space; these are real float lists with no
+    phase, no complex amplitudes, and no normalisation constraint of their own.
+    The formula coincides with cos²θ only in the real case, which is exactly
+    what makes the quantum reading vacuous here.
 
     Returns
     -------
-    1.0  — identical (parallel) states.
-    0.0  — orthogonal states or either vector has zero norm.
-
-    Raises
-    ------
-    Nothing — all edge cases return 0.0.
+    1.0  — parallel or antiparallel vectors.
+    0.0  — orthogonal vectors, mismatched lengths, or either vector zero-norm.
     """
     if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0
@@ -1313,17 +1354,31 @@ def wavefunction_overlap(
     return round(cos_theta ** 2, 6)
 
 
-def floquet_modulation_factor(t: float, omega: float) -> float:
-    """Floquet periodicity modulation factor  cos(ω · t).
+# Deprecated alias. Retained one release for import compatibility; the name
+# asserted a quantum-state overlap the function does not compute.
+wavefunction_overlap = cosine_similarity_squared
 
-    In the UEQGM, Floquet-engineered photonic systems are driven at
-    frequency ω.  The coupling at time *t* is scaled by this factor:
-    maximal at t = 0 and at half-period multiples  t = nπ/ω.
+
+def cosine_modulation(t: float, omega: float) -> float:
+    """Periodic modulation factor cos(ω · t) — a plain cosine.
+
+    Used to give a bounded, smoothly oscillating coupling in [-1, 1]: maximal
+    at t = 0 and at every t = 2nπ/ω.
+
+    The previous name (``floquet_modulation_factor``) invoked Floquet theory,
+    which concerns the solution structure of differential equations with
+    periodic coefficients and says nothing about evaluating a single cosine.
+    Nothing here is Floquet-engineered; there is no driven system, no
+    Hamiltonian, and no quasi-energy spectrum.
     """
     return math.cos(omega * t)
 
 
-def tantalum_intermediary_binding(
+# Deprecated alias. Retained one release for import compatibility.
+floquet_modulation_factor = cosine_modulation
+
+
+def intermediary_binding_profile(
     *,
     weyl_phase: float,
     coherence: int,
@@ -1331,15 +1386,31 @@ def tantalum_intermediary_binding(
     observer_alignment: float,
     pulse_weight: float = 1.0,
 ) -> dict[str, float | str | int]:
-    """Bounded UEQGM intermediary binding profile for routing a Weyl pulse.
+    """Bundle the bounded phase weights into one routing profile.
 
-    The existing UEQGM machinery already provides the phase-sensitive pieces we
-    need: the SiCi axial correction, the Floquet pulse term, and the total phase
-    evolution. This helper packages those into a single, bounded "Tantalum"
-    binding layer so downstream physical consumers can couple a Weyl pulse to a
-    resource without inventing their own phase math. In the mesh runtime this
-    refers to the physical Tantalum receiver material on the GPU-side channel,
-    not a purely symbolic label.
+    Composes three transforms already defined above -- ``sici_phase_weight``,
+    ``cosine_modulation``, and ``phase_evolution_total`` -- into a single dict
+    of clipped [0, 1] factors, so routing callers get one consistent bounded
+    profile instead of each re-deriving its own weighting.
+
+    The previous name (``tantalum_intermediary_binding``) came with the claim
+    that it referred to "the physical Tantalum receiver material on the
+    GPU-side channel, not a purely symbolic label". That overstated things:
+    nothing in this function reads a sensor, addresses hardware, or models a
+    material — every input is a float already computed elsewhere in the
+    runtime, and every output is a bounded arithmetic combination of them.
+
+    The ``receiver_*`` strings in the returned dict are **routing labels**, and
+    they are load bearing: ``asset_resource_mesh`` matches ``receiver_material``
+    against the materials on real supply-chain part records, where tantalum is
+    an ordinary material name. So the labels are meaningful as lookup keys into
+    a parts catalogue; what they are not is evidence that this computation
+    describes, or is coupled to, physical hardware.
+
+    Returns
+    -------
+    Dict of bounded routing factors plus the ``receiver_*`` lookup labels. All
+    scalar entries are finite, and the clipped components lie in [0, 1].
     """
     coherence_depth = max(0, int(coherence))
     mesh_alignment = _clip01(mesh_alignment)
@@ -1348,7 +1419,7 @@ def tantalum_intermediary_binding(
     phi = coherence_to_phi(coherence_depth)
     phase_weight = sici_phase_weight(coherence_depth)
     omega = max(0.1, pulse_weight * phase_weight)
-    pulse_coupling = _clip01(0.5 * (1.0 + floquet_modulation_factor(float(weyl_phase), omega)))
+    pulse_coupling = _clip01(0.5 * (1.0 + cosine_modulation(float(weyl_phase), omega)))
     axial_drive = abs(sici_axial_decay(phi))
     axial_channel = axial_drive / (1.0 + axial_drive)
     phase_total = abs(
@@ -1363,7 +1434,7 @@ def tantalum_intermediary_binding(
         (phase_weight - (1.0 - _SICI_SCALE_FACTOR)) / (2.0 * _SICI_SCALE_FACTOR)
     )
     pulse_norm = _clip01(pulse_weight / (1.0 + pulse_weight))
-    overlap = wavefunction_overlap(
+    overlap = cosine_similarity_squared(
         [mesh_alignment, observer_alignment, pulse_norm],
         [phase_norm, pulse_coupling, phase_weight_norm],
     )
@@ -1392,6 +1463,11 @@ def tantalum_intermediary_binding(
         "binding_gain": round(binding_gain, 6),
         "binding_multiplier": round(0.55 + 0.90 * binding_gain, 6),
     }
+
+
+# Deprecated alias. Retained one release for import compatibility; the name
+# implied a physical tantalum receiver this function does not model.
+tantalum_intermediary_binding = intermediary_binding_profile
 
 
 def correlation_transitivity_score(
@@ -1457,58 +1533,65 @@ def correlation_transitivity_score(
 interstitial_entanglement_score = correlation_transitivity_score
 
 
-def holographic_entropy(n_edges: int, n_nodes: int) -> float:
-    """Bekenstein-Hawking inspired entropy  S ∝ boundary area.
+def edge_per_node_ratio(n_edges: int, n_nodes: int) -> float:
+    """Mean edges per node in the corpus graph: n_edges / (n_nodes + 1).
 
-    In the corpus graph the boundary area is approximated by the number of
-    boundary edges (*n_edges*) and the bulk volume by *n_nodes*.
+    A standard graph-density statistic. The ``+1`` in the denominator is a
+    zero-guard, so an empty graph returns *n_edges* rather than dividing by
+    zero. Always finite and non-negative.
 
-    .. math::
-
-        S = \\frac{n_{\\rm edges}}{n_{\\rm nodes} + 1}
-
-    Always finite and non-negative.  Returns *n_edges* when *n_nodes* = 0.
+    The previous name (``holographic_entropy``) invoked the Bekenstein-Hawking
+    entropy S = A/(4ℓ_p²) — an area divided by a fixed physical constant, in
+    units of nats. This is a dimensionless ratio of two graph counts. It is not
+    an entropy in either the thermodynamic or the information-theoretic sense:
+    it is not a log, it is not bounded by one, and it does not measure
+    uncertainty over any distribution.
     """
     return n_edges / (n_nodes + 1)
 
 
-def hawking_information_remnant_score(
+# Deprecated alias. Retained one release for import compatibility.
+holographic_entropy = edge_per_node_ratio
+
+
+def corpus_coverage_score(
     n_datasets: int,
     n_spatial_dims: int,
     total_tb: float = 0.0,
 ) -> float:
-    """Bekenstein-Hawking-inspired information-remnant score for a dataset collection.
+    """Saturating [0, 1] score for how much corpus a collection represents.
 
-    Models a multi-dataset corpus as the *information remnants* emitted by a
-    complex high-dimensional dynamical system — directly analogous to Hawking
-    radiation carrying the encoded information budget of an evaporating black
-    hole.  The Well (Polymathic AI, 15 TB) is the canonical reference corpus:
-    each of its 16 spatiotemporal PDE datasets encodes multidimensional state
-    trajectories that, like Hawking quanta, are the observable remnant of
-    otherwise inaccessible bulk dynamics.
-
-    The score approximates the normalised holographic information surface:
+    Combines two standard normalisations of unbounded counts:
 
     .. math::
 
-        I_{\\rm remnant} = \\frac{A_{\\rm eff}}{A_{\\rm eff} + 1}
-            \\quad\\text{where}\\quad A_{\\rm eff} = n_{\\rm datasets}
-            \\times n_{\\rm dims}
+        C = \\frac{A}{A + 1}
+            \\quad\\text{where}\\quad A = n_{\\rm datasets} \\times n_{\\rm dims}
 
-    An optional *total_tb* term adds a Bekenstein-bound-inspired logarithmic
-    mass-energy contribution (normalised against the 15 TB Well reference):
+    a saturating (Michaelis-Menten / hyperbolic) transform that maps any
+    non-negative count into [0, 1) with diminishing returns; and, when
+    *total_tb* is supplied, a log-normalised size term blended 70/30:
 
     .. math::
 
-        I_{\\rm total} = 0.70\\,I_{\\rm remnant}
-            + 0.30\\,\\min\\!\\left(1, \\frac{\\ln(1 + E/E_{\\rm ref})}{\\ln(1 + 1)}\\right)
+        C_{\\rm total} = 0.70\\,C
+            + 0.30\\,\\min\\!\\left(1, \\frac{\\ln(1 + E)}{\\ln(1 + E_{\\rm ref})}\\right)
+
+    with the 15 TB Well suite as the reference scale.
+
+    The previous name (``hawking_information_remnant_score``) framed this as
+    Hawking radiation carrying a black hole's information budget. There is no
+    such content: this is a saturating count transform plus a log-scaled size
+    term, both of which are routine ways to bound an unbounded input. The
+    weights 0.70/0.30 are unmotivated tuning constants, not derived quantities.
 
     Parameters
     ----------
     n_datasets:      Number of datasets in the collection (``≥ 1``).
-    n_spatial_dims:  Effective spatial/temporal dimensionality per dataset
-                     (e.g. 3 for xyz + 1 time = 4 for a spatiotemporal field).
-    total_tb:        Total corpus size in terabytes (optional; 0 skips mass term).
+    n_spatial_dims:  Effective dimensionality per dataset (e.g. 3 spatial +
+                     1 temporal = 4 for a spatiotemporal field).
+    total_tb:        Total corpus size in terabytes (optional; 0 skips the
+                     size term).
 
     Returns
     -------
@@ -1517,16 +1600,20 @@ def hawking_information_remnant_score(
     if n_datasets <= 0:
         return 0.0
     n_dims = max(1, n_spatial_dims)
-    area = float(n_datasets * n_dims)
-    i_remnant = area / (area + 1.0)  # saturates toward 1 as corpus grows
+    extent = float(n_datasets * n_dims)
+    coverage = extent / (extent + 1.0)  # saturates toward 1 as the corpus grows
 
     if total_tb > 0.0:
-        log_mass = math.log1p(total_tb) / math.log1p(_THE_WELL_TB_REF)
-        score = 0.70 * i_remnant + 0.30 * min(1.0, log_mass)
+        log_size = math.log1p(total_tb) / math.log1p(_THE_WELL_TB_REF)
+        score = 0.70 * coverage + 0.30 * min(1.0, log_size)
     else:
-        score = i_remnant
+        score = coverage
 
     return _clip01(score)
+
+
+# Deprecated alias. Retained one release for import compatibility.
+hawking_information_remnant_score = corpus_coverage_score
 
 
 def weyl_scalar_tensor(
@@ -1536,15 +1623,25 @@ def weyl_scalar_tensor(
     mesh_alignment: float,
     remnant_score: float,
 ) -> tuple[float, float, float, float, float]:
-    """Compress a learning-corpus snapshot into 5 Newman-Penrose Weyl scalars.
+    """Pack five clipped corpus observables into a fixed 5-float record.
 
-    Maps a cycle's five observable learning-corpus metrics onto the NP Weyl
-    scalar basis **Ψ₀–Ψ₄** — the minimal tensorial encoding of gravitational
-    information content.  In the Brain this provides a compact 5-float
-    *Hawking radiation aspect*: the entire information budget of a research
-    cycle is distilled to its irreducible boundary encoding, exactly as
-    Hawking radiation is the minimal observable remnant of a black hole's
-    information content.
+    Each input is independently clipped to [0, 1] (with a saturating transform
+    on the one unbounded count) and placed at a fixed slot. That is the whole
+    operation: there is no tensor contraction, no basis change, and no coupling
+    between slots — the five values never interact.
+
+    The names Ψ₀–Ψ₄ and "Weyl scalar" are retained because they are load
+    bearing: they identify the persisted ``brain_kv`` keys, the packed wire
+    record, and the Julia peer's format. They are **labels for slot positions**,
+    not Newman-Penrose scalars. Genuine NP scalars are five complex
+    contractions of the Weyl conformal-curvature tensor against a null tetrad,
+    and carry the transverse/longitudinal/Coulomb meanings the parameter docs
+    below allude to. Nothing of that structure survives here, and the mapping
+    from "mean document salience" to "ingoing gravitational radiation" is a
+    naming convention, not a derivation.
+
+    Kept as-is because a fixed, bounded, cheaply-serialised 5-float summary is
+    genuinely useful; only the claim about what it represents was wrong.
 
     .. math::
 
@@ -1572,7 +1669,7 @@ def weyl_scalar_tensor(
                     the intermediate outgoing component; information flowing back
                     toward the boundary via MESH reinforcement.
     remnant_score:  Hawking information-remnant score for the cycle (e.g. from
-                    ``hawking_information_remnant_score()``), ∈ [0, 1].  Mapped to
+                    ``corpus_coverage_score()``), ∈ [0, 1].  Mapped to
                     Ψ₄ — the transverse *outgoing* wave; the irreducible information
                     remnant that escapes the horizon, completing the Hawking circuit.
 
@@ -1734,7 +1831,7 @@ def mesh_compaction_summary(
     compaction_ratio = source_bytes / mesh_bytes_total if mesh_bytes_total > 0 else 0.0
     compaction_scalar_val = information_compaction_scalar(source_bytes, float(mesh_bytes_total))
 
-    remnant_score = hawking_information_remnant_score(
+    remnant_score = corpus_coverage_score(
         n_datasets=_THE_WELL_N_DATASETS,
         n_spatial_dims=_THE_WELL_SPATIAL_DIMS,
         total_tb=source_tb,
@@ -1786,12 +1883,18 @@ def mesh_compaction_summary(
 
 
 def metric_perturbation(mass_eff: float, r: float) -> float:
-    """Spacetime metric perturbation  h_μν = 2 G M_eff / (c² r).
+    """Inverse-distance scaling h = 2·G·M_eff / (c²·r).
 
-    Computes the dimensionless warp magnitude for an effective mass
-    *mass_eff* (kg) at radial distance *r* (m).
+    The expression itself is the correct linearised weak-field (Schwarzschild)
+    perturbation, and it is implemented correctly. What it is *not*, in this
+    codebase, is a physical calculation: callers pass ``vocab_fill ×
+    _METRIC_MASS_SCALE`` as ``mass_eff`` and a graph proximity as ``r``, neither
+    of which is a mass in kilograms or a distance in metres. Multiplying a
+    synthetic number by 2G/c² yields a very small, smoothly decaying scalar --
+    useful as a bounded 1/r weight, which is how ``mesh_field_8d`` consumes it,
+    but carrying no spacetime meaning.
 
-    Returns 0.0 for *r* ≤ 0 (no perturbation at/within the horizon).
+    Returns 0.0 for *r* ≤ 0.
     """
     if r <= 0.0:
         return 0.0
@@ -1901,7 +2004,7 @@ def ueqgm_coherence_score(
     2. Fetch up to 50 UEQGM-tagged entities (props_json LIKE "%ueqgm%"
        or similar quantum-physics tags).
     3. For each pair build a bag-of-words feature vector over
-       ``_UEQGM_KEYWORDS`` and compute ``wavefunction_overlap``.
+       ``_UEQGM_KEYWORDS`` and compute ``cosine_similarity_squared``.
     4. Average the overlaps and scale by ``sici_phase_weight`` at the corpus
        depth (number of UEQGM entities found).
 
@@ -1949,7 +2052,7 @@ def ueqgm_coherence_score(
     for label, props in rows:
         entity_text = (label or "") + " " + (props or "")
         entity_vec = _feature_vec(entity_text)
-        overlaps.append(wavefunction_overlap(target_vec, entity_vec))
+        overlaps.append(cosine_similarity_squared(target_vec, entity_vec))
 
     if not overlaps:
         return 0.0
@@ -1984,7 +2087,13 @@ __all__ = [
     "_raw_sici",
     "sici_axial_decay",
     "sici_phase_weight",
-    # Wavefunction & field theory helpers
+    # Bounded scoring / weighting helpers
+    "cosine_similarity_squared",
+    "cosine_modulation",
+    "intermediary_binding_profile",
+    "edge_per_node_ratio",
+    "corpus_coverage_score",
+    # Deprecated aliases (removed next release)
     "wavefunction_overlap",
     "floquet_modulation_factor",
     "tantalum_intermediary_binding",

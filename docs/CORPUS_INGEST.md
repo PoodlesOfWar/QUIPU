@@ -1,11 +1,17 @@
-# Corpus Ingestion — The Well holographic compression
+# Corpus Ingestion — The Well boundary distillation
 
 `src/quipu/corpus_ingest.py` streams the openly published corpora that pretrain
 current SOTA language models and folds them into QUIPU using the mesh's own
-**holographic compression** — "The Well." An entire ingest cycle is distilled to
-a 5-float Newman-Penrose Weyl tensor (~50 bytes as JSON, or a 28-byte
-base64-packed record as actually stored), scored by the Bekenstein-Hawking
-information surface.
+**boundary distillation** — "The Well." An entire ingest cycle is distilled to a
+fixed 5-float record (~50 bytes as JSON, or a 28-byte base64-packed record as
+actually stored), scored by a saturating coverage statistic.
+
+> **On the naming.** The Ψ₀–Ψ₄ slot names below are wire-format labels, not
+> Newman-Penrose Weyl scalars, and the coverage score is a saturating count
+> transform, not a Bekenstein-Hawking information surface. The mechanism is real
+> and useful — a bounded, cheaply-serialised fixed-size cycle summary — but the
+> gravitational vocabulary describes nothing the arithmetic does. See the
+> `ueqgm_engine` module docstring.
 
 ## The mechanism
 
@@ -33,7 +39,7 @@ Each cycle runs four stages:
    `ueqgm_engine.weyl_scalar_tensor` over five observables, persist it to
    `brain_kv["learnings:weyl_tensor"]` and as a 28-byte base64-packed record, and report
    `mesh_compaction_summary` (compaction ratio + scalar) and
-   `hawking_information_remnant_score`.
+   `corpus_coverage_score`.
 4. **Decompress** — `gard_shard_model.langevin_sigma_from_weyl` lifts the
    current/previous tensors back into the diffusion reference σ that drives mesh
    emission. The tensor is the boundary encoding; σ is what it reconstitutes.
@@ -47,15 +53,15 @@ Each cycle runs four stages:
    `docs/../README.md#ring-5` and the module docstrings in `tool_forge.py`,
    `expert_orchestrator.py`, `systemic_refinement_agent.py`.
 
-### Weyl scalar mapping
+### Slot mapping
 
 | Scalar | Meaning | Source observable |
 |--------|---------|-------------------|
-| Ψ₀ | ingoing signal flux | mean document salience this cycle |
+| Ψ₀ | signal flux | mean document salience this cycle |
 | Ψ₁ | topic entropy | normalised Shannon entropy of salient terms |
-| Ψ₂ | Coulomb bulk mass | documents this cycle, saturating ρ/(ρ+1) |
-| Ψ₃ | outgoing alignment | mesh wavefunction overlap (`state_summary`) |
-| Ψ₄ | Hawking remnant | information-remnant score over the source set |
+| Ψ₂ | corpus volume | documents this cycle, saturating ρ/(ρ+1) |
+| Ψ₃ | mesh alignment | squared cosine similarity to MESH (`state_summary`) |
+| Ψ₄ | corpus coverage | saturating coverage score over the source set |
 
 ### Packed record (cross-language)
 
@@ -68,10 +74,10 @@ bytes: **28 bytes**. Golden vector `(0.0, 0.25, 0.5, 0.75, 1.0)` → base64
 
 ## Honest scope
 
-Holographic compression here is **boundary distillation, not document
-reconstruction**. You cannot decompress the Weyl tensor back into the original
-web pages — as with Hawking radiation, the irreducible information remnant is
-retained in ~28–50 stored bytes per cycle while the mesh bulk accretes structure. A
+This is **boundary distillation, not document reconstruction**. You cannot
+decompress the 5-float record back into the original web pages — only a fixed
+~28–50 stored bytes per cycle are retained while the mesh bulk accretes
+structure. A
 frontier pretraining set is petabyte-scale and is never ingested whole; this
 streams and distills a continuous sample. Access is via sanctioned dataset
 interfaces only; HTTP sources are rate-limited.
