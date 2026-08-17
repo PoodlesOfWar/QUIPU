@@ -7,8 +7,9 @@ QUIPU already implements "The Well" as **holographic compression**: an entire
 learning cycle is distilled to a 5-float Newman-Penrose Weyl tensor Ψ₀–Ψ₄
 (~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record), and the
 achieved compression is scored by ``mesh_compaction_summary`` (compaction ratio
-+ scalar) and ``hawking_information_remnant_score`` (the Bekenstein-Hawking
-information surface). See ``ueqgm_engine`` and the Julia ``mesh_compression_model``.
++ scalar) and ``hawking_information_remnant_score`` (the unitary Page-curve
+information budget — Page 1993; Almheiri et al., RMP 93, 035002 (2021)).
+See ``ueqgm_engine`` and the Julia ``mesh_compression_model``.
 
 This module drives that mechanism from live data:
 

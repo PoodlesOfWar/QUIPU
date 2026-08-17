@@ -4,7 +4,8 @@
 current SOTA language models and folds them into QUIPU using the mesh's own
 **holographic compression** — "The Well." An entire ingest cycle is distilled to
 a 5-float Newman-Penrose Weyl tensor (~50 bytes as JSON, or a 20-byte packed
-record), scored by the Bekenstein-Hawking information surface.
+record), scored by the unitary Page-curve information budget (Page 1993;
+Almheiri et al., Rev. Mod. Phys. 93, 035002 (2021)).
 
 ## The mechanism
 

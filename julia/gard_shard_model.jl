@@ -160,11 +160,18 @@ _clip01(value::Real) = clamp(Float64(value), 0.0, 1.0)
 function _hawking_information_remnant_score(
     n_datasets::Integer, n_spatial_dims::Integer, total_tb::Real,
 )::Float64
+    # Unitary Page curve with island prescription (Page 1993; Almheiri et
+    # al., RMP 93, 035002 (2021)): score = min(f,1−f) + max(0,2f−1) = f,
+    # the evaporated fraction against the Page reference area (The Well
+    # 16×4 = 64), with a Bekenstein mass-energy factor for total_tb.
     n_datasets <= 0 && return 0.0
     area = Float64(n_datasets * max(1, n_spatial_dims))
-    remnant = area / (area + 1.0)
-    log_mass = log1p(max(0.0, Float64(total_tb))) / log1p(THE_WELL_TB_REF)
-    return _clip01(0.70 * remnant + 0.30 * min(1.0, log_mass))
+    if total_tb > 0.0
+        area *= 1.0 + (log1p(Float64(total_tb)) / log1p(THE_WELL_TB_REF))
+    end
+    page_area = Float64(THE_WELL_N_DATASETS * THE_WELL_SPATIAL_DIMS)
+    f = area / (area + page_area)
+    return _clip01(min(f, 1.0 - f) + max(0.0, 2.0 * f - 1.0))
 end
 
 function _information_compaction_scalar(source_bytes::Real, mesh_bytes::Real)::Float64

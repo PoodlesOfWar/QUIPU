@@ -1,8 +1,10 @@
-"""Tests for ueqgm_engine.py — UEQGM v0.9.14 physics computation layer.
+"""Tests for ueqgm_engine.py — UEQGM physics computation layer.
 
-Covers the SiCi axial channel, wavefunction overlap, Floquet modulation,
-holographic entropy, metric perturbation, phase evolution, entropic Bayesian
-diffusion step, and the corpus-backed coherence score.
+Covers the SiCi axial channel, Born-rule wavefunction overlap, Floquet J₀
+dynamic-localization renormalization, von Neumann graph entropy, the unitary
+Page-curve remnant score, the Planck 2018 census weights, metric perturbation,
+phase evolution, entropic Bayesian diffusion step, and the corpus-backed
+coherence score.
 """
 
 from __future__ import annotations
@@ -21,10 +23,13 @@ from src.quipu.ueqgm_engine import (
     _PHI_STEP,
     _SICI_SCALE_FACTOR,
     _UEQGM_RUNTIME_KEY,
+    PLANCK18_CENSUS,
     coherence_to_phi,
+    cosmological_census_weights,
     entropic_bayesian_step,
     floquet_modulation_factor,
     get_adaptive_runtime,
+    hawking_information_remnant_score,
     holographic_entropy,
     metric_perturbation,
     phase_evolution_total,
@@ -187,21 +192,38 @@ def test_wavefunction_overlap_range_zero_to_one():
 
 # ── floquet_modulation_factor ─────────────────────────────────────────────────
 
-def test_floquet_modulation_factor_at_zero_is_one():
-    """cos(0) = 1 — full coupling at t=0."""
+_BESSEL_J0_FIRST_ZERO = 2.404825557695773   # j₀,₁ — first zero of J₀
+_BESSEL_J0_MINIMUM = -0.4027593957025531    # J₀(3.8317…) — global minimum
+
+
+def test_floquet_undriven_keeps_full_coupling():
+    """J₀(0) = 1 — no drive, no renormalization."""
     assert floquet_modulation_factor(0.0, omega=1.0) == pytest.approx(1.0)
 
 
-def test_floquet_modulation_factor_at_half_period_is_minus_one():
-    """cos(ω · π/ω) = cos(π) = −1."""
+def test_floquet_zero_frequency_is_undriven_limit():
+    """ω = 0 — no drive defined → full coupling."""
+    assert floquet_modulation_factor(5.0, omega=0.0) == pytest.approx(1.0)
+
+
+def test_floquet_coherent_destruction_of_tunneling():
+    """J₀(K) = 0 at K = j₀,₁ = 2.4048… — dynamic localization
+    (Dunlap-Kenkre 1986): the drive completely suppresses the coupling."""
     omega = 2.5
-    assert floquet_modulation_factor(math.pi / omega, omega) == pytest.approx(-1.0, abs=1e-10)
+    drive = _BESSEL_J0_FIRST_ZERO * omega
+    assert floquet_modulation_factor(drive, omega) == pytest.approx(0.0, abs=1e-5)
 
 
-def test_floquet_modulation_factor_period():
-    """cos(ω · 2π/ω) = cos(2π) = 1 — full period restores coupling."""
-    omega = 3.7
-    assert floquet_modulation_factor(2 * math.pi / omega, omega) == pytest.approx(1.0, abs=1e-10)
+def test_floquet_high_frequency_limit_restores_coupling():
+    """K = A/ω → 0 as ω → ∞: fast drives leave couplings untouched."""
+    assert floquet_modulation_factor(1.0, omega=1e6) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_floquet_bounded_by_bessel_extrema():
+    """J₀ ∈ [−0.4028, 1] for all real drives."""
+    for drive in [0.0, 0.5, 1.0, 2.0, math.pi, 5.0, 10.0, 25.0]:
+        val = floquet_modulation_factor(drive, omega=1.0)
+        assert _BESSEL_J0_MINIMUM - 1e-6 <= val <= 1.0 + 1e-9
 
 
 def test_tantalum_intermediary_binding_is_bounded():
@@ -244,19 +266,107 @@ def test_tantalum_intermediary_binding_tracks_weyl_alignment():
 # ── holographic_entropy ───────────────────────────────────────────────────────
 
 def test_holographic_entropy_scales_with_edges():
-    """More boundary edges → higher entropy."""
+    """More edges → higher von Neumann entropy (denser ρ spectrum)."""
     assert holographic_entropy(10, 5) > holographic_entropy(5, 5)
 
 
-def test_holographic_entropy_zero_nodes():
-    """n_nodes=0 → S = n_edges (boundary = volume)."""
-    assert holographic_entropy(7, 0) == pytest.approx(7.0)
+def test_holographic_entropy_zero_nodes_is_zero():
+    """Empty graph → zero density matrix → S = 0 (no fictitious boundary)."""
+    assert holographic_entropy(7, 0) == 0.0
 
 
-def test_holographic_entropy_non_negative():
-    """Entropy must always be ≥ 0."""
+def test_holographic_entropy_edgeless_is_zero():
+    """No edges → tr(L) = 0 → S = 0."""
     assert holographic_entropy(0, 100) == 0.0
-    assert holographic_entropy(50, 200) >= 0.0
+
+
+def test_holographic_entropy_in_unit_interval():
+    """HEHW quadratic approximation is bounded in [0, 1]."""
+    for m, n in [(1, 2), (50, 200), (5000, 100), (3, 1000)]:
+        s = holographic_entropy(m, n)
+        assert 0.0 <= s <= 1.0
+
+
+def test_holographic_entropy_exact_triangle():
+    """Exact HEHW value for the triangle graph: n=3, |E|=3, all degrees 2
+    → Σ 1/(d_u·d_v) = 3/4 → S = 1 − 1/3 − (3/4)/9 = 7/12."""
+    assert holographic_entropy(3, 3, degree_pair_sum=0.75) == pytest.approx(7.0 / 12.0)
+
+
+def test_holographic_entropy_real_vs_computational_differential():
+    """The exact degree-pair path (real) and the mean-degree fallback
+    (computational) evaluate the same HEHW functional: for a regular graph
+    they coincide; for a hub (star) graph the exact path reads the degree
+    heterogeneity the fallback cannot see."""
+    # 4-cycle: n=4, |E|=4, all degrees 2 → Σ = 4/4 = 1 — identical to the
+    # mean-field estimate n²/(4|E|) = 16/16 = 1.
+    assert holographic_entropy(4, 4, degree_pair_sum=1.0) == pytest.approx(
+        holographic_entropy(4, 4)
+    )
+    # Star S₄: n=5, |E|=4, hub degree 4, leaves degree 1 → Σ = 4·(1/4) = 1,
+    # while mean-field gives n²/(4|E|) = 25/16 — the star's hub raises the
+    # exact entropy above the regular-graph estimate.
+    assert holographic_entropy(4, 5, degree_pair_sum=1.0) > holographic_entropy(4, 5)
+
+
+# ── hawking_information_remnant_score (unitary Page curve) ──────────────────
+
+def test_page_curve_reference_corpus_sits_at_page_time():
+    """The Well's geometric area (16 datasets × 4 dims = 64) is the Page
+    reference → f = 1/2 exactly."""
+    assert hawking_information_remnant_score(16, 4) == pytest.approx(0.5)
+
+
+def test_page_curve_full_well_past_page_time():
+    """The full 15 TB Well doubles the effective area via the Bekenstein
+    mass-energy term → f = 128/192 = 2/3."""
+    assert hawking_information_remnant_score(16, 4, 15.0) == pytest.approx(2.0 / 3.0)
+
+
+def test_page_curve_monotone_in_datasets():
+    """More radiation quanta → more gross information in the radiation."""
+    scores = [hawking_information_remnant_score(n, 4) for n in (1, 4, 16, 64, 256)]
+    assert scores == sorted(scores)
+    assert all(0.0 <= s <= 1.0 for s in scores)
+
+
+def test_page_curve_empty_collection_is_zero():
+    assert hawking_information_remnant_score(0, 4) == 0.0
+    assert hawking_information_remnant_score(-3, 4) == 0.0
+
+
+def test_page_curve_unitarity_decomposition():
+    """S_rad + I_islands = f — the score IS the evaporated fraction."""
+    a_page = 64.0
+    for n in (2, 8, 16, 40, 100):
+        area = float(n * 4)
+        f = area / (area + a_page)
+        expected = min(f, 1.0 - f) + max(0.0, 2.0 * f - 1.0)
+        assert hawking_information_remnant_score(n, 4) == pytest.approx(expected)
+        assert expected == pytest.approx(f)
+
+
+# ── cosmological_census_weights (Planck 2018) ─────────────────────────────
+
+def test_census_weights_sum_to_one():
+    assert sum(cosmological_census_weights()) == pytest.approx(1.0)
+
+
+def test_census_weights_are_the_measured_hierarchy():
+    """Ω_Λ > Ω_c > Ω_b > Ω_ν > Ω_γ — the universe as Planck measured it."""
+    w_h, w_f, w_o, w_p, w_w = cosmological_census_weights()
+    assert w_h > w_f > w_o > w_p > w_w > 0.0
+    assert w_h == pytest.approx(0.6847, abs=1e-3)   # dark energy
+    assert w_f == pytest.approx(0.2645, abs=1e-3)   # cold dark matter
+    assert w_o == pytest.approx(0.0493, abs=1e-3)   # baryons
+
+
+def test_census_matches_published_planck_values():
+    assert PLANCK18_CENSUS["dark_energy"] == pytest.approx(0.6847)
+    assert PLANCK18_CENSUS["cold_dark_matter"] == pytest.approx(0.2645)
+    assert PLANCK18_CENSUS["baryons"] == pytest.approx(0.0493)
+    assert PLANCK18_CENSUS["neutrinos"] == pytest.approx(0.0014)
+    assert PLANCK18_CENSUS["photons"] == pytest.approx(5.4e-5)
 
 
 # ── metric_perturbation ───────────────────────────────────────────────────────

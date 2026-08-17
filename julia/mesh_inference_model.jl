@@ -301,19 +301,54 @@ function wavefunction_overlap(a, b)::Float64
 end
 
 """
-    floquet_modulation_factor(t, omega) -> Float64
+    besselj0_as(x) -> Float64
 
-`cos(ω·t)` — Floquet periodicity modulation. Port of
-`ueqgm_engine.floquet_modulation_factor`.
+Bessel `J₀(x)` via the Abramowitz & Stegun 9.4.1 / 9.4.3 polynomial
+approximations (accurate to ≲ 5×10⁻⁸) — dependency-free port of
+`ueqgm_engine._bessel_j0`.
 """
-floquet_modulation_factor(t::Real, omega::Real) = cos(omega * t)
+function besselj0_as(x::Real)::Float64
+    ax = abs(Float64(x))
+    if ax <= 3.0
+        y = (ax / 3.0)^2
+        return 1.0 + y * (-2.2499997 + y * (1.2656208 + y * (-0.3163866 +
+            y * (0.0444479 + y * (-0.0039444 + y * 0.0002100)))))
+    end
+    u = 3.0 / ax
+    f0 = 0.79788456 + u * (-0.00000077 + u * (-0.00552740 + u * (-0.00009512 +
+        u * (0.00137237 + u * (-0.00072805 + u * 0.00014476)))))
+    theta0 = ax - 0.78539816 + u * (-0.04166397 + u * (-0.00003954 +
+        u * (0.00262573 + u * (-0.00054125 + u * (-0.00029333 +
+        u * 0.00013558)))))
+    return f0 * cos(theta0) / sqrt(ax)
+end
 
 """
-    holographic_entropy(n_edges, n_nodes) -> Float64
+    floquet_modulation_factor(drive, omega) -> Float64
 
-`S = n_edges / (n_nodes + 1)`. Port of `ueqgm_engine.holographic_entropy`.
+Floquet effective-coupling renormalization `J_eff/J = J₀(A/ω)` — dynamic
+localization (Dunlap-Kenkre 1986); `1.0` when `ω = 0` (undriven limit).
+Port of `ueqgm_engine.floquet_modulation_factor`.
 """
-holographic_entropy(n_edges::Real, n_nodes::Real) = n_edges / (n_nodes + 1)
+floquet_modulation_factor(drive::Real, omega::Real) =
+    omega == 0.0 ? 1.0 : besselj0_as(drive / omega)
+
+"""
+    holographic_entropy(n_edges, n_nodes, degree_pair_sum=nothing) -> Float64
+
+Von Neumann graph entropy, HEHW (2012) quadratic approximation
+`S ≈ 1 − 1/n − Σ 1/(d_u·d_v)/n²` clipped to `[0, 1]`; mean-degree closed
+form from counts when `degree_pair_sum === nothing`.
+Port of `ueqgm_engine.holographic_entropy`.
+"""
+function holographic_entropy(
+    n_edges::Real, n_nodes::Real, degree_pair_sum::Union{Nothing,Real} = nothing,
+)::Float64
+    (n_nodes <= 0 || n_edges <= 0) && return 0.0
+    n = float(n_nodes)
+    dps = degree_pair_sum === nothing ? (n * n) / (4.0 * float(n_edges)) : float(degree_pair_sum)
+    return clip01(1.0 - (1.0 / n) - (dps / (n * n)))
+end
 
 """
     metric_perturbation(mass_eff, r) -> Float64
@@ -352,13 +387,16 @@ end
                   vocab_limit=VOCAB_LIMIT, metric_mass_scale=METRIC_MASS_SCALE)
         -> Float64
 
-The 8th-dimension MESH field scalar, blending five UEQGM aspect integrals:
+The 8th-dimension MESH field scalar, blending five UEQGM aspect integrals
+with the Planck 2018 cosmological census weights (normalised Ω_Λ, Ω_c, Ω_b,
+Ω_ν, Ω_γ — Aghanim et al. 2020, A&A 641, A6):
 
-`field = 0.30·H + 0.25·F + 0.25·O + 0.10·P + 0.10·W`
+`field = Ω_Λ·H + Ω_c·F + Ω_b·O + Ω_ν·P + Ω_γ·W`
 
-  * `H` — `holographic_entropy(n_quipu_edges, n_vocab) / 8`
-  * `F` — Floquet modulation of the Weyl phase at the SiCi-corrected
-    frequency `ω = max(0.1, phase_weight)`, remapped from `[-1,1]→[0,1]`
+  * `H` — `holographic_entropy(n_quipu_edges, n_vocab)` (von Neumann,
+    mean-degree form)
+  * `F` — Floquet `J₀` renormalization of the Weyl drive at the
+    SiCi-corrected frequency `ω = max(0.1, phase_weight)`, remapped to `[0,1]`
   * `O` — `wavefunction_overlap(mean_embed7, mesh_state7)`
   * `P` — `|phase_evolution_total(φ)| / 2π`, `φ = coherence_to_phi(coherence_depth)`
   * `W` — metric warp from vocab-fill density (`n_vocab / vocab_limit`)
@@ -370,12 +408,12 @@ function mesh_field_8d(;
     phase_weight::Real = 1.0, coherence_depth::Integer = 0, weyl_phase::Real = 0.0,
     vocab_limit::Integer = VOCAB_LIMIT, metric_mass_scale::Real = METRIC_MASS_SCALE,
 )::Float64
-    # H — holographic boundary entropy, normalised by an 8 edges/node ceiling
-    H = clip01(holographic_entropy(n_quipu_edges, n_vocab) / 8.0)
+    # H — von Neumann graph entropy (HEHW quadratic, mean-degree form)
+    H = holographic_entropy(n_quipu_edges, n_vocab)
 
     phi = coherence_to_phi(coherence_depth)
 
-    # F — Floquet modulation, Weyl coupling at SiCi-corrected frequency
+    # F — Floquet J₀ renormalization of the Weyl drive at SiCi-corrected frequency
     omega = max(0.1, phase_weight)
     raw_F = floquet_modulation_factor(mod(weyl_phase, 2.0 * pi), omega)
     F = clip01(0.5 * (1.0 + raw_F))
@@ -393,7 +431,10 @@ function mesh_field_8d(;
     raw_W = metric_perturbation(vocab_fill * metric_mass_scale, r)
     W = clip01(raw_W * r)
 
-    return clip01(0.30 * H + 0.25 * F + 0.25 * O + 0.10 * P + 0.10 * W)
+    # Planck 2018 census weights (Ω_Λ, Ω_c, Ω_b, Ω_ν, Ω_γ), normalised —
+    # measured by the bleeding edge of science, not hand-tuned.
+    total = 0.6847 + 0.2645 + 0.0493 + 0.0014 + 5.4e-5
+    return clip01((0.6847 * H + 0.2645 * F + 0.0493 * O + 0.0014 * P + 5.4e-5 * W) / total)
 end
 
 """
