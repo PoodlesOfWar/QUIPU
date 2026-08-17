@@ -120,25 +120,35 @@ end
 # WRITE compression — corpus → MESH footprint → Weyl tensor
 # ---------------------------------------------------------------------------
 """
-    holographic_entropy(n_edges, n_nodes) -> Float64
+    holographic_entropy(n_edges, n_nodes, degree_pair_sum=nothing) -> Float64
 
-Bekenstein-Hawking-inspired boundary/bulk entropy `S = n_edges / (n_nodes + 1)`.
-Always finite and non-negative; returns `n_edges` when `n_nodes == 0`.
+Von Neumann entropy of the graph — quadratic (HEHW 2012) approximation
+`S ≈ 1 − 1/n − Σ 1/(d_u·d_v) / n²`, clipped to `[0, 1]`.  With
+`degree_pair_sum === nothing` the mean-degree closed form
+`S ≈ 1 − 1/n − 1/(4·|E|)` is used (real vs computational differential).
+Returns 0.0 for an empty or edgeless graph.
 Port of `ueqgm_engine.holographic_entropy`.
 """
-holographic_entropy(n_edges::Real, n_nodes::Real) = n_edges / (n_nodes + 1)
+function holographic_entropy(
+    n_edges::Real, n_nodes::Real, degree_pair_sum::Union{Nothing,Real} = nothing,
+)::Float64
+    (n_nodes <= 0 || n_edges <= 0) && return 0.0
+    n = float(n_nodes)
+    dps = degree_pair_sum === nothing ? (n * n) / (4.0 * float(n_edges)) : float(degree_pair_sum)
+    return clip01(1.0 - (1.0 / n) - (dps / (n * n)))
+end
 
 """
     hawking_information_remnant_score(n_datasets, n_spatial_dims, total_tb=0.0) -> Float64
 
-Bekenstein-Hawking-inspired information-remnant score for a dataset
-collection, in `[0, 1]`.
+Unitary Page-curve information budget of a dataset collection, in `[0, 1]`
+(Page 1993; Penington 2020; Almheiri et al., RMP 93, 035002 (2021)).
 
-`area = n_datasets * max(1, n_spatial_dims)`, `i_remnant = area / (area + 1)`.
-When `total_tb > 0` a log-normalised Bekenstein-bound mass term (against the
-15 TB "The Well" reference corpus) is blended in 70/30:
-
-`score = 0.70 * i_remnant + 0.30 * min(1, log1p(total_tb) / log1p(THE_WELL_TB_REF))`
+`area = n_datasets * max(1, n_spatial_dims)`, optionally scaled by the
+Bekenstein mass-energy factor `1 + log1p(total_tb)/log1p(THE_WELL_TB_REF)`;
+`f = area / (area + 64)` against the Page reference area (The Well: 16×4);
+`score = min(f, 1−f) + max(0, 2f−1) = f` — radiation entropy plus island
+information, which by unitarity is the evaporated fraction.
 
 Port of `ueqgm_engine.hawking_information_remnant_score`.
 """
@@ -148,14 +158,12 @@ function hawking_information_remnant_score(
     n_datasets <= 0 && return 0.0
     n_dims = max(1, n_spatial_dims)
     area = float(n_datasets * n_dims)
-    i_remnant = area / (area + 1.0)
-    score = if total_tb > 0.0
-        log_mass = log1p(total_tb) / log1p(THE_WELL_TB_REF)
-        0.70 * i_remnant + 0.30 * min(1.0, log_mass)
-    else
-        i_remnant
+    if total_tb > 0.0
+        area *= 1.0 + (log1p(total_tb) / log1p(THE_WELL_TB_REF))
     end
-    return clip01(score)
+    page_area = float(THE_WELL_N_DATASETS * THE_WELL_SPATIAL_DIMS)
+    f = area / (area + page_area)
+    return clip01(min(f, 1.0 - f) + max(0.0, 2.0 * f - 1.0))
 end
 
 """
