@@ -1,14 +1,14 @@
-"""corpus_ingest — stream open LLM-scale corpora and *holographically compress*
-them into the QUIPU mesh (The Well mechanism).
+"""corpus_ingest — stream open LLM-scale corpora and distil them into the QUIPU
+mesh via The Well (bounded-heuristic boundary distillation).
 
 The real condensation mechanism
 -------------------------------
-QUIPU already implements "The Well" as **holographic compression**: an entire
-learning cycle is distilled to a 5-float Newman-Penrose Weyl tensor Ψ₀–Ψ₄
-(~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record before
+QUIPU already implements "The Well" as **boundary distillation**: an entire
+learning cycle is distilled to a 5-float record whose wire-format labels are
+Ψ₀–Ψ₄ (~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record before
 encoding), and the achieved compression is scored by ``mesh_compaction_summary``
-(compaction ratio + scalar) and ``hawking_information_remnant_score`` (the
-Bekenstein-Hawking information surface). See ``ueqgm_engine`` and the Julia
+(compaction ratio + scalar) and ``corpus_coverage_score`` (the bounded
+heuristic coverage surface). See ``ueqgm_engine`` and the Julia
 ``mesh_compression_model``.
 
 This module drives that mechanism from live data:
