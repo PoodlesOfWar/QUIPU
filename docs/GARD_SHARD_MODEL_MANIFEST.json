@@ -24,8 +24,8 @@
     ]
   },
   "wire_protocol": {
-    "name": "gard-shard/v1",
-    "version": 1,
+    "name": "gard-shard/v2",
+    "version": 2,
     "domain_separation": "SiCi_SQRT(-1)",
     "canonical_json": "UTF-8, sorted object keys, compact separators, no NaN or Infinity",
     "pipeline": [
@@ -33,10 +33,31 @@
       "zlib compression",
       "deterministic byte partitioning",
       "HKDF-SHA256 per shard",
-      "AES-256-CBC with PKCS#7",
-      "HMAC-SHA256 Encrypt-then-MAC"
+      "AES-256-GCM (no padding)",
+      "AEAD 128-bit authentication tag"
     ],
-    "mac_preimage": [
+    "integrity": {
+      "plaintext_sha256": "digest of canonical plaintext",
+      "compressed_sha256": "digest of joined compressed payload",
+      "ciphertext_sha256": "digest per ciphertext shard",
+      "assignment_proof": "HKDF/HMAC proof over a canonical repository assignment object"
+    },
+    "reads_legacy": {
+      "name": "gard-shard/v1",
+      "version": 1,
+      "note": "AES-256-CBC + PKCS#7 with HMAC-SHA256 Encrypt-then-MAC. Read-only: decrypt_json still accepts v1 envelopes, encrypt_json only writes v2."
+    },
+    "aad": [
+      "gard-shard-aad/v2 frame marker",
+      "protocol and explicit version",
+      "public domain context",
+      "authenticated zlib compression level",
+      "model-context SHA-256 digest",
+      "salt",
+      "shard index and count",
+      "nonce"
+    ],
+    "mac_preimage_legacy_v1": [
       "gard-shard-mac/v1 frame marker",
       "protocol and explicit version",
       "public domain context",
@@ -46,13 +67,7 @@
       "shard index and count",
       "IV",
       "ciphertext"
-    ],
-    "integrity": {
-      "plaintext_sha256": "digest of canonical plaintext",
-      "compressed_sha256": "digest of joined compressed payload",
-      "ciphertext_sha256": "digest per ciphertext shard",
-      "assignment_proof": "HKDF/HMAC proof over a canonical repository assignment object"
-    }
+    ]
   },
   "security": {
     "secret_environment_variable": "SCBRAIN_GRID_SECRET",
