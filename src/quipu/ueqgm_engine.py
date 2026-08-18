@@ -1492,7 +1492,7 @@ def floquet_modulation_factor(drive: float, omega: float) -> float:
     return _bessel_j0(drive / omega)
 
 
-def tantalum_intermediary_binding(
+def intermediary_binding_profile(
     *,
     weyl_phase: float,
     coherence: int,
@@ -1500,7 +1500,7 @@ def tantalum_intermediary_binding(
     observer_alignment: float,
     pulse_weight: float = 1.0,
 ) -> dict[str, float | str | int]:
-    """Bounded UEQGM intermediary binding profile for routing a Weyl pulse.
+    """Bounded intermediary binding profile for routing a Weyl pulse.
 
     The existing UEQGM machinery already provides the phase-sensitive pieces we
     need: the SiCi axial correction, the Floquet pulse term, and the total phase
@@ -1567,6 +1567,13 @@ def tantalum_intermediary_binding(
         "binding_gain": round(binding_gain, 6),
         "binding_multiplier": round(0.55 + 0.90 * binding_gain, 6),
     }
+
+
+# Deprecated alias. Retained one release for import compatibility; the old
+# name front-loaded the tantalum label onto a bounded classical routing
+# profile. The label itself is kept inside the returned dict, where
+# asset_resource_mesh matches receiver_material against real part records.
+tantalum_intermediary_binding = intermediary_binding_profile
 
 
 def interstitial_entanglement_score(
@@ -2215,7 +2222,8 @@ __all__ = [
     # Wavefunction & field theory helpers
     "wavefunction_overlap",
     "floquet_modulation_factor",
-    "tantalum_intermediary_binding",
+    "intermediary_binding_profile",
+    "tantalum_intermediary_binding",  # deprecated alias
     "holographic_entropy",
     "hawking_information_remnant_score",
     "weyl_scalar_tensor",
