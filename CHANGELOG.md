@@ -4,6 +4,19 @@ All notable changes to **Supply Chain Brain** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.27.2] Entropy-Differential ↔ STP-Gap Anti-Correlation Signature (2026-08-18)
+
+### Added
+
+- **`mesh_slm._entropy_differential(cn)`** — the real-vs-computational signature differential of the quipu graph, computed live: ΔS = S_exact − S_mean_field, where the exact path evaluates the HEHW von Neumann entropy with the degree-pair sum `Σ 1/(d_u·d_v)` straight from the edge table via SQL, and the computational path uses the mean-degree closed form `n²/(4|E|)` from counts alone. Non-negative by Cauchy–Schwarz (equality iff the graph is regular); measures degree heterogeneity — the information-geometric curvature of the graph. Purely observational, never raises, returns `None` on empty/edgeless graphs.
+- **`mesh_slm._pearson_corr(xs, ys)`** — small dependency-free Pearson correlation helper; `None` for short or zero-variance series.
+- **`train_round` persistence** — each round now appends ΔS to `entropy_differential_history` (capped at `_STP_HISTORY_CAP = 200`) and stamps `last_entropy_differential`, alongside the existing `stp_embed_gap_history` / `stp_torus_gap_history` / `loss_history`. `state_summary` exposes `last_entropy_differential`.
+- **`stp_diagnostic_trend` anti-correlation signature** — new fields: `n_entropy_differential`, `entropy_differential_slope`, `delta_s_torus_corr` (Pearson ρ between ΔS and the STP torus gap over the trailing `2·window`), and `delta_s_signature` (True when ρ ≤ −0.5·Ω_Λ). The prediction: as training grows hubs, the graph's information curvature (ΔS) rises while trajectories approach hubs along learned geodesics (torus gap falls) — the two curvatures are one quantity, coupled at the entropy aspect's Planck 2018 census weight Ω_Λ = 0.6847.
+
+### Tests
+
+- 6 focused tests in `tests/test_mesh_slm.py`: ΔS non-negativity and presence after a round, empty-graph `None`, star-beats-chain ordering (hub ΔS > 0.01, regular cycle ΔS ≈ 0 — the Cauchy–Schwarz boundary), Pearson basics (±1, degenerate → `None`), and the anti-correlation signature present/absent. 24/24 `test_mesh_slm.py` pass; `test_ueqgm_engine.py` unchanged (only the 2 pre-existing environmental SiCi scipy-precision failures).
+
 ## [0.27.1] √−1 → 1 — Core Aspects Grounded in Measured Science (2026-08-17)
 
 ### Changed
@@ -1042,7 +1055,7 @@ All .py files outside .venv compile clean
     entities, and `BRIDGES_TO` edges when a piggyback RDP route is alive.
   - All network errors treated as soft skips (no backoff accumulation).
 
-- **`_ingest_bridge_observations`** (`src/quipu/knowledge_corpus.py`)  
+- **`_ingest_bridge_observations`** (`src/quipu/knowledge_corpus.py`)**  
   Corpus refresh now promotes every `network_topology` row and every
   `bridge_rdp` target into the corpus graph on each 30-min convergence cycle —
   so network vision is persistent across restarts, not just in-memory.

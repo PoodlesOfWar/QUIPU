@@ -1836,8 +1836,7 @@ def _mesh_field_8d(cn: sqlite3.Connection, mesh_state7: list[float]) -> float:
     Five UEQGM aspect integrals are blended:
 
     H — holographic_entropy(n_quipu, n_vocab, degree_pair_sum)
-        Von Neumann entropy of the quipu graph (HEHW 2012 quadratic
-        approximation).  The degree-pair sum Σ 1/(d_u·d_v) is computed
+        Von Neumann entropy of the quipu graph (HEHW quadratic form).  The degree-pair sum Σ 1/(d_u·d_v) is computed
         exactly from the edge table via SQL — the real entropy of the actual
         degree structure; on any SQL failure the count-only mean-degree
         approximation is used (real vs computational differential).
@@ -2133,6 +2132,87 @@ _STP_DIAG_ENV: str = "QUIPU_STP_DIAGNOSTIC"
 _STP_HISTORY_CAP: int = 200          # rolling window kept in mesh_slm_meta
 
 
+def _entropy_differential(cn: sqlite3.Connection) -> float | None:
+    """Real-vs-computational signature differential of the quipu graph.
+
+    Computes the von Neumann graph entropy twice over the live edge table:
+
+    * **real path** — exact ``Σ 1/(d_u·d_v)`` degree-pair sum via SQL;
+    * **computational path** — mean-degree closed form ``n²/(4|E|)`` from
+      counts alone (``degree_pair_sum=None`` inside
+      :func:`ueqgm_engine.holographic_entropy`).
+
+    The differential ``ΔS = S_exact − S_mean_field`` is non-negative by
+    Cauchy–Schwarz (equality iff the graph is regular) and measures degree
+    heterogeneity — the information-geometric curvature of the graph.  It is
+    the structural counterpart of the STP geodesic gap: hubs bend both the
+    entropy surface and the trajectories that pass through them, so over
+    training the two series are predicted to anti-correlate with strength
+    ≈ Ω_Λ (the census weight of the entropy aspect in the 8th-D field).
+
+    Returns ``None`` for an empty/edgeless graph (no differential to speak
+    of).  Purely observational; never raises.
+    """
+    try:
+        n_vocab = int(
+            cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_vocab").fetchone()["c"]
+        )
+        n_quipu = int(
+            cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_quipu").fetchone()["c"]
+        )
+        if n_vocab <= 0 or n_quipu <= 0:
+            return None
+        degree_pair_sum: float | None = None
+        try:
+            row = cn.execute(
+                """
+                WITH deg AS (
+                    SELECT token, SUM(cnt) AS d FROM (
+                        SELECT src AS token, COUNT(*) AS cnt
+                          FROM mesh_slm_quipu GROUP BY src
+                        UNION ALL
+                        SELECT dst AS token, COUNT(*) AS cnt
+                          FROM mesh_slm_quipu GROUP BY dst
+                    ) GROUP BY token
+                )
+                SELECT SUM(1.0 / (ds.d * dd.d)) AS s
+                  FROM mesh_slm_quipu q
+                  JOIN deg ds ON ds.token = q.src
+                  JOIN deg dd ON dd.token = q.dst
+                """
+            ).fetchone()
+            if row is not None and row["s"] is not None:
+                degree_pair_sum = float(row["s"])
+        except sqlite3.OperationalError as exc:
+            logger.debug(
+                "entropy_differential: exact degree-pair sum unavailable: %s", exc
+            )
+        if degree_pair_sum is None:
+            return None
+        s_exact = _ueqgm_holographic_entropy(n_quipu, n_vocab, degree_pair_sum)
+        s_mean = _ueqgm_holographic_entropy(n_quipu, n_vocab, None)
+        return round(s_exact - s_mean, 6)
+    except Exception as exc:  # observational — must never fail a round
+        logger.debug("entropy_differential: computation failed: %s", exc)
+        return None
+
+
+def _pearson_corr(xs: list[float], ys: list[float]) -> float | None:
+    """Pearson correlation of two equal-length series; ``None`` if degenerate."""
+    n = len(xs)
+    if n < 3 or n != len(ys):
+        return None
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    vx = sum((x - mx) ** 2 for x in xs)
+    vy = sum((y - my) ** 2 for y in ys)
+    if vx < 1e-12 or vy < 1e-12:
+        return None
+    return round(cov / math.sqrt(vx * vy), 6)
+
+
+
 def _stp_diagnostic_enabled() -> bool:
     """True unless ``QUIPU_STP_DIAGNOSTIC`` is explicitly falsy (default: on).
 
@@ -2193,8 +2273,7 @@ def _embed7_for_token(
     """Fetch a single token's 7-D embedding row, or ``None`` if absent."""
     row = cn.execute(
         "SELECT e_vision, e_touch, e_smell, e_body, e_brain, e_perception, "
-        "e_entirety FROM mesh_slm_embed WHERE token_id=?",
-        (token_id,),
+        "e_entirety FROM mesh_slm_embed WHERE token_id=?", (token_id,)
     ).fetchone()
     if row is None:
         return None
@@ -2456,7 +2535,7 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                             pass
                         try:
                             cell_s = _torus_cell_for_token(cn, ids[si])
-                            cell_r = _torus_cell_for_token(cn, ids[ri])
+                            cell_r = _torus_cell_for_token
                             cell_t = _torus_cell_for_token(cn, ids[ti])
                             if cell_s and cell_r and cell_t:
                                 gap_t = _stp_cos_gap(
@@ -2535,6 +2614,20 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             loss_hist = _meta_get(cn, "loss_history", []) or []
             loss_hist.append(round(avg_loss, 6))
             _meta_set(cn, "loss_history", loss_hist[-_STP_HISTORY_CAP:])
+
+            # ── Real-vs-computational entropy differential ──────────────────
+            # ΔS = S_exact(SQL) − S_mean_field(counts) — the information-
+            # geometric curvature of the quipu graph.  Predicted to
+            # anti-correlate with the STP torus gap over training (strength
+            # ≈ Ω_Λ); stp_diagnostic_trend() checks that signature.
+            delta_s = _entropy_differential(cn)
+            if delta_s is not None:
+                _meta_set(cn, "last_entropy_differential", delta_s)
+                hist_d = _meta_get(cn, "entropy_differential_history", []) or []
+                hist_d.append(delta_s)
+                _meta_set(
+                    cn, "entropy_differential_history", hist_d[-_STP_HISTORY_CAP:]
+                )
 
             # ── ACRE — accumulate multi-axial interaction; attempt emergence ──
             try:
@@ -2872,7 +2965,7 @@ def generate(
     Returns ``{"text", "confidence", "tokens_emitted", "vocab_hit_rate"}``.
     Low ``confidence`` (< _CONF_FLOOR) signals the caller should fall back.
 
-    specialist: modular expert context (e.g. "supply_chain_optimizer") enables
+    specialist: modular expert context (e.g. "supply_chain_optimizer"). Enables
                 domain-specialized scoring + hybrid real-math grounding.
     """
     if seed is not None:
@@ -3211,6 +3304,15 @@ def stp_diagnostic_trend(
     rounds have accumulated, deliberately **not** called from ``train_round``.
     Returns per-series slopes plus boolean P1 flags; ``insufficient_data`` is
     True when any series has fewer than ``2 * window`` points to compare.
+
+    Also reports the **entropy-differential anti-correlation signature**:
+    ``entropy_differential_history`` (ΔS, the real-vs-computational curvature
+    of the quipu graph) is predicted to anti-correlate with the STP torus gap
+    over training with strength ≈ Ω_Λ = 0.6847 — hubs raise the graph's
+    information curvature while trajectories approach them along learned
+    geodesics (falling gap).  ``delta_s_torus_corr`` is the Pearson
+    correlation over the trailing ``2 * window`` points; ``delta_s_signature``
+    is True when it is negative with magnitude at least ``0.5 * Ω_Λ``.
     """
     def _slope(series: list[float]) -> float | None:
         if len(series) < 2 * window:
@@ -3227,6 +3329,7 @@ def stp_diagnostic_trend(
         loss_hist = _meta_get(cn, "loss_history", []) or []
         embed_hist = _meta_get(cn, "stp_embed_gap_history", []) or []
         torus_hist = _meta_get(cn, "stp_torus_gap_history", []) or []
+        delta_s_hist = _meta_get(cn, "entropy_differential_history", []) or []
     finally:
         if own_conn:
             _cm.__exit__(None, None, None)
@@ -3234,10 +3337,25 @@ def stp_diagnostic_trend(
     loss_slope = _slope([float(x) for x in loss_hist])
     embed_slope = _slope([float(x) for x in embed_hist])
     torus_slope = _slope([float(x) for x in torus_hist])
+    delta_s_slope = _slope([float(x) for x in delta_s_hist])
     loss_flat = loss_slope is not None and abs(loss_slope) < loss_epsilon
 
     def _p1(stp_slope: float | None) -> bool:
         return bool(loss_flat and stp_slope is not None and stp_slope < 0.0)
+
+    # ΔS ↔ STP-torus anti-correlation over the trailing 2·window points.
+    n_pair = min(len(delta_s_hist), len(torus_hist), 2 * window)
+    delta_s_torus_corr: float | None = None
+    if n_pair >= 3:
+        delta_s_torus_corr = _pearson_corr(
+            [float(x) for x in delta_s_hist[-n_pair:]],
+            [float(x) for x in torus_hist[-n_pair:]],
+        )
+    omega_lambda = 0.6847  # Planck 2018 census weight of the entropy aspect
+    delta_s_signature = bool(
+        delta_s_torus_corr is not None
+        and delta_s_torus_corr <= -0.5 * omega_lambda
+    )
 
     return {
         "window": window,
@@ -3245,12 +3363,16 @@ def stp_diagnostic_trend(
         "n_loss": len(loss_hist),
         "n_stp_embed": len(embed_hist),
         "n_stp_torus": len(torus_hist),
+        "n_entropy_differential": len(delta_s_hist),
         "loss_slope": loss_slope,
         "loss_plateaued": loss_flat,
         "stp_embed_slope": embed_slope,
         "stp_torus_slope": torus_slope,
+        "entropy_differential_slope": delta_s_slope,
         "p1_embed": _p1(embed_slope),
         "p1_torus": _p1(torus_slope),
+        "delta_s_torus_corr": delta_s_torus_corr,
+        "delta_s_signature": delta_s_signature,
         "insufficient_data": None in (loss_slope, embed_slope, torus_slope),
     }
 
@@ -3275,6 +3397,7 @@ def state_summary() -> dict:
         last_mesh_field = _meta_get(cn, "last_mesh_field_8d", None)
         last_stp_embed_gap = _meta_get(cn, "last_stp_embed_gap", None)
         last_stp_torus_gap = _meta_get(cn, "last_stp_torus_gap", None)
+        last_entropy_differential = _meta_get(cn, "last_entropy_differential", None)
         mesh = _mesh_state_7d()
         mesh_field = _mesh_field_8d(cn, mesh)
         try:
@@ -3303,6 +3426,7 @@ def state_summary() -> dict:
         "last_wavefunction_overlap": last_overlap,
         "last_stp_embed_gap":    last_stp_embed_gap,
         "last_stp_torus_gap":    last_stp_torus_gap,
+        "last_entropy_differential": last_entropy_differential,
         "patched_local_executor": _PATCHED,
         "resuscitation_quipu":   resuscitation,
         "acre_specialists":      emergent,
@@ -3374,8 +3498,7 @@ def token_embedding(cn: sqlite3.Connection, token_id: int) -> list[float] | None
     """Return the stored 7-D embedding for *token_id*, or None if absent."""
     row = cn.execute(
         "SELECT e_vision, e_touch, e_smell, e_body, e_brain, e_perception, "
-        "e_entirety FROM mesh_slm_embed WHERE token_id=?",
-        (token_id,),
+        "e_entirety FROM mesh_slm_embed WHERE token_id=?", (token_id,)
     ).fetchone()
     if row is None:
         return None
@@ -3610,7 +3733,7 @@ def _weyl_tensor() -> list[float]:
 
 
 def _weyl_resonant_coupling(bias: list[float], weyl: list[float]) -> float:
-    """Floquet coupling ∈[0,1] of a specialist to the current Weyl frequency.
+    """Floquet coupling ∈[0,1] of a specialist to the current Weyl resonant frequency.
 
     The holographic Weyl tensor sets a resonant *drive* (driven by Ψ₄, the
     Hawking-remnant / outgoing-Λ scalar that ``langevin_sigma_from_weyl`` also
@@ -3619,8 +3742,8 @@ def _weyl_resonant_coupling(bias: list[float], weyl: list[float]) -> float:
     J₀(φ/ω) (dynamic localization): specialists whose frequency sits in the
     high-frequency regime relative to the current Weyl drive keep full
     coupling, while those pushed toward a Bessel zero decouple — so the
-    consensus *interacts on the Weyl* and shifts as the tensor (i.e. the
-    ongoing compression state) evolves.
+    consensus *interacts on the Weyl* with the resonant-frequency scalar
+    and re-weights as the holographic compression tensor evolves.
     """
     weyl_phase = 2.0 * math.pi * _clip01(weyl[4] if len(weyl) > 4 else 0.5)
     # Continuous frequency = the bias's center-of-mass axis (its spectral
