@@ -36,6 +36,15 @@ def test_pack_weyl_golden_base64():
     assert base64.b64encode(ci.pack_weyl(psi)).decode() == "AAAAAAAAgD4AAAA/AABAPwAAgD8="
 
 
+def test_stored_bytes_is_base64_footprint_not_raw_pack():
+    """brain_kv values are TEXT, so _persist_weyl base64-encodes the 20-byte
+    packed record before storage. Real on-disk footprint is 28 bytes."""
+    psi = (0.0, 0.25, 0.5, 0.75, 1.0)
+    encoded_len = len(base64.b64encode(ci.pack_weyl(psi)).decode())
+    assert encoded_len == ci.MESH_BRAIN_KV_WEYL_STORED_BYTES == 28
+    assert ci.MESH_BRAIN_KV_WEYL_STORED_BYTES > ci.MESH_BRAIN_KV_WEYL_PACKED_BYTES
+
+
 def test_pack_unpack_round_trip():
     psi = (0.1234, 0.9, 0.42, 0.0, 0.777)
     back = ci.unpack_weyl(ci.pack_weyl(psi))

@@ -8,6 +8,7 @@ import pytest
 from src.quipu.gard_info import (
     GARD_STATE_JSON_BYTES,
     GARD_STATE_PACKED_BYTES,
+    GARD_STATE_STORED_BYTES,
     cramer_rao_bound_gard,
     fisher_information_gard,
     gard_floor_bytes,
@@ -22,6 +23,23 @@ from src.quipu.gard_info import (
 def test_constants_match_weyl_spec():
     assert GARD_STATE_JSON_BYTES == 50
     assert GARD_STATE_PACKED_BYTES == 20
+
+
+def test_stored_bytes_is_base64_of_packed_bytes():
+    """brain_kv is TEXT, so the packed record is base64-encoded before storage:
+    the real on-disk footprint is bigger than the raw Float32 pack size."""
+    import base64
+    assert GARD_STATE_STORED_BYTES == len(base64.b64encode(b"\x00" * GARD_STATE_PACKED_BYTES))
+    assert GARD_STATE_STORED_BYTES == 28
+    assert GARD_STATE_STORED_BYTES > GARD_STATE_PACKED_BYTES
+
+
+def test_interstitial_bits_budgets_against_stored_footprint():
+    """Default actual_bits reflects the base64 text actually written to
+    brain_kv, not the smaller pre-encoding Float32 pack."""
+    r = interstitial_bits(0.1)
+    assert r["actual_bits"] == pytest.approx(GARD_STATE_STORED_BYTES * 8.0)
+    assert r["actual_bits"] > GARD_STATE_PACKED_BYTES * 8.0
 
 
 # ── fisher_information_gard ───────────────────────────────────────────────────

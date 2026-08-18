@@ -3,21 +3,33 @@
 
 Julia protocol peer for the Supply Chain Brain **GARD Shard** model.
 
-`gard-shard/v1` turns a canonical UTF-8 JSON value into one or more encrypted,
+`gard-shard/v2` turns a canonical UTF-8 JSON value into one or more encrypted,
 authenticated shards:
 
 1. Canonical JSON (sorted object keys, compact separators) is zlib-compressed.
 2. The compressed bytes are partitioned deterministically.
-3. Each shard derives AES/HMAC key material via RFC 5869 HKDF-SHA256 from the
-   external `SCBRAIN_GRID_SECRET`, random salt, model-context digest, shard
-   index/count, and public `SiCi_SQRT(-1)` domain context.
-4. AES-256-CBC + PKCS#7 encrypts the shard.
-5. HMAC-SHA256 uses Encrypt-then-MAC over a fixed length-prefixed binary
-   preimage. Authentication is checked before any decrypt/decompress path when
-   `verify_digest=true` (the default).
+3. Each shard derives an AES-256 key via RFC 5869 HKDF-SHA256 from the external
+   `SCBRAIN_GRID_SECRET`, a random salt, the model-context digest, the shard
+   index/count, and the public `SiCi_SQRT(-1)` domain context.
+4. AES-256-GCM seals the shard. Confidentiality and integrity come from the one
+   AEAD primitive, so there is no separate MAC key and no padding.
+5. The protocol, version, domain, compression level, model digest, salt, shard
+   index/count and nonce are bound as additional authenticated data, so a shard
+   lifted into another context fails the tag rather than decrypting cleanly.
+
+`gard-shard/v1` (AES-256-CBC + PKCS#7 with HMAC-SHA256 Encrypt-then-MAC) stays
+fully readable: `decrypt_json` and `verify_envelope` accept both protocols, and
+only `encrypt_json` is v2-only. The v1 HKDF info and MAC preimage bind the
+protocol string, so the legacy path pins `GARD_PROTOCOL_V1` rather than reading
+the current constant.
+
+Nettle.jl exposes no GCM mode, so GCM is built here from Nettle's AES block
+cipher (see `_encrypt_gcm`). `selftest()` runs three NIST CAVP AES-256-GCM
+known-answer vectors so that construction self-validates rather than being
+taken on trust.
 
 The implementation uses mature Julia packages for JSON (`JSON3`), zlib
-(`CodecZlib`), AES-CBC/HMAC (`Nettle`), plus Julia standard libraries. It never
+(`CodecZlib`), AES/HMAC (`Nettle`), plus Julia standard libraries. It never
 serializes a grid secret, derived key, or plaintext into a Hub manifest.
 """
 module GardShardModel
@@ -58,9 +70,17 @@ export
     publish_loadopoly_manifest,
     selftest
 
-const GARD_PROTOCOL = "gard-shard/v1"
-const GARD_PROTOCOL_VERSION = 1
-const GARD_ENVELOPE_SCHEMA = "gard-shard-envelope/v1"
+const GARD_PROTOCOL = "gard-shard/v2"
+const GARD_PROTOCOL_VERSION = 2
+const GARD_ENVELOPE_SCHEMA = "gard-shard-envelope/v2"
+
+# v1 is still fully readable. Its protocol string is bound into both the HKDF
+# info and the MAC preimage, so the legacy path pins these constants rather than
+# reading GARD_PROTOCOL — advancing the current version alone would otherwise
+# silently change v1 key derivation and break every existing envelope.
+const GARD_PROTOCOL_V1 = "gard-shard/v1"
+const GARD_PROTOCOL_VERSION_V1 = 1
+const GARD_ENVELOPE_SCHEMA_V1 = "gard-shard-envelope/v1"
 const GARD_MODEL_CONTEXT_SCHEMA = "gard-model-context/v1"
 const GARD_HUB_MANIFEST_SCHEMA = "loadopoly-gard-shard-status/v1"
 const GARD_ASSIGNMENT_PROOF_KIND = "catalog-assignment-proof/v1"
@@ -74,6 +94,11 @@ const HKDF_BYTES = AES_KEY_BYTES + HMAC_KEY_BYTES
 const SALT_BYTES = 32
 const IV_BYTES = 16
 const HMAC_BYTES = 32
+# AES-GCM: 96-bit nonce is the NIST SP 800-38D recommended size (used directly,
+# without the GHASH derivation any other length requires); 128-bit tag is full
+# strength. Mirrors _GCM_NONCE_BYTES / _GCM_TAG_BYTES in the Python peer.
+const GCM_NONCE_BYTES = 12
+const GCM_TAG_BYTES = 16
 const MAX_SHARDS = 256
 const MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
 const MAX_PLAINTEXT_BYTES = 32 * 1024 * 1024
@@ -441,7 +466,7 @@ function _derive_shard_keys(
     length(salt) == SALT_BYTES || throw(GardShardVerificationError("invalid shard salt length"))
     info = _binary_record(
         Vector{UInt8}(codeunits("gard-shard-hkdf/v1")),
-        Vector{UInt8}(codeunits(GARD_PROTOCOL)),
+        Vector{UInt8}(codeunits(GARD_PROTOCOL_V1)),
         Vector{UInt8}(codeunits(config.domain)),
         Vector{UInt8}(model_digest),
         _u32(shard_index),
@@ -449,6 +474,56 @@ function _derive_shard_keys(
     )
     material = _hkdf_sha256(secret, salt, info, HKDF_BYTES)
     return material[1:AES_KEY_BYTES], material[AES_KEY_BYTES + 1:end]
+end
+
+"""Derive the single v2 AES-256-GCM key (HKDF-SHA256).
+
+GCM authenticates with the same key it encrypts under, so unlike v1 there is no
+second MAC key. The HKDF label and bound protocol string are both
+version-distinct, so a v1 and a v2 shard sharing salt, model digest and index
+still derive unrelated keys.
+"""
+function _derive_shard_key_gcm(
+    secret::AbstractVector{UInt8}; salt::AbstractVector{UInt8},
+    model_digest::AbstractVector{UInt8}, shard_index::Integer,
+    shard_count::Integer, config::GardShardConfig,
+)::Vector{UInt8}
+    length(salt) == SALT_BYTES || throw(GardShardVerificationError("invalid shard salt length"))
+    info = _binary_record(
+        Vector{UInt8}(codeunits("gard-shard-hkdf/v2")),
+        Vector{UInt8}(codeunits(GARD_PROTOCOL)),
+        Vector{UInt8}(codeunits(config.domain)),
+        Vector{UInt8}(model_digest),
+        _u32(shard_index),
+        _u32(shard_count),
+    )
+    return _hkdf_sha256(secret, salt, info, AES_KEY_BYTES)
+end
+
+"""v2 additional authenticated data.
+
+Binds exactly the context v1 bound into its MAC preimage, minus the ciphertext
+(which GCM authenticates natively). A shard lifted into another domain,
+reordered within its set, or replayed under a different model context fails the
+tag rather than decrypting cleanly.
+"""
+function _gcm_aad(
+    ; model_digest::AbstractVector{UInt8}, salt::AbstractVector{UInt8},
+    shard_index::Integer, shard_count::Integer, nonce::AbstractVector{UInt8},
+    config::GardShardConfig, compression_level::Integer = config.compression_level,
+)::Vector{UInt8}
+    return _binary_record(
+        Vector{UInt8}(codeunits("gard-shard-aad/v2")),
+        Vector{UInt8}(codeunits(GARD_PROTOCOL)),
+        _u32(GARD_PROTOCOL_VERSION),
+        Vector{UInt8}(codeunits(config.domain)),
+        _u32(compression_level + 1),
+        Vector{UInt8}(model_digest),
+        Vector{UInt8}(salt),
+        _u32(shard_index),
+        _u32(shard_count),
+        Vector{UInt8}(nonce),
+    )
 end
 
 function _mac_preimage(
@@ -459,8 +534,8 @@ function _mac_preimage(
 )::Vector{UInt8}
     return _binary_record(
         Vector{UInt8}(codeunits("gard-shard-mac/v1")),
-        Vector{UInt8}(codeunits(GARD_PROTOCOL)),
-        _u32(GARD_PROTOCOL_VERSION),
+        Vector{UInt8}(codeunits(GARD_PROTOCOL_V1)),
+        _u32(GARD_PROTOCOL_VERSION_V1),
         Vector{UInt8}(codeunits(config.domain)),
         _u32(compression_level + 1),
         Vector{UInt8}(model_digest),
@@ -470,6 +545,163 @@ function _mac_preimage(
         Vector{UInt8}(iv),
         Vector{UInt8}(ciphertext),
     )
+end
+
+# ===========================================================================
+# AES-256-GCM (gard-shard/v2)
+#
+# Nettle.jl exposes no GCM mode, so GCM is built here from the one primitive it
+# does provide. Everything below is NIST SP 800-38D:
+#
+#   * `_aes_ecb_block` — AES-256 on a single block. AES-CBC with an all-zero IV
+#     on exactly one block is identical to ECB on that block (C₁ = E(P₁ ⊕ 0)),
+#     and Nettle does not auto-pad (the CBC path above pads explicitly), so a
+#     16-byte input yields exactly 16 bytes out.
+#   * `_gf_mult` — GF(2¹²⁸) multiplication, reduction polynomial
+#     x¹²⁸ + x⁷ + x² + x + 1, in the bit-reflected convention GCM uses.
+#   * `_ghash` — the universal hash over padded AAD ‖ padded ciphertext ‖
+#     (bitlen(AAD) ‖ bitlen(C)).
+#   * `_gctr` — counter-mode keystream from a 32-bit big-endian counter.
+#
+# The identical algorithm was validated in Python against three NIST CAVP
+# AES-256-GCM known-answer vectors and 300 randomised differential cases
+# against a vetted AES-GCM implementation, byte-for-byte. `selftest()` re-runs
+# the NIST vectors here so the Julia transliteration self-validates on first
+# run rather than being taken on trust.
+# ===========================================================================
+
+"""AES-256 on one 16-byte block, via single-block CBC with a zero IV."""
+function _aes_ecb_block(key::AbstractVector{UInt8}, block::AbstractVector{UInt8})::Vector{UInt8}
+    length(key) == AES_KEY_BYTES || throw(GardShardError("invalid AES-256 key length"))
+    length(block) == 16 || throw(GardShardError("AES block must be 16 bytes"))
+    out = Nettle.encrypt("AES256", :CBC, zeros(UInt8, IV_BYTES),
+                         Vector{UInt8}(key), Vector{UInt8}(block))
+    return Vector{UInt8}(out[1:16])
+end
+
+"""GF(2^128) multiply in the GCM bit-reflected convention."""
+function _gf_mult(xb::AbstractVector{UInt8}, yb::AbstractVector{UInt8})::Vector{UInt8}
+    z = zeros(UInt8, 16)
+    v = Vector{UInt8}(yb)
+    @inbounds for i in 0:127
+        # bit i of X, counting from the most significant bit of byte 1
+        if (xb[(i >> 3) + 1] >> (7 - (i & 7))) & 0x01 == 0x01
+            for k in 1:16
+                z[k] ⊻= v[k]
+            end
+        end
+        lsb = v[16] & 0x01
+        # v >>= 1 across the whole 128-bit big-endian value
+        for k in 16:-1:2
+            v[k] = (v[k] >> 1) | ((v[k - 1] & 0x01) << 7)
+        end
+        v[1] >>= 1
+        if lsb == 0x01
+            v[1] ⊻= 0xE1
+        end
+    end
+    return z
+end
+
+_pad16(data::AbstractVector{UInt8}) =
+    isempty(data) ? UInt8[] : vcat(Vector{UInt8}(data), zeros(UInt8, mod(-length(data), 16)))
+
+function _u64be(value::Integer)::Vector{UInt8}
+    out = Vector{UInt8}(undef, 8)
+    v = UInt64(value)
+    @inbounds for i in 8:-1:1
+        out[i] = UInt8(v & 0xFF)
+        v >>= 8
+    end
+    return out
+end
+
+function _ghash(h::AbstractVector{UInt8}, aad::AbstractVector{UInt8},
+                ciphertext::AbstractVector{UInt8})::Vector{UInt8}
+    y = zeros(UInt8, 16)
+    for chunk in (_pad16(aad), _pad16(ciphertext))
+        for off in 1:16:length(chunk)
+            block = chunk[off:off + 15]
+            for k in 1:16
+                y[k] ⊻= block[k]
+            end
+            y = _gf_mult(y, h)
+        end
+    end
+    lens = vcat(_u64be(length(aad) * 8), _u64be(length(ciphertext) * 8))
+    for k in 1:16
+        y[k] ⊻= lens[k]
+    end
+    return _gf_mult(y, h)
+end
+
+"""Increment the trailing 32-bit big-endian counter of a 16-byte block."""
+function _inc32(block::AbstractVector{UInt8})::Vector{UInt8}
+    out = Vector{UInt8}(block)
+    @inbounds for k in 16:-1:13
+        out[k] += 0x01
+        out[k] == 0x00 || break
+    end
+    return out
+end
+
+function _gctr(key::AbstractVector{UInt8}, icb::AbstractVector{UInt8},
+               data::AbstractVector{UInt8})::Vector{UInt8}
+    isempty(data) && return UInt8[]
+    out = Vector{UInt8}(undef, length(data))
+    cb = Vector{UInt8}(icb)
+    @inbounds for off in 1:16:length(data)
+        ks = _aes_ecb_block(key, cb)
+        last = min(off + 15, length(data))
+        for k in off:last
+            out[k] = data[k] ⊻ ks[k - off + 1]
+        end
+        cb = _inc32(cb)
+    end
+    return out
+end
+
+"""J₀ per SP 800-38D: IV‖0³¹1 for a 96-bit nonce, GHASH otherwise."""
+function _gcm_j0(h::AbstractVector{UInt8}, nonce::AbstractVector{UInt8})::Vector{UInt8}
+    length(nonce) == GCM_NONCE_BYTES && return vcat(Vector{UInt8}(nonce), UInt8[0, 0, 0, 1])
+    return _ghash(h, UInt8[], nonce)
+end
+
+"""AES-256-GCM seal. Returns ciphertext with the 16-byte tag appended."""
+function _encrypt_gcm(plaintext::AbstractVector{UInt8}, key::AbstractVector{UInt8},
+                      nonce::AbstractVector{UInt8}, aad::AbstractVector{UInt8})::Vector{UInt8}
+    length(key) == AES_KEY_BYTES && length(nonce) == GCM_NONCE_BYTES ||
+        throw(GardShardError("invalid AES-256-GCM key material"))
+    h = _aes_ecb_block(key, zeros(UInt8, 16))
+    j0 = _gcm_j0(h, nonce)
+    ciphertext = _gctr(key, _inc32(j0), plaintext)
+    s = _ghash(h, aad, ciphertext)
+    mask = _aes_ecb_block(key, j0)
+    tag = UInt8[s[k] ⊻ mask[k] for k in 1:GCM_TAG_BYTES]
+    return vcat(ciphertext, tag)
+end
+
+"""AES-256-GCM open. Throws unless tag, nonce, key and AAD all match."""
+function _decrypt_gcm(sealed::AbstractVector{UInt8}, key::AbstractVector{UInt8},
+                      nonce::AbstractVector{UInt8}, aad::AbstractVector{UInt8})::Vector{UInt8}
+    length(key) == AES_KEY_BYTES && length(nonce) == GCM_NONCE_BYTES ||
+        throw(GardShardVerificationError("invalid AES-256-GCM key material"))
+    length(sealed) >= GCM_TAG_BYTES ||
+        throw(GardShardVerificationError("invalid GARD ciphertext"))
+    split = length(sealed) - GCM_TAG_BYTES
+    ciphertext = Vector{UInt8}(sealed[1:split])
+    tag = Vector{UInt8}(sealed[split + 1:end])
+    h = _aes_ecb_block(key, zeros(UInt8, 16))
+    j0 = _gcm_j0(h, nonce)
+    s = _ghash(h, aad, ciphertext)
+    mask = _aes_ecb_block(key, j0)
+    # Constant-time tag comparison: accumulate differences, never early-exit.
+    diff = 0x00
+    @inbounds for k in 1:GCM_TAG_BYTES
+        diff |= (s[k] ⊻ mask[k]) ⊻ tag[k]
+    end
+    diff == 0x00 || throw(GardShardVerificationError("GARD envelope authentication failed"))
+    return _gctr(key, _inc32(j0), ciphertext)
 end
 
 function _encrypt_cbc(plaintext::AbstractVector{UInt8}, key::AbstractVector{UInt8}, iv::AbstractVector{UInt8})
@@ -642,16 +874,21 @@ end
 
 function _normalise_envelope(envelope, cfg::GardShardConfig)
     raw = _as_dict(envelope, "GARD envelope must be an object")
-    get(raw, "schema", nothing) == GARD_ENVELOPE_SCHEMA ||
-        throw(GardShardVerificationError("unsupported GARD envelope schema"))
-    get(raw, "protocol", nothing) == GARD_PROTOCOL ||
+    schema = get(raw, "schema", nothing)
+    protocol = get(raw, "protocol", nothing)
+    version = if schema == GARD_ENVELOPE_SCHEMA && protocol == GARD_PROTOCOL
+        GARD_PROTOCOL_VERSION
+    elseif schema == GARD_ENVELOPE_SCHEMA_V1 && protocol == GARD_PROTOCOL_V1
+        GARD_PROTOCOL_VERSION_V1
+    else
         throw(GardShardVerificationError("unsupported GARD envelope protocol"))
+    end
     _as_int(
         get(raw, "protocol_version", nothing),
         "protocol_version";
-        minimum = GARD_PROTOCOL_VERSION,
-        maximum = GARD_PROTOCOL_VERSION,
-    ) == GARD_PROTOCOL_VERSION ||
+        minimum = version,
+        maximum = version,
+    ) == version ||
         throw(GardShardVerificationError("unsupported GARD envelope version"))
     get(raw, "domain", nothing) == cfg.domain ||
         throw(GardShardVerificationError("GARD envelope domain mismatch"))
@@ -669,11 +906,18 @@ function _normalise_envelope(envelope, cfg::GardShardConfig)
     )
 
     encryption = _as_dict(get(raw, "encryption", nothing), "invalid GARD encryption configuration")
-    encryption == Dict("algorithm" => "AES-256-CBC", "padding" => "PKCS#7") ||
-        throw(GardShardVerificationError("unsupported GARD encryption configuration"))
     authentication = _as_dict(get(raw, "authentication", nothing), "invalid GARD authentication configuration")
-    authentication == Dict("algorithm" => "HMAC-SHA256", "mode" => "encrypt-then-mac") ||
-        throw(GardShardVerificationError("unsupported GARD authentication configuration"))
+    if version == GARD_PROTOCOL_VERSION_V1
+        encryption == Dict("algorithm" => "AES-256-CBC", "padding" => "PKCS#7") ||
+            throw(GardShardVerificationError("unsupported GARD encryption configuration"))
+        authentication == Dict("algorithm" => "HMAC-SHA256", "mode" => "encrypt-then-mac") ||
+            throw(GardShardVerificationError("unsupported GARD authentication configuration"))
+    else
+        encryption == Dict("algorithm" => "AES-256-GCM", "padding" => "none") ||
+            throw(GardShardVerificationError("unsupported GARD encryption configuration"))
+        authentication == Dict("algorithm" => "AES-256-GCM", "mode" => "aead") ||
+            throw(GardShardVerificationError("unsupported GARD authentication configuration"))
+    end
 
     context = _as_dict(get(raw, "model_context", nothing), "missing GARD model context")
     model_digest_text = get(raw, "model_digest", nothing)
@@ -726,26 +970,47 @@ function _normalise_envelope(envelope, cfg::GardShardConfig)
         index == expected_index && count == shard_count ||
             throw(GardShardVerificationError("inconsistent GARD shard ordering"))
         salt = _b64_decode(get(shard, "salt_b64", nothing), "salt_b64")
-        iv = _b64_decode(get(shard, "iv_b64", nothing), "iv_b64")
         ciphertext = _b64_decode(get(shard, "ciphertext_b64", nothing), "ciphertext_b64")
-        mac = _b64_decode(get(shard, "hmac_sha256_b64", nothing), "hmac_sha256_b64")
-        length(salt) == SALT_BYTES && length(iv) == IV_BYTES && length(mac) == HMAC_BYTES ||
+        length(salt) == SALT_BYTES ||
             throw(GardShardVerificationError("invalid GARD shard field length"))
-        (!isempty(ciphertext) && length(ciphertext) % IV_BYTES == 0) ||
-            throw(GardShardVerificationError("invalid GARD ciphertext"))
         sha256_hex(ciphertext) == String(get(shard, "ciphertext_sha256", "")) ||
             throw(GardShardVerificationError("GARD ciphertext digest mismatch"))
-        push!(checked, Dict(
-            "index" => index,
-            "count" => count,
-            "salt" => salt,
-            "iv" => iv,
-            "ciphertext" => ciphertext,
-            "mac" => mac,
-        ))
+        if version == GARD_PROTOCOL_VERSION_V1
+            iv = _b64_decode(get(shard, "iv_b64", nothing), "iv_b64")
+            mac = _b64_decode(get(shard, "hmac_sha256_b64", nothing), "hmac_sha256_b64")
+            length(iv) == IV_BYTES && length(mac) == HMAC_BYTES ||
+                throw(GardShardVerificationError("invalid GARD shard field length"))
+            # CBC ciphertext is always a whole number of blocks.
+            (!isempty(ciphertext) && length(ciphertext) % IV_BYTES == 0) ||
+                throw(GardShardVerificationError("invalid GARD ciphertext"))
+            push!(checked, Dict(
+                "index" => index,
+                "count" => count,
+                "salt" => salt,
+                "iv" => iv,
+                "ciphertext" => ciphertext,
+                "mac" => mac,
+            ))
+        else
+            nonce = _b64_decode(get(shard, "nonce_b64", nothing), "nonce_b64")
+            length(nonce) == GCM_NONCE_BYTES ||
+                throw(GardShardVerificationError("invalid GARD shard field length"))
+            # GCM is a stream mode: no block alignment, but the tag is always
+            # present, so the sealed length is at least the tag length.
+            length(ciphertext) >= GCM_TAG_BYTES ||
+                throw(GardShardVerificationError("invalid GARD ciphertext"))
+            push!(checked, Dict(
+                "index" => index,
+                "count" => count,
+                "salt" => salt,
+                "nonce" => nonce,
+                "ciphertext" => ciphertext,
+            ))
+        end
     end
     return (
         raw = raw,
+        version = version,
         model_digest = model_digest,
         shard_count = shard_count,
         shards = checked,
@@ -770,7 +1035,7 @@ function verify_envelope(
         return Dict(
             "verified" => false,
             "verification_disabled" => true,
-            "protocol" => GARD_PROTOCOL,
+            "protocol" => checked.raw["protocol"],
             "shard_count" => checked.shard_count,
             "model_digest" => checked.raw["model_digest"],
         )
@@ -778,28 +1043,48 @@ function verify_envelope(
 
     grid_secret = _secret_bytes(secret, cfg)
     for shard in checked.shards
-        _, mac_key = _derive_shard_keys(
-            grid_secret;
-            salt = shard["salt"], model_digest = checked.model_digest,
-            shard_index = shard["index"], shard_count = checked.shard_count,
-            config = cfg,
-        )
-        expected = _hmac_sha256(
-            mac_key,
-            _mac_preimage(
-                model_digest = checked.model_digest, salt = shard["salt"],
+        if checked.version == GARD_PROTOCOL_VERSION_V1
+            _, mac_key = _derive_shard_keys(
+                grid_secret;
+                salt = shard["salt"], model_digest = checked.model_digest,
                 shard_index = shard["index"], shard_count = checked.shard_count,
-                iv = shard["iv"], ciphertext = shard["ciphertext"], config = cfg,
-                compression_level = checked.compression_level,
-            ),
-        )
-        _constant_time_equal(expected, shard["mac"]) ||
-            throw(GardShardVerificationError("GARD envelope authentication failed"))
+                config = cfg,
+            )
+            expected = _hmac_sha256(
+                mac_key,
+                _mac_preimage(
+                    model_digest = checked.model_digest, salt = shard["salt"],
+                    shard_index = shard["index"], shard_count = checked.shard_count,
+                    iv = shard["iv"], ciphertext = shard["ciphertext"], config = cfg,
+                    compression_level = checked.compression_level,
+                ),
+            )
+            _constant_time_equal(expected, shard["mac"]) ||
+                throw(GardShardVerificationError("GARD envelope authentication failed"))
+        else
+            # The v2 tag can only be checked by opening the shard; the plaintext
+            # is discarded here.
+            key = _derive_shard_key_gcm(
+                grid_secret;
+                salt = shard["salt"], model_digest = checked.model_digest,
+                shard_index = shard["index"], shard_count = checked.shard_count,
+                config = cfg,
+            )
+            _decrypt_gcm(
+                shard["ciphertext"], key, shard["nonce"],
+                _gcm_aad(
+                    model_digest = checked.model_digest, salt = shard["salt"],
+                    shard_index = shard["index"], shard_count = checked.shard_count,
+                    nonce = shard["nonce"], config = cfg,
+                    compression_level = checked.compression_level,
+                ),
+            )
+        end
     end
     return Dict(
         "verified" => true,
         "verification_disabled" => false,
-        "protocol" => GARD_PROTOCOL,
+        "protocol" => checked.raw["protocol"],
         "shard_count" => checked.shard_count,
         "model_digest" => checked.raw["model_digest"],
     )
@@ -807,7 +1092,7 @@ end
 
 """
     encrypt_json(payload; secret=nothing, model_context=nothing, config=nothing,
-                 fixed_salts=nothing, fixed_ivs=nothing) -> Dict
+                 fixed_salts=nothing, fixed_nonces=nothing) -> Dict
 
 Canonicalize, zlib-compress, shard, AES-256-CBC encrypt, and HMAC authenticate
 a JSON-compatible payload. Fixed salts/IVs exist only for public deterministic
@@ -816,7 +1101,7 @@ interoperability fixtures; production callers leave both unset.
 function encrypt_json(
     payload; secret = nothing, model_context = nothing,
     config::Union{Nothing,GardShardConfig} = nothing,
-    fixed_salts = nothing, fixed_ivs = nothing,
+    fixed_salts = nothing, fixed_ivs = nothing, fixed_nonces = nothing,
 )::Dict{String,Any}
     cfg = _cfg(config)
     grid_secret = _secret_bytes(secret, cfg)
@@ -832,25 +1117,29 @@ function encrypt_json(
     chunks = _split_bytes(compressed, cfg.shard_count)
     fixed_salts !== nothing && length(fixed_salts) < length(chunks) &&
         throw(GardShardError("fixed_salts must provide one salt per shard"))
-    fixed_ivs !== nothing && length(fixed_ivs) < length(chunks) &&
-        throw(GardShardError("fixed_ivs must provide one IV per shard"))
+    # fixed_ivs is the deprecated v1 spelling; v2 nonces are shorter, so any
+    # supplied material is truncated to the GCM nonce length.
+    if fixed_nonces === nothing && fixed_ivs !== nothing
+        fixed_nonces = [Vector{UInt8}(v)[1:min(end, GCM_NONCE_BYTES)] for v in fixed_ivs]
+    end
+    fixed_nonces !== nothing && length(fixed_nonces) < length(chunks) &&
+        throw(GardShardError("fixed_nonces must provide one nonce per shard"))
 
     shards = Dict{String,Any}[]
     for (julia_index, chunk) in enumerate(chunks)
         index = julia_index - 1
         salt = _fixed_material(fixed_salts, julia_index, SALT_BYTES, "salt")
-        iv = _fixed_material(fixed_ivs, julia_index, IV_BYTES, "IV")
-        encryption_key, mac_key = _derive_shard_keys(
+        nonce = _fixed_material(fixed_nonces, julia_index, GCM_NONCE_BYTES, "nonce")
+        encryption_key = _derive_shard_key_gcm(
             grid_secret;
             salt = salt, model_digest = model_digest, shard_index = index,
             shard_count = length(chunks), config = cfg,
         )
-        ciphertext = _encrypt_cbc(chunk, encryption_key, iv)
-        mac = _hmac_sha256(
-            mac_key,
-            _mac_preimage(
+        ciphertext = _encrypt_gcm(
+            chunk, encryption_key, nonce,
+            _gcm_aad(
                 model_digest = model_digest, salt = salt, shard_index = index,
-                shard_count = length(chunks), iv = iv, ciphertext = ciphertext, config = cfg,
+                shard_count = length(chunks), nonce = nonce, config = cfg,
                 compression_level = cfg.compression_level,
             ),
         )
@@ -858,10 +1147,9 @@ function encrypt_json(
             "index" => index,
             "count" => length(chunks),
             "salt_b64" => _b64_encode(salt),
-            "iv_b64" => _b64_encode(iv),
+            "nonce_b64" => _b64_encode(nonce),
             "ciphertext_b64" => _b64_encode(ciphertext),
             "ciphertext_sha256" => sha256_hex(ciphertext),
-            "hmac_sha256_b64" => _b64_encode(mac),
         ))
     end
     return Dict(
@@ -871,8 +1159,8 @@ function encrypt_json(
         "domain" => cfg.domain,
         "encoding" => "base64",
         "compression" => Dict("algorithm" => "zlib", "level" => cfg.compression_level),
-        "encryption" => Dict("algorithm" => "AES-256-CBC", "padding" => "PKCS#7"),
-        "authentication" => Dict("algorithm" => "HMAC-SHA256", "mode" => "encrypt-then-mac"),
+        "encryption" => Dict("algorithm" => "AES-256-GCM", "padding" => "none"),
+        "authentication" => Dict("algorithm" => "AES-256-GCM", "mode" => "aead"),
         "model_context" => context,
         "model_digest" => bytes2hex(model_digest),
         "plaintext_sha256" => sha256_hex(plaintext),
@@ -897,18 +1185,42 @@ function decrypt_json(
             throw(GardShardVerificationError("GARD model context does not match the envelope"))
     end
 
-    # Must finish all MAC checks before CBC decryption or zlib decompression.
-    verify_envelope(checked.raw; secret = secret, config = cfg)
+    is_v1 = checked.version == GARD_PROTOCOL_VERSION_V1
+    if is_v1
+        # v1 has no integrity inside the cipher, so every MAC must pass before
+        # the CBC decrypt / zlib path is entered at all. v2 skips this because
+        # the GCM open below authenticates natively — running it here would
+        # simply decrypt every shard twice.
+        verify_envelope(checked.raw; secret = secret, config = cfg)
+    end
     grid_secret = _secret_bytes(secret, cfg)
     recovered = UInt8[]
     for shard in checked.shards
-        encryption_key, _ = _derive_shard_keys(
-            grid_secret;
-            salt = shard["salt"], model_digest = checked.model_digest,
-            shard_index = shard["index"], shard_count = checked.shard_count,
-            config = cfg,
-        )
-        append!(recovered, _decrypt_cbc(shard["ciphertext"], encryption_key, shard["iv"]))
+        if is_v1
+            encryption_key, _ = _derive_shard_keys(
+                grid_secret;
+                salt = shard["salt"], model_digest = checked.model_digest,
+                shard_index = shard["index"], shard_count = checked.shard_count,
+                config = cfg,
+            )
+            append!(recovered, _decrypt_cbc(shard["ciphertext"], encryption_key, shard["iv"]))
+        else
+            encryption_key = _derive_shard_key_gcm(
+                grid_secret;
+                salt = shard["salt"], model_digest = checked.model_digest,
+                shard_index = shard["index"], shard_count = checked.shard_count,
+                config = cfg,
+            )
+            append!(recovered, _decrypt_gcm(
+                shard["ciphertext"], encryption_key, shard["nonce"],
+                _gcm_aad(
+                    model_digest = checked.model_digest, salt = shard["salt"],
+                    shard_index = shard["index"], shard_count = checked.shard_count,
+                    nonce = shard["nonce"], config = cfg,
+                    compression_level = checked.compression_level,
+                ),
+            ))
+        end
     end
     sha256_hex(recovered) == checked.raw["compressed_sha256"] ||
         throw(GardShardVerificationError("GARD compressed payload digest mismatch"))
@@ -1070,6 +1382,114 @@ end
 # ---------------------------------------------------------------------------
 # Public deterministic compatibility fixture
 # ---------------------------------------------------------------------------
+"""NIST SP 800-38D / CAVP AES-256-GCM known-answer vectors.
+
+The GCM core here is hand-built on Nettle's AES because Nettle.jl exposes no
+GCM mode, so it must prove itself rather than be taken on trust. These three
+vectors are the standard published AES-256-GCM test cases; the same algorithm
+was additionally checked byte-for-byte against a vetted AES-GCM implementation
+across 300 randomised cases before transliteration.
+"""
+function _selftest_gcm_vectors()
+    key0 = fill(UInt8(0), 32)
+    iv0 = fill(UInt8(0), 12)
+
+    # 1. Empty plaintext, empty AAD.
+    sealed = _encrypt_gcm(UInt8[], key0, iv0, UInt8[])
+    @assert _b64_encode(sealed) == _b64_encode(hex2bytes("530f8afbc74536b9a963b4f1c4cb738b"))
+    @assert _decrypt_gcm(sealed, key0, iv0, UInt8[]) == UInt8[]
+
+    # 2. One all-zero block, empty AAD.
+    sealed = _encrypt_gcm(fill(UInt8(0), 16), key0, iv0, UInt8[])
+    @assert bytes2hex(sealed) == (
+        "cea7403d4d606b6e074ec5d3baf39d18" * "d0d1c8a799996bf0265b98b5d48ab919")
+    @assert _decrypt_gcm(sealed, key0, iv0, UInt8[]) == fill(UInt8(0), 16)
+
+    # 3. Multi-block plaintext with AAD (the classic 60-byte/20-byte case).
+    key = hex2bytes("feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308")
+    nonce = hex2bytes("cafebabefacedbaddecaf888")
+    plain = hex2bytes("d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a72" *
+                      "1c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b39")
+    aad = hex2bytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
+    sealed = _encrypt_gcm(plain, key, nonce, aad)
+    @assert bytes2hex(sealed) == (
+        "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa" *
+        "8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662" *
+        "76fc6ece0f4e1768cddf8853bb2d551b")
+    @assert _decrypt_gcm(sealed, key, nonce, aad) == plain
+
+    # AAD is authenticated: altering it must fail the tag.
+    bad_aad = copy(aad); bad_aad[1] ⊻= 0x01
+    failed = false
+    try
+        _decrypt_gcm(sealed, key, nonce, bad_aad)
+    catch err
+        failed = err isa GardShardVerificationError
+    end
+    @assert failed
+    return true
+end
+
+"""Read-back of a frozen gard-shard/v1 envelope produced before the migration.
+
+Guards the whole legacy path at once: the v1 branch of the validator, the v1
+HKDF info (whose bound protocol string must stay pinned to v1), the v1 MAC
+preimage, and CBC/PKCS#7 decryption.
+"""
+function _selftest_v1_readback()
+    fixture_secret = Vector{UInt8}(codeunits("gard-v1-public-test-fixture-key"))
+    payload = Dict("message" => "GARD shard interoperability",
+                   "numbers" => [1, 2, 3], "unicode" => "MESH Psi")
+    legacy = Dict{String,Any}(
+        "schema" => "gard-shard-envelope/v1",
+        "protocol" => "gard-shard/v1",
+        "protocol_version" => 1,
+        "domain" => "SiCi_SQRT(-1)",
+        "encoding" => "base64",
+        "compression" => Dict("algorithm" => "zlib", "level" => 6),
+        "encryption" => Dict("algorithm" => "AES-256-CBC", "padding" => "PKCS#7"),
+        "authentication" => Dict("algorithm" => "HMAC-SHA256", "mode" => "encrypt-then-mac"),
+        "model_context" => Dict("architecture" => "MESH-SLM-SCM-GLM-Quipu-GNN", "revision" => 1),
+        "model_digest" => "5bbba9598191e8e5622ffce857bf7f70af38fa964d7a0eac5be79e7c4f8bc804",
+        "plaintext_sha256" => "3a9d41f63f18d0ef61b631842420eff808fa97830788442c08e364c11f416d7a",
+        "compressed_sha256" => "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb",
+        "plaintext_bytes" => 80,
+        "compressed_bytes" => 86,
+        "shard_count" => 2,
+        "shards" => Any[
+            Dict{String,Any}(
+                "index" => 0, "count" => 2,
+                "salt_b64" => "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+                "iv_b64" => "AAECAwQFBgcICQoLDA0ODw==",
+                "ciphertext_b64" => "KMkV3Vgqx06peRg9miaOhM8obZR4sirNYiyXOxL/ZUhiqrLQGMlxcHFJhQkFgge7",
+                "ciphertext_sha256" => "43180488e24480ebc6ae21dd2db75399af10405eb2c10e11463dfd989f8c0a2c",
+                "hmac_sha256_b64" => "Sjp9VwTqUNalaistPssRIx9WRveRMxkM21kQ9A6fvyQ=",
+            ),
+            Dict{String,Any}(
+                "index" => 1, "count" => 2,
+                "salt_b64" => "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+                "iv_b64" => "EBESExQVFhcYGRobHB0eHw==",
+                "ciphertext_b64" => "BGYLiI7tAEDiWQ2c3a46NM9iRP157TYRukKa3cGMd6NOIQ2fyJk9lrGS7z2YE+Ey",
+                "ciphertext_sha256" => "9a679ad6e78414bc74655433655e38b407432d7603b754263d34333478e2ca7f",
+                "hmac_sha256_b64" => "vw+2tmiJgMZoXrzwQmgVDEKszrFqBkFhvQq0uh11dHo=",
+            ),
+        ],
+    )
+    @assert decrypt_json(legacy; secret = fixture_secret) == payload
+    @assert verify_envelope(legacy; secret = fixture_secret)["protocol"] == GARD_PROTOCOL_V1
+
+    tampered = deepcopy(legacy)
+    tampered["shards"][1]["hmac_sha256_b64"] = _b64_encode(fill(UInt8(0), HMAC_BYTES))
+    rejected = false
+    try
+        decrypt_json(tampered; secret = fixture_secret)
+    catch err
+        rejected = err isa GardShardVerificationError
+    end
+    @assert rejected
+    return true
+end
+
 """
     selftest() -> Bool
 
@@ -1094,19 +1514,25 @@ function selftest()::Bool
         secret = fixture_secret, model_context = context,
         config = GardShardConfig(shard_count = 2),
         fixed_salts = [UInt8.(0:31), UInt8.(32:63)],
-        fixed_ivs = [UInt8.(0:15), UInt8.(16:31)],
+        fixed_nonces = [UInt8.(0:11), UInt8.(12:23)],
     )
     @assert envelope["model_digest"] == "5bbba9598191e8e5622ffce857bf7f70af38fa964d7a0eac5be79e7c4f8bc804"
     @assert envelope["plaintext_sha256"] == "3a9d41f63f18d0ef61b631842420eff808fa97830788442c08e364c11f416d7a"
     @assert envelope["compressed_sha256"] == "cfc7db87da6cdd7347f2b1becef891a5f5b01cda5a3b983c896b6482cf2f40cb"
-    @assert envelope["shards"][1]["ciphertext_b64"] == "KMkV3Vgqx06peRg9miaOhM8obZR4sirNYiyXOxL/ZUhiqrLQGMlxcHFJhQkFgge7"
-    @assert envelope["shards"][1]["hmac_sha256_b64"] == "Sjp9VwTqUNalaistPssRIx9WRveRMxkM21kQ9A6fvyQ="
-    @assert envelope["shards"][2]["ciphertext_b64"] == "BGYLiI7tAEDiWQ2c3a46NM9iRP157TYRukKa3cGMd6NOIQ2fyJk9lrGS7z2YE+Ey"
-    @assert envelope["shards"][2]["hmac_sha256_b64"] == "vw+2tmiJgMZoXrzwQmgVDEKszrFqBkFhvQq0uh11dHo="
+    @assert envelope["shards"][1]["ciphertext_b64"] == "ZpwXOZ/ebpcwuJSWM7R/kIw+G0ykXBdwEviR8FdOLWBoahqygkGDYQaPR2ZFePySRc00FPyQEXKgUsA="
+    @assert envelope["shards"][1]["nonce_b64"] == "AAECAwQFBgcICQoL"
+    @assert envelope["shards"][2]["ciphertext_b64"] == "aZTxOKmJs/34MMAAWFxrxBLNHtw3BcwIh9TIPtIgs3jN70fCLHsY/XMzu1ZuQNOisHNL9N4HFY9RwCo="
+    @assert envelope["shards"][2]["nonce_b64"] == "DA0ODxAREhMUFRYX"
     @assert decrypt_json(envelope; secret = fixture_secret) == payload
 
+    # Flipping a ciphertext bit must fail the AEAD tag. The ciphertext digest is
+    # recomputed so the envelope stays internally consistent and the rejection is
+    # demonstrably the GCM tag, not the cheaper sha256 precheck.
     tampered = deepcopy(envelope)
-    tampered["shards"][1]["hmac_sha256_b64"] = _b64_encode(fill(UInt8(0), HMAC_BYTES))
+    raw_ct = _b64_decode(tampered["shards"][1]["ciphertext_b64"], "ciphertext_b64")
+    raw_ct[1] ⊻= 0x01
+    tampered["shards"][1]["ciphertext_b64"] = _b64_encode(raw_ct)
+    tampered["shards"][1]["ciphertext_sha256"] = sha256_hex(raw_ct)
     rejected = false
     try
         decrypt_json(tampered; secret = fixture_secret)
@@ -1114,7 +1540,11 @@ function selftest()::Bool
         rejected = err isa GardShardVerificationError
     end
     @assert rejected
-    println("GardShardModel.selftest(): OK — gard-shard/v1 Python fixture parity")
+
+    _selftest_gcm_vectors()
+    _selftest_v1_readback()
+    println("GardShardModel.selftest(): OK — gard-shard/v2 Python fixture parity, " *
+            "NIST GCM vectors, v1 read-back")
     return true
 end
 

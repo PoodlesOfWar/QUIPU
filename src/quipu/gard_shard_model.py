@@ -31,12 +31,34 @@ from typing import Any, Mapping, Sequence
 
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
-GARD_PROTOCOL = "gard-shard/v1"
-GARD_PROTOCOL_VERSION = 1
-GARD_ENVELOPE_SCHEMA = "gard-shard-envelope/v1"
+# ---------------------------------------------------------------------------
+# Protocol versions
+#
+# v2 (current) uses AES-256-GCM: one AEAD primitive providing confidentiality
+# and integrity together, replacing v1's AES-256-CBC + PKCS#7 + separate
+# HMAC-SHA256 encrypt-then-MAC construction. GCM removes the padding oracle
+# surface CBC carries, halves the per-shard authentication overhead (a 16-byte
+# tag versus a 32-byte HMAC), and drops the second HKDF-derived key.
+#
+# v1 remains fully readable. Its protocol string is bound into both the HKDF
+# info and the MAC preimage, so it is threaded explicitly through the legacy
+# code path rather than read from the module-level constant -- bumping the
+# constant alone would silently change v1 key derivation and break every
+# existing envelope.
+# ---------------------------------------------------------------------------
+GARD_PROTOCOL = "gard-shard/v2"
+GARD_PROTOCOL_VERSION = 2
+GARD_ENVELOPE_SCHEMA = "gard-shard-envelope/v2"
+
+GARD_PROTOCOL_V1 = "gard-shard/v1"
+GARD_PROTOCOL_VERSION_V1 = 1
+GARD_ENVELOPE_SCHEMA_V1 = "gard-shard-envelope/v1"
+
 GARD_MODEL_CONTEXT_SCHEMA = "gard-model-context/v1"
 GARD_HUB_MANIFEST_SCHEMA = "loadopoly-gard-shard-status/v1"
 GARD_ASSIGNMENT_PROOF_KIND = "catalog-assignment-proof/v1"
@@ -50,6 +72,10 @@ _HKDF_BYTES = _AES_KEY_BYTES + _HMAC_KEY_BYTES
 _SALT_BYTES = 32
 _IV_BYTES = 16
 _HMAC_BYTES = 32
+# AES-GCM: 96-bit nonce is the NIST SP 800-38D recommended size (the only one
+# used directly without extra derivation), 128-bit tag is the full-strength tag.
+_GCM_NONCE_BYTES = 12
+_GCM_TAG_BYTES = 16
 _MAX_SHARDS = 256
 _MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
 _MAX_PLAINTEXT_BYTES = 32 * 1024 * 1024
@@ -235,13 +261,19 @@ def _derive_shard_keys(
     shard_count: int,
     config: GardShardConfig,
 ) -> tuple[bytes, bytes]:
-    """Derive independent AES and HMAC keys with HKDF-SHA256."""
+    """Derive the legacy v1 pair of independent AES and HMAC keys (HKDF-SHA256).
+
+    Retained for reading ``gard-shard/v1`` envelopes. The protocol string is
+    pinned to the v1 constant because it is bound into the HKDF info: reading
+    the module-level ``GARD_PROTOCOL`` here would change v1 derivation the
+    moment the current version advances.
+    """
 
     if len(salt) != _SALT_BYTES:
         raise GardShardVerificationError("invalid shard salt length")
     info = _binary_record(
         b"gard-shard-hkdf/v1",
-        GARD_PROTOCOL.encode("utf-8"),
+        GARD_PROTOCOL_V1.encode("utf-8"),
         config.domain.encode("utf-8"),
         model_digest,
         _u32(shard_index),
@@ -256,6 +288,41 @@ def _derive_shard_keys(
     return material[:_AES_KEY_BYTES], material[_AES_KEY_BYTES:]
 
 
+def _derive_shard_key_gcm(
+    secret: bytes,
+    *,
+    salt: bytes,
+    model_digest: bytes,
+    shard_index: int,
+    shard_count: int,
+    config: GardShardConfig,
+) -> bytes:
+    """Derive the single v2 AES-256-GCM key with HKDF-SHA256.
+
+    GCM authenticates with the same key it encrypts under, so unlike v1 there
+    is no second MAC key. The HKDF label and the bound protocol string are both
+    version-distinct, so a v1 and a v2 shard sharing a salt, model digest and
+    index still derive unrelated keys.
+    """
+
+    if len(salt) != _SALT_BYTES:
+        raise GardShardVerificationError("invalid shard salt length")
+    info = _binary_record(
+        b"gard-shard-hkdf/v2",
+        GARD_PROTOCOL.encode("utf-8"),
+        config.domain.encode("utf-8"),
+        model_digest,
+        _u32(shard_index),
+        _u32(shard_count),
+    )
+    return HKDF(
+        algorithm=hashes.SHA256(),
+        length=_AES_KEY_BYTES,
+        salt=salt,
+        info=info,
+    ).derive(secret)
+
+
 def _mac_preimage(
     *,
     model_digest: bytes,
@@ -267,13 +334,17 @@ def _mac_preimage(
     config: GardShardConfig,
     compression_level: int | None = None,
 ) -> bytes:
-    """Return the fixed, length-prefixed Encrypt-then-MAC preimage."""
+    """Return the fixed, length-prefixed v1 Encrypt-then-MAC preimage.
+
+    Legacy read path only. As with the v1 KDF info, the protocol string and
+    version are pinned to the v1 constants because they are bound into the MAC.
+    """
 
     level = int(config.compression_level if compression_level is None else compression_level)
     return _binary_record(
         b"gard-shard-mac/v1",
-        GARD_PROTOCOL.encode("utf-8"),
-        _u32(GARD_PROTOCOL_VERSION),
+        GARD_PROTOCOL_V1.encode("utf-8"),
+        _u32(GARD_PROTOCOL_VERSION_V1),
         config.domain.encode("utf-8"),
         _u32(level + 1),
         model_digest,
@@ -282,6 +353,40 @@ def _mac_preimage(
         _u32(shard_count),
         iv,
         ciphertext,
+    )
+
+
+def _gcm_aad(
+    *,
+    model_digest: bytes,
+    salt: bytes,
+    shard_index: int,
+    shard_count: int,
+    nonce: bytes,
+    config: GardShardConfig,
+    compression_level: int | None = None,
+) -> bytes:
+    """Return the v2 AES-GCM additional authenticated data.
+
+    Binds exactly the context v1 bound into its MAC preimage, minus the
+    ciphertext (which GCM authenticates natively). Because this is AAD, a shard
+    lifted into a different domain, reordered within the set, or replayed under
+    a different model context fails the tag check rather than decrypting
+    cleanly -- the same cross-context binding v1 achieved via the MAC.
+    """
+
+    level = int(config.compression_level if compression_level is None else compression_level)
+    return _binary_record(
+        b"gard-shard-aad/v2",
+        GARD_PROTOCOL.encode("utf-8"),
+        _u32(GARD_PROTOCOL_VERSION),
+        config.domain.encode("utf-8"),
+        _u32(level + 1),
+        model_digest,
+        salt,
+        _u32(shard_index),
+        _u32(shard_count),
+        nonce,
     )
 
 
@@ -304,6 +409,27 @@ def _decrypt_cbc(ciphertext: bytes, key: bytes, iv: bytes) -> bytes:
         return unpadder.update(padded) + unpadder.finalize()
     except ValueError as exc:
         raise GardShardVerificationError("GARD ciphertext could not be decrypted") from exc
+
+
+def _encrypt_gcm(plaintext: bytes, key: bytes, nonce: bytes, aad: bytes) -> bytes:
+    """AES-256-GCM seal. Returns ciphertext with the 16-byte tag appended."""
+    if len(key) != _AES_KEY_BYTES or len(nonce) != _GCM_NONCE_BYTES:
+        raise GardShardError("invalid AES-256-GCM key material")
+    return AESGCM(key).encrypt(nonce, plaintext, aad)
+
+
+def _decrypt_gcm(ciphertext: bytes, key: bytes, nonce: bytes, aad: bytes) -> bytes:
+    """AES-256-GCM open. Raises if the tag, nonce, key, or AAD do not match.
+
+    There is no way to obtain plaintext from a tampered v2 shard: the tag check
+    is inside the primitive, not a separate pass that could be skipped.
+    """
+    if len(key) != _AES_KEY_BYTES or len(nonce) != _GCM_NONCE_BYTES:
+        raise GardShardVerificationError("invalid AES-256-GCM key material")
+    try:
+        return AESGCM(key).decrypt(nonce, ciphertext, aad)
+    except InvalidTag as exc:
+        raise GardShardVerificationError("GARD envelope authentication failed") from exc
 
 
 def _split_bytes(payload: bytes, count: int) -> list[bytes]:
@@ -519,9 +645,13 @@ def _normalise_envelope(
     if not isinstance(envelope, Mapping):
         raise GardShardVerificationError("GARD envelope must be an object")
     out = dict(envelope)
-    if out.get("schema") != GARD_ENVELOPE_SCHEMA or out.get("protocol") != GARD_PROTOCOL:
+    if out.get("schema") == GARD_ENVELOPE_SCHEMA and out.get("protocol") == GARD_PROTOCOL:
+        version = GARD_PROTOCOL_VERSION
+    elif out.get("schema") == GARD_ENVELOPE_SCHEMA_V1 and out.get("protocol") == GARD_PROTOCOL_V1:
+        version = GARD_PROTOCOL_VERSION_V1
+    else:
         raise GardShardVerificationError("unsupported GARD envelope protocol")
-    if _required_int(out.get("protocol_version"), "protocol_version", minimum=GARD_PROTOCOL_VERSION, maximum=GARD_PROTOCOL_VERSION) != GARD_PROTOCOL_VERSION:
+    if _required_int(out.get("protocol_version"), "protocol_version", minimum=version, maximum=version) != version:
         raise GardShardVerificationError("unsupported GARD envelope version")
     if out.get("domain") != config.domain:
         raise GardShardVerificationError("GARD envelope domain mismatch")
@@ -531,10 +661,16 @@ def _normalise_envelope(
     if not isinstance(compression, Mapping) or compression.get("algorithm") != "zlib":
         raise GardShardVerificationError("unsupported GARD compression configuration")
     _required_int(compression.get("level"), "compression level", minimum=-1, maximum=9)
-    if out.get("encryption") != {"algorithm": "AES-256-CBC", "padding": "PKCS#7"}:
-        raise GardShardVerificationError("unsupported GARD encryption configuration")
-    if out.get("authentication") != {"algorithm": "HMAC-SHA256", "mode": "encrypt-then-mac"}:
-        raise GardShardVerificationError("unsupported GARD authentication configuration")
+    if version == GARD_PROTOCOL_VERSION_V1:
+        if out.get("encryption") != {"algorithm": "AES-256-CBC", "padding": "PKCS#7"}:
+            raise GardShardVerificationError("unsupported GARD encryption configuration")
+        if out.get("authentication") != {"algorithm": "HMAC-SHA256", "mode": "encrypt-then-mac"}:
+            raise GardShardVerificationError("unsupported GARD authentication configuration")
+    else:
+        if out.get("encryption") != {"algorithm": "AES-256-GCM", "padding": "none"}:
+            raise GardShardVerificationError("unsupported GARD encryption configuration")
+        if out.get("authentication") != {"algorithm": "AES-256-GCM", "mode": "aead"}:
+            raise GardShardVerificationError("unsupported GARD authentication configuration")
 
     context = out.get("model_context")
     if not isinstance(context, Mapping):
@@ -571,28 +707,51 @@ def _normalise_envelope(
         if shard_index != expected_index or declared_count != shard_count:
             raise GardShardVerificationError("inconsistent GARD shard ordering")
         salt = _b64_decode(shard.get("salt_b64"), "salt_b64")
-        iv = _b64_decode(shard.get("iv_b64"), "iv_b64")
         ciphertext = _b64_decode(shard.get("ciphertext_b64"), "ciphertext_b64")
-        mac = _b64_decode(shard.get("hmac_sha256_b64"), "hmac_sha256_b64")
-        if len(salt) != _SALT_BYTES or len(iv) != _IV_BYTES or len(mac) != _HMAC_BYTES:
+        if len(salt) != _SALT_BYTES:
             raise GardShardVerificationError("invalid GARD shard field length")
-        if not ciphertext or len(ciphertext) % _IV_BYTES:
-            raise GardShardVerificationError("invalid GARD ciphertext")
         if sha256_hex(ciphertext) != str(shard.get("ciphertext_sha256") or ""):
             raise GardShardVerificationError("GARD ciphertext digest mismatch")
-        checked_shards.append(
-            {
-                "index": shard_index,
-                "count": declared_count,
-                "salt": salt,
-                "iv": iv,
-                "ciphertext": ciphertext,
-                "mac": mac,
-            }
-        )
+
+        if version == GARD_PROTOCOL_VERSION_V1:
+            iv = _b64_decode(shard.get("iv_b64"), "iv_b64")
+            mac = _b64_decode(shard.get("hmac_sha256_b64"), "hmac_sha256_b64")
+            if len(iv) != _IV_BYTES or len(mac) != _HMAC_BYTES:
+                raise GardShardVerificationError("invalid GARD shard field length")
+            # CBC ciphertext is always a whole number of blocks.
+            if not ciphertext or len(ciphertext) % _IV_BYTES:
+                raise GardShardVerificationError("invalid GARD ciphertext")
+            checked_shards.append(
+                {
+                    "index": shard_index,
+                    "count": declared_count,
+                    "salt": salt,
+                    "iv": iv,
+                    "ciphertext": ciphertext,
+                    "mac": mac,
+                }
+            )
+        else:
+            nonce = _b64_decode(shard.get("nonce_b64"), "nonce_b64")
+            if len(nonce) != _GCM_NONCE_BYTES:
+                raise GardShardVerificationError("invalid GARD shard field length")
+            # GCM is a stream mode: no block alignment, but the tag is always
+            # present, so the sealed length is at least the tag length.
+            if len(ciphertext) < _GCM_TAG_BYTES:
+                raise GardShardVerificationError("invalid GARD ciphertext")
+            checked_shards.append(
+                {
+                    "index": shard_index,
+                    "count": declared_count,
+                    "salt": salt,
+                    "nonce": nonce,
+                    "ciphertext": ciphertext,
+                }
+            )
 
     return {
         "raw": out,
+        "version": version,
         "model_digest": model_digest,
         "shard_count": shard_count,
         "shards": checked_shards,
@@ -608,50 +767,86 @@ def verify_envelope(
     secret: str | bytes | bytearray | None = None,
     config: GardShardConfig | None = None,
 ) -> dict[str, Any]:
-    """Verify every GARD MAC before decryption and return safe diagnostics."""
+    """Authenticate every GARD shard before use and return safe diagnostics.
+
+    For v1 this checks each HMAC without decrypting. For v2 the AEAD tag can
+    only be checked by opening the shard, so this performs the GCM open and
+    discards the plaintext.
+
+    ``verify_digest=False`` skips this pass. Note the asymmetry that makes v2
+    stricter: for v1 that genuinely disabled integrity checking and a tampered
+    envelope would still decrypt, whereas a v2 shard is authenticated inside
+    the AEAD primitive on every open, so tampering is always rejected no matter
+    how this flag is set.
+    """
 
     cfg = _config(config)
     checked = _normalise_envelope(envelope, cfg)
+    protocol = checked["raw"]["protocol"]
     if not cfg.verify_digest:
         return {
             "verified": False,
             "verification_disabled": True,
-            "protocol": GARD_PROTOCOL,
+            "protocol": protocol,
             "shard_count": checked["shard_count"],
             "model_digest": checked["raw"]["model_digest"],
         }
 
     grid_secret = _secret_bytes(secret, cfg)
     for shard in checked["shards"]:
-        _, mac_key = _derive_shard_keys(
-            grid_secret,
-            salt=shard["salt"],
-            model_digest=checked["model_digest"],
-            shard_index=shard["index"],
-            shard_count=checked["shard_count"],
-            config=cfg,
-        )
-        expected = hmac.new(
-            mac_key,
-            _mac_preimage(
-                model_digest=checked["model_digest"],
+        if checked["version"] == GARD_PROTOCOL_VERSION_V1:
+            _, mac_key = _derive_shard_keys(
+                grid_secret,
                 salt=shard["salt"],
+                model_digest=checked["model_digest"],
                 shard_index=shard["index"],
                 shard_count=checked["shard_count"],
-                iv=shard["iv"],
-                ciphertext=shard["ciphertext"],
                 config=cfg,
-                compression_level=checked["compression_level"],
-            ),
-            hashlib.sha256,
-        ).digest()
-        if not hmac.compare_digest(expected, shard["mac"]):
-            raise GardShardVerificationError("GARD envelope authentication failed")
+            )
+            expected = hmac.new(
+                mac_key,
+                _mac_preimage(
+                    model_digest=checked["model_digest"],
+                    salt=shard["salt"],
+                    shard_index=shard["index"],
+                    shard_count=checked["shard_count"],
+                    iv=shard["iv"],
+                    ciphertext=shard["ciphertext"],
+                    config=cfg,
+                    compression_level=checked["compression_level"],
+                ),
+                hashlib.sha256,
+            ).digest()
+            if not hmac.compare_digest(expected, shard["mac"]):
+                raise GardShardVerificationError("GARD envelope authentication failed")
+        else:
+            key = _derive_shard_key_gcm(
+                grid_secret,
+                salt=shard["salt"],
+                model_digest=checked["model_digest"],
+                shard_index=shard["index"],
+                shard_count=checked["shard_count"],
+                config=cfg,
+            )
+            _decrypt_gcm(
+                shard["ciphertext"],
+                key,
+                shard["nonce"],
+                _gcm_aad(
+                    model_digest=checked["model_digest"],
+                    salt=shard["salt"],
+                    shard_index=shard["index"],
+                    shard_count=checked["shard_count"],
+                    nonce=shard["nonce"],
+                    config=cfg,
+                    compression_level=checked["compression_level"],
+                ),
+            )
 
     return {
         "verified": True,
         "verification_disabled": False,
-        "protocol": GARD_PROTOCOL,
+        "protocol": protocol,
         "shard_count": checked["shard_count"],
         "model_digest": checked["raw"]["model_digest"],
     }
@@ -665,12 +860,26 @@ def encrypt_json(
     config: GardShardConfig | None = None,
     fixed_salts: Sequence[bytes] | None = None,
     fixed_ivs: Sequence[bytes] | None = None,
+    fixed_nonces: Sequence[bytes] | None = None,
 ) -> dict[str, Any]:
     """Compress, split, encrypt, and authenticate JSON as a GARD envelope.
 
-    ``fixed_salts`` and ``fixed_ivs`` exist solely for deterministic public
+    Writes the current protocol (``gard-shard/v2``, AES-256-GCM). Reading
+    ``gard-shard/v1`` envelopes remains supported via :func:`decrypt_json`.
+
+    ``fixed_salts`` and ``fixed_nonces`` exist solely for deterministic public
     interoperability fixtures.  Production callers must leave them unset so
     each encrypted shard obtains fresh random material from ``secrets``.
+
+    A GCM nonce must never repeat under the same key. Every shard here derives
+    a distinct key (fresh random salt per shard through HKDF), so nonce reuse
+    across shards is not a cross-shard risk -- but supplying ``fixed_nonces``
+    together with ``fixed_salts`` and a fixed secret does pin a single
+    (key, nonce) pair, which is why both are restricted to test fixtures.
+
+    ``fixed_ivs`` is accepted as a deprecated alias for ``fixed_nonces``; v2
+    uses a 12-byte GCM nonce rather than a 16-byte CBC IV, so entries are
+    truncated to the nonce length.
     """
 
     cfg = _config(config)
@@ -688,14 +897,18 @@ def encrypt_json(
     chunks = _split_bytes(compressed, cfg.shard_count)
     if fixed_salts is not None and len(fixed_salts) < len(chunks):
         raise GardShardError("fixed_salts must provide one salt per shard")
-    if fixed_ivs is not None and len(fixed_ivs) < len(chunks):
-        raise GardShardError("fixed_ivs must provide one IV per shard")
+    # fixed_ivs is the deprecated v1 spelling; v2 nonces are shorter, so the
+    # supplied material is truncated to the GCM nonce length.
+    if fixed_nonces is None and fixed_ivs is not None:
+        fixed_nonces = [bytes(v)[:_GCM_NONCE_BYTES] for v in fixed_ivs]
+    if fixed_nonces is not None and len(fixed_nonces) < len(chunks):
+        raise GardShardError("fixed_nonces must provide one nonce per shard")
 
     encoded_shards: list[dict[str, Any]] = []
     for index, chunk in enumerate(chunks):
         salt = _fixed_material(fixed_salts, index, _SALT_BYTES, "salt")
-        iv = _fixed_material(fixed_ivs, index, _IV_BYTES, "IV")
-        encryption_key, mac_key = _derive_shard_keys(
+        nonce = _fixed_material(fixed_nonces, index, _GCM_NONCE_BYTES, "nonce")
+        encryption_key = _derive_shard_key_gcm(
             grid_secret,
             salt=salt,
             model_digest=model_digest,
@@ -703,30 +916,28 @@ def encrypt_json(
             shard_count=len(chunks),
             config=cfg,
         )
-        ciphertext = _encrypt_cbc(chunk, encryption_key, iv)
-        mac = hmac.new(
-            mac_key,
-            _mac_preimage(
+        ciphertext = _encrypt_gcm(
+            chunk,
+            encryption_key,
+            nonce,
+            _gcm_aad(
                 model_digest=model_digest,
                 salt=salt,
                 shard_index=index,
                 shard_count=len(chunks),
-                iv=iv,
-                ciphertext=ciphertext,
+                nonce=nonce,
                 config=cfg,
                 compression_level=cfg.compression_level,
             ),
-            hashlib.sha256,
-        ).digest()
+        )
         encoded_shards.append(
             {
                 "index": index,
                 "count": len(chunks),
                 "salt_b64": _b64_encode(salt),
-                "iv_b64": _b64_encode(iv),
+                "nonce_b64": _b64_encode(nonce),
                 "ciphertext_b64": _b64_encode(ciphertext),
                 "ciphertext_sha256": sha256_hex(ciphertext),
-                "hmac_sha256_b64": _b64_encode(mac),
             }
         )
 
@@ -737,8 +948,8 @@ def encrypt_json(
         "domain": cfg.domain,
         "encoding": "base64",
         "compression": {"algorithm": "zlib", "level": int(cfg.compression_level)},
-        "encryption": {"algorithm": "AES-256-CBC", "padding": "PKCS#7"},
-        "authentication": {"algorithm": "HMAC-SHA256", "mode": "encrypt-then-mac"},
+        "encryption": {"algorithm": "AES-256-GCM", "padding": "none"},
+        "authentication": {"algorithm": "AES-256-GCM", "mode": "aead"},
         "model_context": context,
         "model_digest": model_digest_text,
         "plaintext_sha256": sha256_hex(plain),
@@ -771,7 +982,11 @@ def decrypt_json(
     config: GardShardConfig | None = None,
     expected_model_context: Mapping[str, Any] | None = None,
 ) -> Any:
-    """Verify, decrypt, decompress, and deserialize a GARD JSON envelope."""
+    """Verify, decrypt, decompress, and deserialize a GARD JSON envelope.
+
+    Accepts both the current ``gard-shard/v2`` (AES-256-GCM) and the legacy
+    ``gard-shard/v1`` (AES-256-CBC + HMAC-SHA256) protocols.
+    """
 
     cfg = _config(config)
     checked = _normalise_envelope(envelope, cfg)
@@ -780,20 +995,52 @@ def decrypt_json(
         if not hmac.compare_digest(expected, checked["raw"]["model_digest"]):
             raise GardShardVerificationError("GARD model context does not match the envelope")
 
-    # This call performs every MAC check before a CBC decrypt/decompression path.
-    verify_envelope(checked["raw"], secret=secret, config=cfg)
+    is_v1 = checked["version"] == GARD_PROTOCOL_VERSION_V1
+    if is_v1:
+        # v1 has no integrity inside the cipher, so every MAC must be checked
+        # before the CBC decrypt/decompression path is entered at all. v2 skips
+        # this pass because the GCM open below authenticates natively -- running
+        # it here would just decrypt each shard twice.
+        verify_envelope(checked["raw"], secret=secret, config=cfg)
+
     grid_secret = _secret_bytes(secret, cfg)
     recovered_chunks: list[bytes] = []
     for shard in checked["shards"]:
-        encryption_key, _ = _derive_shard_keys(
-            grid_secret,
-            salt=shard["salt"],
-            model_digest=checked["model_digest"],
-            shard_index=shard["index"],
-            shard_count=checked["shard_count"],
-            config=cfg,
-        )
-        recovered_chunks.append(_decrypt_cbc(shard["ciphertext"], encryption_key, shard["iv"]))
+        if is_v1:
+            encryption_key, _ = _derive_shard_keys(
+                grid_secret,
+                salt=shard["salt"],
+                model_digest=checked["model_digest"],
+                shard_index=shard["index"],
+                shard_count=checked["shard_count"],
+                config=cfg,
+            )
+            recovered_chunks.append(_decrypt_cbc(shard["ciphertext"], encryption_key, shard["iv"]))
+        else:
+            encryption_key = _derive_shard_key_gcm(
+                grid_secret,
+                salt=shard["salt"],
+                model_digest=checked["model_digest"],
+                shard_index=shard["index"],
+                shard_count=checked["shard_count"],
+                config=cfg,
+            )
+            recovered_chunks.append(
+                _decrypt_gcm(
+                    shard["ciphertext"],
+                    encryption_key,
+                    shard["nonce"],
+                    _gcm_aad(
+                        model_digest=checked["model_digest"],
+                        salt=shard["salt"],
+                        shard_index=shard["index"],
+                        shard_count=checked["shard_count"],
+                        nonce=shard["nonce"],
+                        config=cfg,
+                        compression_level=checked["compression_level"],
+                    ),
+                )
+            )
 
     compressed = b"".join(recovered_chunks)
     if len(compressed) != checked["compressed_bytes"]:
@@ -836,10 +1083,17 @@ def read_envelope_json(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+# Assignment proofs are an independent HMAC-SHA256 signature over catalog
+# assignments -- they carry no ciphertext and are untouched by the envelope's
+# CBC->GCM migration. Their bound protocol string stays pinned to v1 so proofs
+# already issued continue to verify; only the envelope protocol advanced.
+_ASSIGNMENT_PROOF_PROTOCOL = GARD_PROTOCOL_V1
+
+
 def _assignment_proof_key(secret: bytes, assignment_digest: bytes, config: GardShardConfig) -> bytes:
     info = _binary_record(
         b"gard-assignment-proof-hkdf/v1",
-        GARD_PROTOCOL.encode("utf-8"),
+        _ASSIGNMENT_PROOF_PROTOCOL.encode("utf-8"),
         config.domain.encode("utf-8"),
         assignment_digest,
     )
@@ -854,7 +1108,7 @@ def _assignment_proof_key(secret: bytes, assignment_digest: bytes, config: GardS
 def _assignment_proof_preimage(assignment_digest: bytes, config: GardShardConfig) -> bytes:
     return _binary_record(
         b"gard-assignment-proof-mac/v1",
-        GARD_PROTOCOL.encode("utf-8"),
+        _ASSIGNMENT_PROOF_PROTOCOL.encode("utf-8"),
         GARD_ASSIGNMENT_PROOF_KIND.encode("utf-8"),
         config.domain.encode("utf-8"),
         assignment_digest,
@@ -883,7 +1137,7 @@ def sign_assignment_proof(
         hashlib.sha256,
     ).digest()
     return {
-        "protocol": GARD_PROTOCOL,
+        "protocol": _ASSIGNMENT_PROOF_PROTOCOL,
         "kind": GARD_ASSIGNMENT_PROOF_KIND,
         "domain": cfg.domain,
         "assignment": normalized_assignment,
@@ -908,7 +1162,7 @@ def verify_assignment_proof(
     try:
         if not isinstance(proof, Mapping):
             return False
-        if proof.get("protocol") != GARD_PROTOCOL:
+        if proof.get("protocol") != _ASSIGNMENT_PROOF_PROTOCOL:
             return False
         if proof.get("kind") != GARD_ASSIGNMENT_PROOF_KIND:
             return False
@@ -957,9 +1211,10 @@ def build_hub_manifest(
             "domain": cfg.domain,
             "canonical_payload": "UTF-8 JSON, sorted keys, compact separators",
             "compression": "zlib before sharding",
-            "encryption": "AES-256-CBC with PKCS#7 padding",
-            "authentication": "HMAC-SHA256 Encrypt-then-MAC",
+            "encryption": "AES-256-GCM (no padding)",
+            "authentication": "AES-256-GCM AEAD, 128-bit tag",
             "kdf": "HKDF-SHA256 per shard",
+            "reads_legacy": f"{GARD_PROTOCOL_V1} (AES-256-CBC + HMAC-SHA256)",
         },
         "security": {
             "grid_secret_env": cfg.secret_env,
@@ -1012,11 +1267,18 @@ def _selftest() -> dict[str, Any]:
         model_context=context,
         config=GardShardConfig(shard_count=2),
         fixed_salts=[bytes(range(32)), bytes(range(32, 64))],
-        fixed_ivs=[bytes(range(16)), bytes(range(16, 32))],
+        fixed_nonces=[bytes(range(12)), bytes(range(12, 24))],
     )
     assert decrypt_json(envelope, secret=fixture_secret) == payload
+
+    # Flipping a ciphertext bit must fail the AEAD tag. The ciphertext digest is
+    # recomputed so the envelope stays internally consistent and the rejection
+    # is demonstrably the GCM tag rather than the cheaper sha256 precheck.
     tampered = json.loads(json.dumps(envelope))
-    tampered["shards"][0]["hmac_sha256_b64"] = _b64_encode(b"\x00" * _HMAC_BYTES)
+    raw = bytearray(base64.b64decode(tampered["shards"][0]["ciphertext_b64"]))
+    raw[0] ^= 0x01
+    tampered["shards"][0]["ciphertext_b64"] = _b64_encode(bytes(raw))
+    tampered["shards"][0]["ciphertext_sha256"] = sha256_hex(bytes(raw))
     try:
         decrypt_json(tampered, secret=fixture_secret)
     except GardShardVerificationError:
@@ -1051,6 +1313,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 __all__ = [
     "GARD_PROTOCOL",
     "GARD_PROTOCOL_VERSION",
+    "GARD_PROTOCOL_V1",
+    "GARD_PROTOCOL_VERSION_V1",
     "GARD_SHARD_DOMAIN",
     "GRID_SECRET_ENV",
     "VERIFY_DIGEST_ENV",

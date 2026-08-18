@@ -15,8 +15,9 @@ src/quipu/          Python model core (package: src.quipu)
   system_entirety.py      System Entirety self-model (bit-flip parity, certainty axes)
   mesh_entirety.py        Mesh-level entirety aggregation
   asset_resource_mesh.py  Physical realization - compute peers/assets as graph substrate
-  gard_shard_model.py     gard-shard/v1 - canonical JSON > zlib > AES-256-CBC > HMAC-SHA256,
-                          per-shard HKDF keys, fail-closed verification, selftest CLI
+  gard_shard_model.py     gard-shard/v2 - canonical JSON > zlib > AES-256-GCM (AEAD),
+                          per-shard HKDF keys, fail-closed verification, selftest CLI;
+                          still reads legacy gard-shard/v1 (AES-256-CBC + HMAC-SHA256)
   neural_plasticity.py    Plasticity dynamics
   self_realization_loop.py  Realization loop (v0.24.1 sigmoidal eligibility lineage)
   radam_optimizer.py      rADAM optimizer
