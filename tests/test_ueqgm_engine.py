@@ -28,11 +28,17 @@ from src.quipu.ueqgm_engine import (
     _SICI_SCALE_FACTOR,
     _SICI_SERIES_CUTOFF,
     _UEQGM_RUNTIME_KEY,
+    PLANCK18_CENSUS,
     _raw_sici,
     coherence_to_phi,
+    corpus_coverage_score,
+    cosine_modulation,
+    cosmological_census_weights,
+    edge_per_node_ratio,
     entropic_bayesian_step,
     floquet_modulation_factor,
     get_adaptive_runtime,
+    hawking_information_remnant_score,
     holographic_entropy,
     metric_perturbation,
     phase_evolution_total,
@@ -274,23 +280,35 @@ def test_wavefunction_overlap_range_zero_to_one():
         assert 0.0 <= ov <= 1.0
 
 
-# ── floquet_modulation_factor ─────────────────────────────────────────────────
-
-def test_floquet_modulation_factor_at_zero_is_one():
-    """cos(0) = 1 — full coupling at t=0."""
+def test_cosine_modulation_zero_phase_is_one():
+    assert cosine_modulation(0.0, omega=1.0) == pytest.approx(1.0)
     assert floquet_modulation_factor(0.0, omega=1.0) == pytest.approx(1.0)
 
 
-def test_floquet_modulation_factor_at_half_period_is_minus_one():
-    """cos(ω · π/ω) = cos(π) = −1."""
+def test_cosine_modulation_zero_frequency_is_one():
+    assert cosine_modulation(5.0, omega=0.0) == pytest.approx(1.0)
+    assert floquet_modulation_factor(5.0, omega=0.0) == pytest.approx(1.0)
+
+
+def test_cosine_modulation_half_turn_is_negative_one():
+    assert cosine_modulation(math.pi, omega=1.0) == pytest.approx(-1.0, abs=1e-9)
+    assert floquet_modulation_factor(math.pi, omega=1.0) == pytest.approx(-1.0, abs=1e-9)
+
+
+def test_cosine_modulation_is_periodic():
     omega = 2.5
-    assert floquet_modulation_factor(math.pi / omega, omega) == pytest.approx(-1.0, abs=1e-10)
+    t = 0.37
+    period = (2.0 * math.pi) / omega
+    assert cosine_modulation(t, omega) == pytest.approx(
+        cosine_modulation(t + period, omega),
+        abs=1e-9,
+    )
 
 
-def test_floquet_modulation_factor_period():
-    """cos(ω · 2π/ω) = cos(2π) = 1 — full period restores coupling."""
-    omega = 3.7
-    assert floquet_modulation_factor(2 * math.pi / omega, omega) == pytest.approx(1.0, abs=1e-10)
+def test_cosine_modulation_is_bounded():
+    for t in [0.0, 0.5, 1.0, 2.0, math.pi, 5.0, 10.0, 25.0]:
+        val = cosine_modulation(t, omega=1.0)
+        assert -1.0 <= val <= 1.0
 
 
 def test_tantalum_intermediary_binding_is_bounded():
@@ -330,22 +348,85 @@ def test_tantalum_intermediary_binding_tracks_weyl_alignment():
     assert aligned["binding_gain"] > offset["binding_gain"]
 
 
-# ── holographic_entropy ───────────────────────────────────────────────────────
+# ── edge_per_node_ratio / holographic_entropy alias ───────────────────────────
 
-def test_holographic_entropy_scales_with_edges():
-    """More boundary edges → higher entropy."""
+def test_edge_per_node_ratio_scales_with_edges():
+    assert edge_per_node_ratio(10, 5) > edge_per_node_ratio(5, 5)
     assert holographic_entropy(10, 5) > holographic_entropy(5, 5)
 
 
-def test_holographic_entropy_zero_nodes():
-    """n_nodes=0 → S = n_edges (boundary = volume)."""
+def test_edge_per_node_ratio_zero_nodes_uses_guard():
+    assert edge_per_node_ratio(7, 0) == pytest.approx(7.0)
     assert holographic_entropy(7, 0) == pytest.approx(7.0)
 
 
-def test_holographic_entropy_non_negative():
-    """Entropy must always be ≥ 0."""
+def test_edge_per_node_ratio_edgeless_is_zero():
+    assert edge_per_node_ratio(0, 100) == 0.0
     assert holographic_entropy(0, 100) == 0.0
-    assert holographic_entropy(50, 200) >= 0.0
+
+
+def test_edge_per_node_ratio_is_plain_ratio():
+    assert edge_per_node_ratio(3, 2) == pytest.approx(1.0)
+    assert edge_per_node_ratio(10, 4) == pytest.approx(2.0)
+
+
+def test_edge_per_node_ratio_ignores_legacy_degree_pair_sum_argument():
+    assert edge_per_node_ratio(3, 2, degree_pair_sum=0.75) == pytest.approx(1.0)
+    assert holographic_entropy(3, 2, degree_pair_sum=0.75) == pytest.approx(1.0)
+
+
+# ── corpus_coverage_score / hawking_information_remnant_score alias ──────────
+
+def test_corpus_coverage_reference_collection_matches_saturating_ratio():
+    expected = 64.0 / 65.0
+    assert corpus_coverage_score(16, 4) == pytest.approx(expected)
+    assert hawking_information_remnant_score(16, 4) == pytest.approx(expected)
+
+
+def test_corpus_coverage_blends_log_size_term():
+    base = 64.0 / 65.0
+    expected = 0.70 * base + 0.30
+    assert corpus_coverage_score(16, 4, 15.0) == pytest.approx(expected)
+    assert hawking_information_remnant_score(16, 4, 15.0) == pytest.approx(expected)
+
+
+def test_corpus_coverage_monotone_in_datasets():
+    scores = [corpus_coverage_score(n, 4) for n in (1, 4, 16, 64, 256)]
+    assert scores == sorted(scores)
+    assert all(0.0 <= s <= 1.0 for s in scores)
+
+
+def test_corpus_coverage_empty_collection_is_zero():
+    assert corpus_coverage_score(0, 4) == 0.0
+    assert hawking_information_remnant_score(-3, 4) == 0.0
+
+
+def test_corpus_coverage_large_size_term_stays_clipped():
+    assert 0.0 <= corpus_coverage_score(8, 4, 10_000.0) <= 1.0
+    assert corpus_coverage_score(8, 4, 10_000.0) >= corpus_coverage_score(8, 4, 0.0)
+
+
+# ── cosmological_census_weights (Planck 2018) ─────────────────────────────
+
+def test_census_weights_sum_to_one():
+    assert sum(cosmological_census_weights()) == pytest.approx(1.0)
+
+
+def test_census_weights_are_the_measured_hierarchy():
+    """Ω_Λ > Ω_c > Ω_b > Ω_ν > Ω_γ — the universe as Planck measured it."""
+    w_h, w_f, w_o, w_p, w_w = cosmological_census_weights()
+    assert w_h > w_f > w_o > w_p > w_w > 0.0
+    assert w_h == pytest.approx(0.6847, abs=1e-3)   # dark energy
+    assert w_f == pytest.approx(0.2645, abs=1e-3)   # cold dark matter
+    assert w_o == pytest.approx(0.0493, abs=1e-3)   # baryons
+
+
+def test_census_matches_published_planck_values():
+    assert PLANCK18_CENSUS["dark_energy"] == pytest.approx(0.6847)
+    assert PLANCK18_CENSUS["cold_dark_matter"] == pytest.approx(0.2645)
+    assert PLANCK18_CENSUS["baryons"] == pytest.approx(0.0493)
+    assert PLANCK18_CENSUS["neutrinos"] == pytest.approx(0.0014)
+    assert PLANCK18_CENSUS["photons"] == pytest.approx(5.4e-5)
 
 
 # ── metric_perturbation ───────────────────────────────────────────────────────

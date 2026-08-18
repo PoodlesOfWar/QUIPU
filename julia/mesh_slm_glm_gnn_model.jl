@@ -428,18 +428,52 @@ function wavefunction_overlap(a, b)::Float64
 end
 
 """
-    floquet_modulation_factor(t, omega) -> Float64
+    besselj0_as(x) -> Float64
 
-Port of `ueqgm_engine.floquet_modulation_factor`: `cos(ω·t)`.
+Bessel `J₀(x)` via the Abramowitz & Stegun 9.4.1 / 9.4.3 polynomials
+(≲ 5×10⁻⁸ error) — dependency-free port of `ueqgm_engine._bessel_j0`.
 """
-floquet_modulation_factor(t::Real, omega::Real) = cos(omega * t)
+function besselj0_as(x::Real)::Float64
+    ax = abs(Float64(x))
+    if ax <= 3.0
+        y = (ax / 3.0)^2
+        return 1.0 + y * (-2.2499997 + y * (1.2656208 + y * (-0.3163866 +
+            y * (0.0444479 + y * (-0.0039444 + y * 0.0002100)))))
+    end
+    u = 3.0 / ax
+    f0 = 0.79788456 + u * (-0.00000077 + u * (-0.00552740 + u * (-0.00009512 +
+        u * (0.00137237 + u * (-0.00072805 + u * 0.00014476)))))
+    theta0 = ax - 0.78539816 + u * (-0.04166397 + u * (-0.00003954 +
+        u * (0.00262573 + u * (-0.00054125 + u * (-0.00029333 +
+        u * 0.00013558)))))
+    return f0 * cos(theta0) / sqrt(ax)
+end
 
 """
-    holographic_entropy(n_edges, n_nodes) -> Float64
+    floquet_modulation_factor(drive, omega) -> Float64
 
-Port of `ueqgm_engine.holographic_entropy`: `n_edges / (n_nodes + 1)`.
+Port of `ueqgm_engine.floquet_modulation_factor`: Floquet effective-coupling
+renormalization `J₀(A/ω)` (dynamic localization, Dunlap-Kenkre 1986);
+`1.0` when `ω = 0`.
 """
-holographic_entropy(n_edges::Real, n_nodes::Real) = n_edges / (n_nodes + 1)
+floquet_modulation_factor(drive::Real, omega::Real) =
+    omega == 0.0 ? 1.0 : besselj0_as(drive / omega)
+
+"""
+    holographic_entropy(n_edges, n_nodes, degree_pair_sum=nothing) -> Float64
+
+Port of `ueqgm_engine.holographic_entropy`: von Neumann graph entropy,
+HEHW (2012) quadratic approximation `1 − 1/n − Σ/(n²)` in `[0, 1]`;
+mean-degree closed form when `degree_pair_sum === nothing`.
+"""
+function holographic_entropy(
+    n_edges::Real, n_nodes::Real, degree_pair_sum::Union{Nothing,Real} = nothing,
+)::Float64
+    (n_nodes <= 0 || n_edges <= 0) && return 0.0
+    n = float(n_nodes)
+    dps = degree_pair_sum === nothing ? (n * n) / (4.0 * float(n_edges)) : float(degree_pair_sum)
+    return clip01(1.0 - (1.0 / n) - (dps / (n * n)))
+end
 
 """
     metric_perturbation(mass_eff, r) -> Float64
@@ -496,15 +530,16 @@ end
                   phase_weight=1.0, coherence_depth=0, weyl_phase=0.0,
                   vocab_limit, metric_mass_scale=METRIC_MASS_SCALE) -> Float64
 
-`field = 0.30·H + 0.25·F + 0.25·O + 0.10·P + 0.10·W` — see the module
-docstring's architecture table. Port of `mesh_slm._mesh_field_8d`.
+`field = Ω_Λ·H + Ω_c·F + Ω_b·O + Ω_ν·P + Ω_γ·W` (normalised) — the Planck
+2018 cosmological census weights (Aghanim et al. 2020, A&A 641, A6); see the
+module docstring's architecture table. Port of `mesh_slm._mesh_field_8d`.
 """
 function mesh_field_8d(;
     n_vocab::Integer, n_quipu_edges::Integer, mean_embed7, mesh_state7,
     phase_weight::Real = 1.0, coherence_depth::Integer = 0, weyl_phase::Real = 0.0,
     vocab_limit::Integer, metric_mass_scale::Real = METRIC_MASS_SCALE,
 )::Float64
-    H = clip01(holographic_entropy(n_quipu_edges, n_vocab) / 8.0)
+    H = holographic_entropy(n_quipu_edges, n_vocab)
 
     phi = coherence_to_phi(coherence_depth)
 
@@ -522,7 +557,9 @@ function mesh_field_8d(;
     raw_W = metric_perturbation(vocab_fill * metric_mass_scale, r)
     W = clip01(raw_W * r)
 
-    return clip01(0.30 * H + 0.25 * F + 0.25 * O + 0.10 * P + 0.10 * W)
+    # Planck 2018 census weights, normalised — measured, not hand-tuned.
+    total = 0.6847 + 0.2645 + 0.0493 + 0.0014 + 5.4e-5
+    return clip01((0.6847 * H + 0.2645 * F + 0.0493 * O + 0.0014 * P + 5.4e-5 * W) / total)
 end
 
 # ---------------------------------------------------------------------------

@@ -1,15 +1,15 @@
-"""corpus_ingest — stream open LLM-scale corpora and *holographically compress*
-them into the QUIPU mesh (The Well mechanism).
+"""corpus_ingest — stream open LLM-scale corpora and distill them into the
+QUIPU mesh (The Well mechanism).
 
 The real condensation mechanism
 -------------------------------
-QUIPU already implements "The Well" as **holographic compression**: an entire
-learning cycle is distilled to a 5-float Newman-Penrose Weyl tensor Ψ₀–Ψ₄
-(~50 bytes as JSON, or a 20-byte packed ``5 × Float32 LE`` record before
-encoding), and the achieved compression is scored by ``mesh_compaction_summary``
-(compaction ratio + scalar) and ``hawking_information_remnant_score`` (the
-Bekenstein-Hawking information surface). See ``ueqgm_engine`` and the Julia
-``mesh_compression_model``.
+QUIPU already implements "The Well" as **boundary distillation**: an entire
+learning cycle is distilled to a fixed 5-float record Ψ₀–Ψ₄ (~50 bytes as
+JSON, or a 20-byte packed ``5 × Float32 LE`` record before base64 encoding /
+28 bytes as actually stored), and the achieved compression is scored by
+``mesh_compaction_summary`` (compaction ratio + scalar) and
+``corpus_coverage_score`` (a saturating coverage statistic). See
+``ueqgm_engine`` and the Julia ``mesh_compression_model``.
 
 This module drives that mechanism from live data:
 
@@ -19,16 +19,16 @@ This module drives that mechanism from live data:
    (tokens → 7-D torus, Hebbian quipu edges), settled by ``train_round``.
 3. **Compress** each cycle to its Weyl tensor with ``weyl_scalar_tensor`` over
    five observables (signal flux, topic entropy, corpus volume, mesh alignment,
-   Hawking remnant), persist it to ``brain_kv["learnings:weyl_tensor"]`` and, as
-   base64 text (``brain_kv`` values are TEXT, so the 20 raw packed bytes become
-   28 stored bytes), report the compaction ratio/scalar.
+   corpus coverage), persist it to ``brain_kv["learnings:weyl_tensor"]`` and,
+   as base64 text (``brain_kv`` values are TEXT, so the 20 raw packed bytes
+   become 28 stored bytes), report the compaction ratio/scalar.
 4. **Decompress** — the Weyl tensor re-radiates dynamics: ``langevin_sigma_from_weyl``
    turns the current/previous tensors back into the diffusion reference σ that
    drives emission. The tensor is the boundary encoding; σ is what it reconstitutes.
 
 Honest scope
 ------------
-Holographic compression here is *boundary distillation*, not literal document
+Boundary distillation here is *not* literal document
 reconstruction. You cannot decompress the Weyl tensor back into the original
 web pages — the point (as with Hawking radiation) is that the irreducible
 information remnant is retained in ~28–50 bytes per cycle as actually stored
@@ -58,7 +58,7 @@ from typing import Callable, Iterator, Sequence
 
 from . import mesh_slm
 from .ueqgm_engine import (
-    hawking_information_remnant_score,
+    corpus_coverage_score,
     mesh_compaction_summary,
     weyl_scalar_tensor,
 )
@@ -398,7 +398,7 @@ def compress_cycle_to_weyl(
     * Ψ₁ topic entropy  ← normalised Shannon entropy of salient terms
     * Ψ₂ corpus volume  ← documents this cycle (saturating ρ/(ρ+1))
     * Ψ₃ mesh alignment ← mesh wavefunction overlap (from state_summary)
-    * Ψ₄ Hawking remnant ← information-remnant score over the source set
+    * Ψ₄ corpus coverage ← coverage score over the source set
     """
     n_docs = len(saliences)
     signal_flux = (sum(saliences) / n_docs) if n_docs else 0.0
@@ -414,7 +414,7 @@ def compress_cycle_to_weyl(
         mesh_alignment, vocab_size, quipu_edges = 0.0, 0, 0
 
     total_tb = approx_source_bytes / (1024 ** 4)
-    remnant = hawking_information_remnant_score(
+    coverage = corpus_coverage_score(
         n_datasets=max(1, len(source_counts)),
         n_spatial_dims=_THE_WELL_SPATIAL_DIMS,
         total_tb=total_tb,
@@ -425,7 +425,7 @@ def compress_cycle_to_weyl(
         topic_entropy=topic_entropy,
         corpus_volume=float(n_docs),
         mesh_alignment=mesh_alignment,
-        remnant_score=remnant,
+        remnant_score=coverage,
     )
 
     # Compaction achieved against the actual mesh footprint.
