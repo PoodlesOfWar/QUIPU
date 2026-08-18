@@ -106,7 +106,7 @@ PLANCK18_CENSUS: dict[str, float] = {
     "neutrinos": _PLANCK18_OMEGA_NEUTRINO,
     "photons": _PLANCK18_OMEGA_PHOTON,
 }
-"""Planck 2018 density parameters (Aghanim et al. 2020, A&A 641, A6)."""
+# Planck 2018 density parameters (Aghanim et al. 2020, A&A 641, A6).
 
 # Page-curve reference area: The Well's 16 datasets × 4 effective dimensions.
 # A corpus of exactly this dimensionless area sits at the Page time (f = 1/2).
