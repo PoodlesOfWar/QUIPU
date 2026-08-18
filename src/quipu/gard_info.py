@@ -26,7 +26,14 @@ import math
 
 # GARD record floors (information science naming).
 GARD_STATE_JSON_BYTES = 50     # 5-scalar state as canonical JSON
-GARD_STATE_PACKED_BYTES = 20   # 5 x Float32 LE packed record
+GARD_STATE_PACKED_BYTES = 20   # 5 x Float32 LE, raw pre-encoding pack (struct.pack("<5f", ...))
+
+# corpus_ingest._persist_weyl never writes the 20 raw bytes above to brain_kv --
+# brain_kv values are TEXT, so the packed record is base64-encoded first
+# (learnings:weyl_tensor_packed_b64). That encoding inflates 20 bytes to
+# ceil(20/3)*4 = 28 bytes of stored text; GARD_STATE_STORED_BYTES is that
+# actual on-disk footprint, not the pre-encoding pack size.
+GARD_STATE_STORED_BYTES = 4 * -(-GARD_STATE_PACKED_BYTES // 3)  # ceil(20/3)*4 = 28
 
 
 def fisher_information_gard(sigma: float, n_samples: int = 1) -> float:
@@ -116,8 +123,8 @@ def interstitial_bits(
     if actual_bits_per_component is not None:
         actual_bpc = float(actual_bits_per_component)
     else:
-        # Float32 packed record: 4 bytes × 8 bits per component.
-        actual_bpc = (GARD_STATE_PACKED_BYTES * 8.0) / max(1, int(n_components))
+        # Base64-encoded packed record, as actually written to brain_kv.
+        actual_bpc = (GARD_STATE_STORED_BYTES * 8.0) / max(1, int(n_components))
     actual_bits = actual_bpc * n_comp
 
     gap = max(0.0, actual_bits - floor_bits)
@@ -182,6 +189,7 @@ def gard_floor_bytes_from_state(
 __all__ = [
     "GARD_STATE_JSON_BYTES",
     "GARD_STATE_PACKED_BYTES",
+    "GARD_STATE_STORED_BYTES",
     "fisher_information_gard",
     "cramer_rao_bound_gard",
     "gard_floor_bytes",

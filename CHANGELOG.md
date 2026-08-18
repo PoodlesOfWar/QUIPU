@@ -4,6 +4,37 @@ All notable changes to **Supply Chain Brain** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.28.0] GARD Shard AES-256-GCM End to End & Si/Ci Numerical Correctness (2026-08-18)
+
+### Changed — wire protocol
+
+- **`gard-shard/v2` (AES-256-GCM).** `gard_shard_model.encrypt_json` now seals each shard with one AEAD primitive instead of AES-256-CBC + PKCS#7 with a separate HMAC-SHA256 pass. Removes the padding-oracle surface, drops the second HKDF key, replaces the 32-byte HMAC with a 16-byte tag, and cuts raw per-shard crypto overhead **144 → 110 bytes**. The context v1 bound into its MAC preimage is now GCM *additional authenticated data*, so reordered shards, substituted nonces and altered compression levels all fail the tag.
+- **v1 stays fully readable.** `decrypt_json` and `verify_envelope` accept both protocols; only `encrypt_json` is v2-only. Because the v1 HKDF info and MAC preimage both bind the protocol string, those paths pin `GARD_PROTOCOL_V1` rather than reading the advanced constant — bumping it alone would have silently changed v1 key derivation and broken every existing envelope. Assignment proofs are an independent HMAC mechanism carrying no ciphertext and stay pinned to v1, so proofs already issued still verify.
+- **Julia peer ported to v2**, restoring cross-language parity (it was v1-only and could not read anything Python wrote). Nettle.jl exposes no GCM, so GCM is built from Nettle's AES per NIST SP 800-38D. Because hand-built crypto must prove itself, the identical algorithm was first validated in Python against three NIST CAVP AES-256-GCM known-answer vectors and 300 randomised differential cases against a vetted implementation, then transliterated; `selftest()` re-runs those vectors in Julia so the port self-validates on first run.
+
+### Fixed
+
+- **Si/Ci divergence past |φ| ≈ 2π.** `_raw_sici`'s non-scipy fallback used a fixed-order power series valid only for small argument, but `sici_axial_decay` is called with φ = π/4 + kπ growing without bound: at coherence 20 it returned **~1.9e13 against a true value of ~1.7e-2**. The alternating terms grow to ≈ xⁿ/n! before decaying, so the partial sums dwarf the answer and cancellation destroys it — a conditioning failure that reproduces deterministically whenever scipy is absent, not the "scipy precision" environmental issue it was previously taken for. Replaced with Taylor series below |x| = 2 and a modified-Lentz continued fraction for E₁(ix) above; verified against `mpmath` at **≤ 6.7e-16 for x ∈ [1e-8, 1e6]**. `test_sici_axial_decay_large_phi_shrinks` and `test_sici_phase_weight_large_coherence_approaches_one` now pass on their merits rather than only under scipy.
+- **Si/Ci identity tests are parametrised over both implementation paths**, so the pure-Python fallback — the branch that actually broke — cannot go untested on machines that have scipy.
+- **Ci's Taylor branch judged convergence against its own partial sum**, which for small x (where the sum → 0 but γ + ln x dominates) ran to the iteration cap. Now judged against the full result magnitude.
+- **The "20-byte" GARD/Weyl designator** described the raw `struct.pack("<5f", …)` output, but `brain_kv` values are TEXT and the record is base64-encoded before storage, so the real footprint is 28 bytes. Adds `GARD_STATE_STORED_BYTES` / `MESH_BRAIN_KV_WEYL_STORED_BYTES` and budgets `interstitial_bits` against the stored size. The 20-byte constants remain — correct for the wire pack and the Julia peer's byte-for-byte parity.
+
+### Security
+
+- **GARD Lite GUI now actually encrypts.** It advertised `AES-256-CBC + HKDF-SHA256` while performing no encryption (payload was plain zlib) and keyed its HMAC with the **public** domain string `SiCi_SQRT(-1)`, which any reader can recompute — so it authenticated nothing. Every integrity field was a hardcoded literal: `hmac_authenticity_verified`, `dissociation_error_percent: 0.000000%` and `integrity_status: AUTHENTICATED_MATCH_ZERO_DISSOCIATION` were emitted without a digest ever being compared. It now seals with AES-256-GCM under an HKDF-SHA256 key from `SCBRAIN_GRID_SECRET`, binds the whole header as AAD, fails closed without a secret, verifies by decrypting and inflating what it just wrote, and reports `UNVERIFIED` when it has not verified.
+- **Browser fallback was destroying data.** It ignored the file's contents, wrote a hardcoded 20-byte tensor as the "compressed" download, and reported zero dissociation — so a user who compressed there and kept only that download lost their file. It now performs the same `GARD_WEYL_v2` construction via WebCrypto (AES-GCM + HKDF-SHA256, byte-identical to the Python HKDF) with zlib through the native `CompressionStream`, computes the Weyl summary from the real payload, and round-trips before offering the download.
+- The 20-byte tensor is written as `.weyl-summary.bin` and no longer offered as the compressed artefact: it is a boundary summary and cannot reconstruct a file.
+
+### Changed
+
+- `tantalum_intermediary_binding` → `intermediary_binding_profile` (deprecated alias retained one release). The `receiver_*` labels stay in the returned dict: `asset_resource_mesh` matches `receiver_material` against materials on real supply-chain part records, so they are load-bearing lookup keys.
+
+### Compatibility
+
+- v1 GARD envelopes decrypt unchanged (verified against an envelope generated by the pre-migration module, frozen into both the Python and Julia suites).
+- Legacy `GARD_WEYL_v1` GUI containers still open, reported as `gard-weyl/v1-unauthenticated`.
+- `verify_digest=false` no longer yields plaintext from a tampered envelope — authentication is inside the AEAD primitive. A tightening, not a regression.
+
 ## [0.27.2] Entropy-Differential ↔ STP-Gap Anti-Correlation Signature (2026-08-18)
 
 ### Added
