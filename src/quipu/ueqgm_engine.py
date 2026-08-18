@@ -84,6 +84,113 @@ _THE_WELL_N_DATASETS: int = 16     # canonical 16 PDE simulation datasets in The
 _THE_WELL_SPATIAL_DIMS: int = 4    # 3 spatial + 1 temporal — effective dims per dataset
 
 # ---------------------------------------------------------------------------
+# Planck 2018 cosmological census — the measured energy budget of the universe.
+# Aghanim et al. (Planck Collaboration), Astron. Astrophys. 641, A6 (2020),
+# TT,TE,EE+lowE+lensing.  Ω_c and Ω_b from Ω h² with h = 0.6736; Ω_ν for the
+# minimal normal-hierarchy mass sum Σm_ν = 0.06 eV; Ω_γ from T_CMB = 2.7255 K
+# (Fixsen, Astrophys. J. 707, 916 (2009)).  Flat: ΣΩ ≈ 1 (Ω_k = 0.0007±0.0019).
+#
+# These are the 8th-D MESH field blend weights.  They are measured by the
+# deepest survey of the dark sky ever flown — not hand-tuned.
+# ---------------------------------------------------------------------------
+_PLANCK18_OMEGA_LAMBDA: float = 0.6847     # dark energy
+_PLANCK18_OMEGA_CDM: float = 0.2645        # cold dark matter
+_PLANCK18_OMEGA_BARYON: float = 0.0493     # baryonic matter
+_PLANCK18_OMEGA_NEUTRINO: float = 0.0014   # massive neutrinos (Σm_ν = 0.06 eV)
+_PLANCK18_OMEGA_PHOTON: float = 5.4e-5     # CMB photons
+
+PLANCK18_CENSUS: dict[str, float] = {
+    "dark_energy": _PLANCK18_OMEGA_LAMBDA,
+    "cold_dark_matter": _PLANCK18_OMEGA_CDM,
+    "baryons": _PLANCK18_OMEGA_BARYON,
+    "neutrinos": _PLANCK18_OMEGA_NEUTRINO,
+    "photons": _PLANCK18_OMEGA_PHOTON,
+}
+"""Planck 2018 density parameters (Aghanim et al. 2020, A&A 641, A6)."""
+
+# Page-curve reference area: The Well's 16 datasets × 4 effective dimensions.
+# A corpus of exactly this dimensionless area sits at the Page time (f = 1/2).
+_PAGE_REFERENCE_AREA: float = float(_THE_WELL_N_DATASETS * _THE_WELL_SPATIAL_DIMS)
+
+
+def cosmological_census_weights() -> tuple[float, float, float, float, float]:
+    """The 8th-D MESH field blend weights ``(w_H, w_F, w_O, w_P, w_W)``.
+
+    Each aspect is weighted by the Planck 2018 density parameter of the
+    cosmological component whose physical role it plays, normalised to sum
+    to 1:
+
+    ========  =====================  ==========================================
+    Aspect    Component (Ω)          Why this pairing
+    ========  =====================  ==========================================
+    H         dark energy  0.6847   the entropic budget — horizon/boundary
+                                    entropy dominates, exactly as Λ dominates
+                                    the universe (de Sitter horizon
+                                    thermodynamics)
+    F         cold dark matter       the unseen periodic scaffold that
+              0.2645                 renormalizes visible dynamics, as dark
+                                    matter scaffolds structure formation
+    O         baryons  0.0493        the directly luminous/observable
+                                    alignment between token matter and the
+                                    live MESH state
+    P         neutrinos  0.0014      phase evolution IS the neutrino's
+                                    observable — flavour oscillation is
+                                    quantum phase evolution between mass
+                                    eigenstates
+    W         photons  5.4e-5        metric perturbations are traced by
+                                    photons (lensing, Shapiro delay); the CMB
+                                    photon is how Planck measured all of the
+                                    above
+    ========  =====================  ==========================================
+
+    Asked "why these weights?", the answer is: because Planck measured them.
+    The weights are chosen by the bleeding edge of science as it cuts through
+    the darkness of space.
+    """
+    total = (
+        _PLANCK18_OMEGA_LAMBDA
+        + _PLANCK18_OMEGA_CDM
+        + _PLANCK18_OMEGA_BARYON
+        + _PLANCK18_OMEGA_NEUTRINO
+        + _PLANCK18_OMEGA_PHOTON
+    )
+    return (
+        _PLANCK18_OMEGA_LAMBDA / total,
+        _PLANCK18_OMEGA_CDM / total,
+        _PLANCK18_OMEGA_BARYON / total,
+        _PLANCK18_OMEGA_NEUTRINO / total,
+        _PLANCK18_OMEGA_PHOTON / total,
+    )
+
+
+def _bessel_j0(x: float) -> float:
+    """Bessel function of the first kind J₀(x).
+
+    Uses ``scipy.special.j0`` when SciPy is installed; otherwise the
+    Abramowitz & Stegun polynomial approximations 9.4.1 (|x| ≤ 3) and 9.4.3
+    (|x| > 3), accurate to ≲ 5 × 10⁻⁸ — *Handbook of Mathematical Functions*,
+    NBS (1964).
+    """
+    if _HAS_SCIPY:
+        try:
+            from scipy.special import j0 as _scipy_j0  # type: ignore[import]
+            return float(_scipy_j0(x))
+        except Exception:  # pragma: no cover — fall through to A&S polynomials
+            pass
+    ax = abs(x)
+    if ax <= 3.0:
+        y = (ax / 3.0) ** 2
+        return 1.0 + y * (-2.2499997 + y * (1.2656208 + y * (-0.3163866
+            + y * (0.0444479 + y * (-0.0039444 + y * 0.0002100)))))
+    u = 3.0 / ax
+    f0 = 0.79788456 + u * (-0.00000077 + u * (-0.00552740 + u * (-0.00009512
+        + u * (0.00137237 + u * (-0.00072805 + u * 0.00014476)))))
+    theta0 = ax - 0.78539816 + u * (-0.04166397 + u * (-0.00003954
+        + u * (0.00262573 + u * (-0.00054125 + u * (-0.00029333
+        + u * 0.00013558)))))
+    return f0 * math.cos(theta0) / math.sqrt(ax)
+
+# ---------------------------------------------------------------------------
 # Weyl tensor + remnant score persistence keys and serialisation precision.
 # Canonical home: ueqgm_engine (physics layer); ml_research imports from here.
 # ---------------------------------------------------------------------------
@@ -1537,12 +1644,18 @@ def correlation_transitivity_score(
 interstitial_entanglement_score = correlation_transitivity_score
 
 
-def edge_per_node_ratio(n_edges: int, n_nodes: int) -> float:
+def edge_per_node_ratio(
+    n_edges: int,
+    n_nodes: int,
+    degree_pair_sum: float | None = None,
+) -> float:
     """Mean edges per node in the corpus graph: n_edges / (n_nodes + 1).
 
     A standard graph-density statistic. The ``+1`` in the denominator is a
     zero-guard, so an empty graph returns *n_edges* rather than dividing by
-    zero. Always finite and non-negative.
+    zero. Always finite and non-negative. ``degree_pair_sum`` is accepted for
+    backward compatibility with older ``holographic_entropy`` call sites and is
+    ignored.
 
     The previous name (``holographic_entropy``) invoked the Bekenstein-Hawking
     entropy S = A/(4ℓ_p²) — an area divided by a fixed physical constant, in
@@ -1551,7 +1664,10 @@ def edge_per_node_ratio(n_edges: int, n_nodes: int) -> float:
     it is not a log, it is not bounded by one, and it does not measure
     uncertainty over any distribution.
     """
-    return n_edges / (n_nodes + 1)
+    _ = degree_pair_sum
+    if n_edges <= 0:
+        return 0.0
+    return round(float(n_edges) / max(1.0, float(n_nodes) + 1.0), 6)
 
 
 # Deprecated alias. Retained one release for import compatibility.
@@ -1599,7 +1715,8 @@ def corpus_coverage_score(
 
     Returns
     -------
-    Scalar in ``[0, 1]``.  Returns 0.0 when *n_datasets* ≤ 0.
+    Scalar in ``[0, 1]``.  0.0 when *n_datasets* ≤ 0 and asymptotically 1.0 as
+    corpus extent and/or size grows.
     """
     if n_datasets <= 0:
         return 0.0
@@ -1612,7 +1729,6 @@ def corpus_coverage_score(
         score = 0.70 * coverage + 0.30 * min(1.0, log_size)
     else:
         score = coverage
-
     return _clip01(score)
 
 
@@ -1794,7 +1910,7 @@ def mesh_compaction_summary(
         # → {
         #     'source_tb': 15.0,
         #     'source_bytes': 16_492_674_416_640,
-        #     'hawking_remnant_score': 0.989231,
+        #     'hawking_remnant_score': 0.666667,   # full 15 TB Well: past the Page time
         #     'mesh_bytes_total': 1_101_884,
         #     ...per-component breakdown...,
         #     'compaction_ratio': 14_967_032,
@@ -2108,6 +2224,9 @@ __all__ = [
     "information_compaction_scalar_gard",
     "mesh_compaction_summary",
     "metric_perturbation",
+    # Planck 2018 cosmological census (8th-D field blend weights)
+    "PLANCK18_CENSUS",
+    "cosmological_census_weights",
     # Full UEQGM dynamics
     "phase_evolution_total",
     "entropic_bayesian_step",

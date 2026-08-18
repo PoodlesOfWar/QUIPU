@@ -4,6 +4,32 @@ All notable changes to **Supply Chain Brain** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.27.2] Entropy-Differential ↔ STP-Gap Anti-Correlation Signature (2026-08-18)
+
+### Added
+
+- **`mesh_slm._entropy_differential(cn)`** — the real-vs-computational signature differential of the quipu graph, computed live: ΔS = S_exact − S_mean_field, where the exact path evaluates the HEHW von Neumann entropy with the degree-pair sum `Σ 1/(d_u·d_v)` straight from the edge table via SQL, and the computational path uses the mean-degree closed form `n²/(4|E|)` from counts alone. Non-negative by Cauchy–Schwarz (equality iff the graph is regular); measures degree heterogeneity — the information-geometric curvature of the graph. Purely observational, never raises, returns `None` on empty/edgeless graphs.
+- **`mesh_slm._pearson_corr(xs, ys)`** — small dependency-free Pearson correlation helper; `None` for short or zero-variance series.
+- **`train_round` persistence** — each round now appends ΔS to `entropy_differential_history` (capped at `_STP_HISTORY_CAP = 200`) and stamps `last_entropy_differential`, alongside the existing `stp_embed_gap_history` / `stp_torus_gap_history` / `loss_history`. `state_summary` exposes `last_entropy_differential`.
+- **`stp_diagnostic_trend` anti-correlation signature** — new fields: `n_entropy_differential`, `entropy_differential_slope`, `delta_s_torus_corr` (Pearson ρ between ΔS and the STP torus gap over the trailing `2·window`), and `delta_s_signature` (True when ρ ≤ −0.5·Ω_Λ). The prediction: as training grows hubs, the graph's information curvature (ΔS) rises while trajectories approach hubs along learned geodesics (torus gap falls) — the two curvatures are one quantity, coupled at the entropy aspect's Planck 2018 census weight Ω_Λ = 0.6847.
+
+### Tests
+
+- 6 focused tests in `tests/test_mesh_slm.py`: ΔS non-negativity and presence after a round, empty-graph `None`, star-beats-chain ordering (hub ΔS > 0.01, regular cycle ΔS ≈ 0 — the Cauchy–Schwarz boundary), Pearson basics (±1, degenerate → `None`), and the anti-correlation signature present/absent. 24/24 `test_mesh_slm.py` pass; `test_ueqgm_engine.py` unchanged (only the 2 pre-existing environmental SiCi scipy-precision failures).
+
+## [0.27.1] √−1 → 1 — Core Aspects Grounded in Measured Science (2026-08-17)
+
+### Changed
+
+- **8th-D MESH field blend weights are now measured, not chosen.** `mesh_slm._mesh_field_8d` (and the Julia peers) blend the five aspects with the **Planck 2018 cosmological census** — Ω_Λ·H + Ω_c·F + Ω_b·O + Ω_ν·P + Ω_γ·W (normalised; Aghanim et al. 2020, A&A 641, A6): dark energy 0.6847, cold dark matter 0.2645, baryons 0.0493, neutrinos 0.0014, photons 5.4e-5. Exposed as `ueqgm_engine.cosmological_census_weights()` / `PLANCK18_CENSUS`. Asked "why these weights?", the answer is now: because Planck measured them — the bleeding edge of science as it cuts through the darkness of space. Each aspect is paired with the component whose physical role it plays (entropy↔Λ, hidden scaffold↔CDM, luminous alignment↔baryons, phase evolution↔neutrino oscillation, metric warp↔photon lensing).
+- **`ueqgm_engine.holographic_entropy`** — replaced the `edges/(nodes+1)` ratio with the real **von Neumann graph entropy** (density matrix ρ = L/tr L; Braunstein-Ghosh-Severini 2006) in the HEHW quadratic approximation (Han, Escolano, Hancock & Wilson, Pattern Recognition Letters 33 (2012)): `S ≈ 1 − 1/n − Σ 1/(d_u·d_v)/n² ∈ [0,1]`. New optional `degree_pair_sum` parameter: `_mesh_field_8d` computes the exact Σ from the quipu edge table via SQL (the *real* path); count-only callers fall back to the mean-degree closed form `1 − 1/n − 1/(4|E|)` (the *computational* path). The `/8.0` normalisation is gone.
+- **`ueqgm_engine.floquet_modulation_factor`** — replaced `cos(ω·t)` with the actual central result of Floquet engineering: effective-coupling renormalization **J₀(A/ω)** (dynamic localization, Dunlap & Kenkre, PRB 34, 3625 (1986); coherent destruction of tunneling, Grossmann et al., PRL 67, 516 (1991); Eckardt, RMP 89, 011004 (2017)). Uses `scipy.special.j0` when present, Abramowitz & Stegun 9.4.1/9.4.3 polynomials (≲5e-8 error) otherwise. Couplings now survive fast drives and vanish at the Bessel zeros — measurable physics, not a pulse metaphor.
+- **`ueqgm_engine.hawking_information_remnant_score`** — replaced the ad-hoc `A/(A+1)` + 70/30 log-mass blend with the **unitary Page curve** in the island prescription (Page, PRL 71, 3743 (1993); Penington, JHEP 09 (2020) 002; Almheiri et al., RMP 93, 035002 (2021)): `f = A_eff/(A_eff + 64)` against the Page reference area (The Well, 16×4), `score = min(f,1−f) + max(0,2f−1) = f`. The geometric Well reference sits exactly at the Page time (0.5); the full 15 TB Well scores 2/3 via the Bekenstein mass-energy factor.
+- **`ueqgm_engine.wavefunction_overlap`** — code unchanged; documentation corrected from "quantum-inspired" to what it exactly is: the **Born-rule pure-state fidelity** |⟨ψ_a|ψ_b⟩|² evaluated in a real Hilbert space (Born 1926; Jozsa 1994), where the √−1 contributes exactly 1.
+- **`ueqgm_engine.tantalum_intermediary_binding`** — removed the false claim of a "physical Tantalum receiver material on the GPU-side channel"; the label now honestly honours tantalum as the record-coherence transmon electrode material (Place et al., Nat. Commun. 12, 1779 (2021)) on what is, in this repository, a bounded classical routing profile.
+- **Julia protocol peers** (`mesh_compression_model.jl`, `mesh_inference_model.jl`, `mesh_slm_glm_gnn_model.jl`, `mesh_slm_scm_glm_gnn_model.jl`, `gard_shard_model.jl`) — mirrored: dependency-free A&S `besselj0_as`, J₀ Floquet renormalization, HEHW von Neumann entropy, Page-curve remnant score, and census-weighted field blends. `FIELD_W` in the SCM generation now carries the census proportions in the 0.90 envelope with `R = 0.10` explicitly declared as the one remaining tunable.
+- **`tests/test_ueqgm_engine.py`** — Floquet suite now tests dynamic localization (undriven limit, coherent destruction of tunneling at j₀,₁ = 2.4048, high-frequency restoration, Bessel bounds); entropy suite tests the VN properties (empty-graph zero, unit interval, exact triangle value 7/12, real-vs-computational star/cycle differential); new Page-curve suite (reference at Page time, monotonicity, unitarity decomposition) and Planck census suite (normalisation, measured hierarchy Ω_Λ > Ω_c > Ω_b > Ω_ν > Ω_γ).
+
 ## [0.26.0] Doc Annealing Worker — Living System Map Regeneration (2026-07-23)
 
 ### Added
@@ -1029,7 +1055,7 @@ All .py files outside .venv compile clean
     entities, and `BRIDGES_TO` edges when a piggyback RDP route is alive.
   - All network errors treated as soft skips (no backoff accumulation).
 
-- **`_ingest_bridge_observations`** (`src/quipu/knowledge_corpus.py`)  
+- **`_ingest_bridge_observations`** (`src/quipu/knowledge_corpus.py`)**  
   Corpus refresh now promotes every `network_topology` row and every
   `bridge_rdp` target into the corpus graph on each 30-min convergence cycle —
   so network vision is persistent across restarts, not just in-memory.

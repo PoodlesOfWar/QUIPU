@@ -1371,7 +1371,7 @@ def system_entirety_state(signals: dict | None = None, *, include_ueqgm_runtime:
 def bit_flip_parity(observer: float, t: float | None = None) -> int:
     """Instantaneous parity bit ``±1`` for the oscillating expansion.
 
-    Uses the UEQGM Floquet modulation factor ``cos(ω·t)`` biased by the
+    Uses a time-periodic (Floquet) parity drive ``cos(ω·t)`` biased by the
     observer.  When ``observer`` is strong the cosine is shifted toward
     positive parity but the period stays well-defined, so the bit
     alternates faithfully.

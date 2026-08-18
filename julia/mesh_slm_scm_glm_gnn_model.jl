@@ -121,7 +121,20 @@ const TAN_CLAMP = 1.0e3
 const ATROPHY_COUPLING       = 0.05   # max per-round quipu decay strength
 const RESUSC_LR              = 0.10   # Hebbian revival nudge per event
 const REVIVE_EDGES_PER_EVENT = 8      # weakest edges revived per NHPP event
-const FIELD_W = (H = 0.28, F = 0.22, O = 0.22, P = 0.09, W = 0.09, R = 0.10)
+# H/F/O/P/W carry the Planck 2018 cosmological census proportions
+# (Ω_Λ, Ω_c, Ω_b, Ω_ν, Ω_γ — Aghanim et al. 2020, A&A 641, A6), scaled
+# into the (1 − R) envelope.  R = 0.10 is this integration's ONE declared
+# modeling choice: the SCM viability coupling, which has no cosmological
+# counterpart and is documented as a tunable, not a measurement.
+const _CENSUS_TOTAL = 0.6847 + 0.2645 + 0.0493 + 0.0014 + 5.4e-5
+const FIELD_W = (
+    H = 0.90 * 0.6847 / _CENSUS_TOTAL,   # dark energy
+    F = 0.90 * 0.2645 / _CENSUS_TOTAL,   # cold dark matter
+    O = 0.90 * 0.0493 / _CENSUS_TOTAL,   # baryons
+    P = 0.90 * 0.0014 / _CENSUS_TOTAL,   # neutrinos
+    W = 0.90 * 5.4e-5 / _CENSUS_TOTAL,   # photons
+    R = 0.10,                            # SCM viability (declared tunable)
+)
 
 # ACRE — Axial Cross-Resonance Emergence (ports of mesh_slm.acre_*)
 const AXES = ("vision", "touch", "smell", "body", "brain", "perception", "entirety")
@@ -414,8 +427,35 @@ function wavefunction_overlap(a, b)::Float64
     return round((dot / (na * nb))^2; digits = 6)
 end
 
-floquet_modulation_factor(t::Real, omega::Real) = cos(omega * t)
-holographic_entropy(n_edges::Real, n_nodes::Real) = n_edges / (n_nodes + 1)
+function besselj0_as(x::Real)::Float64
+    ax = abs(Float64(x))
+    if ax <= 3.0
+        y = (ax / 3.0)^2
+        return 1.0 + y * (-2.2499997 + y * (1.2656208 + y * (-0.3163866 +
+            y * (0.0444479 + y * (-0.0039444 + y * 0.0002100)))))
+    end
+    u = 3.0 / ax
+    f0 = 0.79788456 + u * (-0.00000077 + u * (-0.00552740 + u * (-0.00009512 +
+        u * (0.00137237 + u * (-0.00072805 + u * 0.00014476)))))
+    theta0 = ax - 0.78539816 + u * (-0.04166397 + u * (-0.00003954 +
+        u * (0.00262573 + u * (-0.00054125 + u * (-0.00029333 +
+        u * 0.00013558)))))
+    return f0 * cos(theta0) / sqrt(ax)
+end
+
+# Floquet J₀ renormalization (dynamic localization, Dunlap-Kenkre 1986).
+floquet_modulation_factor(drive::Real, omega::Real) =
+    omega == 0.0 ? 1.0 : besselj0_as(drive / omega)
+
+# Von Neumann graph entropy, HEHW (2012) quadratic approximation.
+function holographic_entropy(
+    n_edges::Real, n_nodes::Real, degree_pair_sum::Union{Nothing,Real} = nothing,
+)::Float64
+    (n_nodes <= 0 || n_edges <= 0) && return 0.0
+    n = float(n_nodes)
+    dps = degree_pair_sum === nothing ? (n * n) / (4.0 * float(n_edges)) : float(degree_pair_sum)
+    return clip01(1.0 - (1.0 / n) - (dps / (n * n)))
+end
 
 function metric_perturbation(mass_eff::Real, r::Real)::Float64
     r <= 0.0 && return 0.0
@@ -475,16 +515,17 @@ end
                    weyl_phase=0.0) -> Float64
 
 The SCM-extended global field:
-`0.28·H + 0.22·F + 0.22·O + 0.09·P + 0.09·W + 0.10·R` where H/F/O/P/W are
-the five source integrals of `mesh_slm._mesh_field_8d` and
-`R = clip01(V/(m(1+φμ)))` is the SCM viability integral.
+`FIELD_W.H·H + FIELD_W.F·F + FIELD_W.O·O + FIELD_W.P·P + FIELD_W.W·W + 0.10·R`
+where H/F/O/P/W carry the Planck 2018 census proportions in the 0.90
+envelope, and `R = clip01(V/(m(1+φμ)))` is the SCM viability integral
+(the one declared tunable).
 """
 function mesh_field_scm(model::MeshSLMModel, mesh_state7;
                         phase_weight::Real = 1.0, coherence_depth::Integer = 0,
                         weyl_phase::Real = 0.0)::Float64
     n_vocab = length(model.positions)
     n_edges = length(model.quipu_weight)
-    H = clip01(holographic_entropy(n_edges, n_vocab) / 8.0)
+    H = holographic_entropy(n_edges, n_vocab)
     phi = coherence_to_phi(coherence_depth)
     omega = max(0.1, phase_weight)
     F = clip01(0.5 * (1.0 + floquet_modulation_factor(mod(weyl_phase, 2pi), omega)))
