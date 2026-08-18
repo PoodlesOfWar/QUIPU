@@ -106,39 +106,57 @@ def test_coherence_to_phi_all_intersection_points():
 # These pin the mathematical identities rather than the implementation, so the
 # scipy path and the pure-Python series/continued-fraction path must both
 # satisfy them.
+#
+# _raw_sici short-circuits to scipy whenever scipy is installed, which would
+# leave the pure-Python fallback — the branch that actually broke — untested on
+# any machine that has it. Every identity test below is therefore parametrised
+# over both paths, with the scipy case skipped when scipy is absent.
 
-def test_raw_sici_origin():
+@pytest.fixture(params=["fallback", "scipy"])
+def sici(request, monkeypatch):
+    """Return _raw_sici pinned to one specific implementation path."""
+    import src.quipu.ueqgm_engine as _u
+
+    if request.param == "scipy":
+        if not _u._HAS_SCIPY:
+            pytest.skip("scipy not installed")
+    else:
+        monkeypatch.setattr(_u, "_HAS_SCIPY", False)
+    return _u._raw_sici
+
+
+def test_raw_sici_origin(sici):
     """Si(0) = 0 exactly; Ci has a logarithmic pole at the origin."""
-    si, ci = _raw_sici(0.0)
+    si, ci = sici(0.0)
     assert si == 0.0
     assert ci == -math.inf
 
 
-def test_raw_sici_si_is_odd():
+def test_raw_sici_si_is_odd(sici):
     """Si(-x) = -Si(x)."""
     for x in (0.3, 1.5, 3.0, 50.0):
-        assert _raw_sici(-x)[0] == pytest.approx(-_raw_sici(x)[0], rel=1e-12)
+        assert sici(-x)[0] == pytest.approx(-sici(x)[0], rel=1e-12)
 
 
-def test_raw_sici_known_reference_values():
+def test_raw_sici_known_reference_values(sici):
     """Reference values of Si/Ci to 12 significant figures."""
     # Si(pi) is the Gibbs constant; Si(1)/Ci(1) are standard tabulated values.
-    assert _raw_sici(math.pi)[0] == pytest.approx(1.851937051982466, rel=1e-12)
-    assert _raw_sici(1.0)[0] == pytest.approx(0.946083070367183, rel=1e-12)
-    assert _raw_sici(1.0)[1] == pytest.approx(0.337403922900968, rel=1e-12)
+    assert sici(math.pi)[0] == pytest.approx(1.851937051982466, rel=1e-12)
+    assert sici(1.0)[0] == pytest.approx(0.946083070367183, rel=1e-12)
+    assert sici(1.0)[1] == pytest.approx(0.337403922900968, rel=1e-12)
     # Ci's first positive root.
-    assert _raw_sici(0.6165054856207162)[1] == pytest.approx(0.0, abs=1e-15)
+    assert sici(0.6165054856207162)[1] == pytest.approx(0.0, abs=1e-15)
 
 
-def test_raw_sici_asymptotic_limits():
+def test_raw_sici_asymptotic_limits(sici):
     """Si(x) -> pi/2 and Ci(x) -> 0 as x -> inf, with O(1/x) decaying oscillation."""
     for x in (1e3, 1e4, 1e5):
-        si, ci = _raw_sici(x)
+        si, ci = sici(x)
         assert abs(si - math.pi / 2.0) < 2.0 / x
         assert abs(ci) < 2.0 / x
 
 
-def test_raw_sici_continuous_across_series_cutoff():
+def test_raw_sici_continuous_across_series_cutoff(sici):
     """The series and continued-fraction branches must agree at the switchover.
 
     Probed at +/-1e-11 so the function's own slope there (Si'(2) = sin(2)/2
@@ -146,13 +164,13 @@ def test_raw_sici_continuous_across_series_cutoff():
     real disagreement between branches would be orders of magnitude larger.
     """
     eps = 1e-11
-    lo = _raw_sici(_SICI_SERIES_CUTOFF - eps)
-    hi = _raw_sici(_SICI_SERIES_CUTOFF + eps)
+    lo = sici(_SICI_SERIES_CUTOFF - eps)
+    hi = sici(_SICI_SERIES_CUTOFF + eps)
     assert lo[0] == pytest.approx(hi[0], abs=1e-9)
     assert lo[1] == pytest.approx(hi[1], abs=1e-9)
 
 
-def test_raw_sici_satisfies_defining_derivatives():
+def test_raw_sici_satisfies_defining_derivatives(sici):
     """d/dx Si(x) = sin(x)/x and d/dx Ci(x) = cos(x)/x -- the defining ODEs.
 
     Checked by central difference on both sides of the series/CF cutoff, the
@@ -161,13 +179,13 @@ def test_raw_sici_satisfies_defining_derivatives():
     """
     h = 1e-6
     for x in (0.5, 1.5, 3.0, 40.0, 500.0):
-        si_hi, ci_hi = _raw_sici(x + h)
-        si_lo, ci_lo = _raw_sici(x - h)
+        si_hi, ci_hi = sici(x + h)
+        si_lo, ci_lo = sici(x - h)
         assert (si_hi - si_lo) / (2 * h) == pytest.approx(math.sin(x) / x, rel=1e-6, abs=1e-9)
         assert (ci_hi - ci_lo) / (2 * h) == pytest.approx(math.cos(x) / x, rel=1e-6, abs=1e-9)
 
 
-def test_raw_sici_large_phi_stays_finite_and_small():
+def test_raw_sici_large_phi_stays_finite_and_small(sici):
     """Regression: the old truncated power series diverged past |x| ~ 2*pi.
 
     At the coherence values this module actually produces (phi = pi/4 + k*pi),
@@ -175,7 +193,7 @@ def test_raw_sici_large_phi_stays_finite_and_small():
     """
     for coherence in (20, 100, 500, 1000):
         phi = coherence_to_phi(coherence)
-        si, ci = _raw_sici(phi)
+        si, ci = sici(phi)
         assert math.isfinite(si) and math.isfinite(ci)
         # Both approach their limits as O(1/phi), so the bound must scale too.
         assert abs(si - math.pi / 2.0) < 2.0 / phi

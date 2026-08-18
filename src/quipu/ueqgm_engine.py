@@ -648,6 +648,11 @@ def _raw_sici(phi: float) -> tuple[float, float]:
             si_val += addend
             if abs(addend) < _SICI_EPS * abs(si_val):
                 break
+        # Ci's series is only the *correction* to γ + ln x, so convergence has
+        # to be judged against the magnitude of the whole result. Testing
+        # against ci_sum alone spins to _SICI_MAX_ITER for small x, where
+        # ci_sum → 0 while γ + ln x dominates and is already exact.
+        log_part = _EULER_MASCHERONI + math.log(x)
         ci_sum = 0.0
         term = 1.0
         n = 0
@@ -656,9 +661,10 @@ def _raw_sici(phi: float) -> tuple[float, float]:
             term *= -x * x / ((2 * n - 1) * (2 * n))
             addend = term / (2 * n)
             ci_sum += addend
-            if abs(addend) < _SICI_EPS * max(abs(ci_sum), 1.0e-30):
+            scale = max(abs(log_part + ci_sum), abs(ci_sum))
+            if abs(addend) <= _SICI_EPS * max(scale, 1.0e-300):
                 break
-        ci_val = _EULER_MASCHERONI + math.log(x) + ci_sum
+        ci_val = log_part + ci_sum
 
     # Si is odd; Ci is even in |x|.
     return (si_val if phi >= 0 else -si_val), ci_val
