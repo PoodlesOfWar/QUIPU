@@ -108,6 +108,19 @@ def test_coherence_to_phi_all_intersection_points():
 # scipy path and the pure-Python series/continued-fraction path must both
 # satisfy them.
 
+def test_raw_sici_fallback_matches_scipy_when_available(monkeypatch):
+    import src.quipu.ueqgm_engine as u
+
+    if not u._HAS_SCIPY:
+        pytest.skip("scipy not installed")
+
+    x = 40.0
+    si_scipy, ci_scipy = u._scipy_sici(x)
+    monkeypatch.setattr(u, "_HAS_SCIPY", False)
+    si_fb, ci_fb = u._raw_sici(x)
+    assert si_fb == pytest.approx(float(si_scipy), rel=1e-14, abs=1e-14)
+    assert ci_fb == pytest.approx(float(ci_scipy), rel=1e-14, abs=1e-14)
+
 def test_raw_sici_origin():
     """Si(0) = 0 exactly; Ci has a logarithmic pole at the origin."""
     si, ci = _raw_sici(0.0)
