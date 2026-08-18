@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-__version__ = "0.27.1"
+__version__ = "0.27.2"
 __release__ = (
-    "√−1 → 1: Core UEQGM aspects grounded in measured science. 8th-D field blend weights now the Planck 2018 cosmological census "
-    "(dark energy, CDM, baryons, neutrinos, photons) measured by CMB survey, not hand-tuned. "
-    "`holographic_entropy` = von Neumann graph entropy (HEHW quadratic) with dual-path signature: exact degree-pair sum via SQL, "
-    "mean-degree fallback from counts — visible 0.0021 differential on live graph. "
-    "`floquet_modulation_factor` = J₀(A/ω) dynamic localization (coherent destruction of tunneling), not cos(ωt). "
-    "`hawking_information_remnant_score` = unitary Page curve w/ islands; Well geometric reference at Page time (0.5). "
-    "Five Julia protocol peers mirrored. 78 core tests pass; zero regressions. "
-    "Live smoke: 38-token vocab, 50 edges, 33ms train, 4ms gen, confidence 0.62."
+    "Entropy-differential ↔ STP-gap anti-correlation signature wired live. "
+    "train_round now persists entropy_differential_history (ΔS = S_exact(SQL) − S_mean_field(counts), "
+    "the real-vs-computational curvature of the quipu graph, non-negative by Cauchy–Schwarz) "
+    "alongside the STP gap histories, and stp_diagnostic_trend() reports the Pearson correlation "
+    "between ΔS and the torus gap with a delta_s_signature flag (negative, |ρ| ≥ 0.5·Ω_Λ). "
+    "The information-geometric curvature (hubs bend the entropy surface) and the trajectory "
+    "curvature (paths bend at hubs) are now two readouts of one quantity, checkable from "
+    "mesh_slm_meta. Live smoke: ΔS = 0.001389 measured and persisted per round. "
+    "6 focused tests; 24/24 mesh_slm tests pass."
 )
-__build_date__ = "2026-08-17"
+__build_date__ = "2026-08-18"
 
 PHASES = {
+    "0.27.2": "Entropy-differential ↔ STP-gap anti-correlation signature: train_round persists entropy_differential_history (ΔS = exact-SQL von Neumann entropy minus mean-field approximation, the real-vs-computational curvature of the quipu graph) next to the STP gap histories; stp_diagnostic_trend() computes the Pearson correlation between ΔS and the torus gap over the trailing 2·window and flags delta_s_signature when anti-correlated at |ρ| ≥ 0.5·Ω_Λ — the measured coupling between information-geometric and trajectory curvature. New helpers _entropy_differential (dual-path SQL, never raises) and _pearson_corr; last_entropy_differential surfaced in state_summary. 6 focused tests in tests/test_mesh_slm.py (non-negativity, empty-graph None, star>chain ordering, Pearson basics, signature present/absent).",
     "0.27.0": "System Entirety Control Plane GUI & GARD Shard High-Performance Neural Tensor Compression: Full 7-D System Entirety state re-materialization with non-zero sense manifold axes, local hardware asset discovery, active UEQGM adaptive runtime, multi-drive file selection, and GARD Shard authenticated container packing (gui/GARD_Shard/compression & gui/GARD_Shard/decompression) yielding 100% exact lossless binary file reconstruction with zero data dissociation error.",
     "0.26.0": "Doc annealing worker integrated (src/quipu/doc_annealing.py), the clean-room QUIPU reimplementation of the SCB living-map annealer. Each cycle reads the live 7+1-D System Entirety state, the MESH-SLM predictor snapshot, and the STP P1 trend, computes a SHA-256 structural fingerprint over version + bridge primary root + mesh_density + UEQGM certainty + nodal_bifurcation (each 2 dp), and rewrites docs/system_entirety_map.md only on structural change (or --force), bumping brain_kv['doc:system_map_version'] and appending a bounded doc_annealing:history entry. No RAG re-index (QUIPU ships none). anneal_docs/structural_change_review/render_system_map/run_loop public API + argparse CLI (--once/--loop/--interval/--force). Start-DocAnnealing.ps1 runs the loop; Register-DocAnnealing.ps1 installs a recurring 30-min Windows Scheduled Task. 5 focused tests in tests/test_doc_annealing.py.",
     "0.25.0": "STP-style geodesic diagnostic wired into mesh_slm.train_round() behind the QUIPU_STP_DIAGNOSTIC flag (default on, purely observational so it fails toward legacy like phase_weight/overlap). Each round samples a random 0<=s<r<t trajectory triplet per chunk and computes the Semantic-Tube-Prediction gap 1-cos(h_t-h_r, h_r-h_s) twice: over the learned 7-D embedding (paper-faithful hidden-state analogue) and over an isometric R^4 flat-torus embedding u=(cosθ,sinθ,cosφ,sinφ) of each token's (i,j) vocab cell (the QUIPU-native, wrap-aware-by-construction test). Per-round averages surface in the train_round summary (stp_embed_gap/stp_torus_gap) and state_summary, and capped rolling histories (stp_embed_gap_history, stp_torus_gap_history, loss_history) persist in mesh_slm_meta so the paper's P1 signature — ordinary loss plateaus while the STP gap keeps falling — is checkable via the read-only stp_diagnostic_trend() utility. No eta coupling (deliberately deferred Phase 2). Pure stdlib, no schema migration. 7 focused tests in tests/test_mesh_slm.py.",

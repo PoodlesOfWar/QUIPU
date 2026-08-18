@@ -444,3 +444,109 @@ def test_stp_diagnostic_history_capped(isolated_slm_db):
     assert len(hist_t) <= cap
     assert len(hist_e) <= cap
     assert len(hist_l) <= cap
+
+
+# ---------------------------------------------------------------------------
+# Real-vs-computational entropy differential (ΔS) tests
+# ---------------------------------------------------------------------------
+
+def test_entropy_differential_nonneg_and_present(isolated_slm_db):
+    """After a training round the differential history exists, and ΔS >= 0
+    (Cauchy–Schwarz: exact degree-pair sum <= mean-field closed form)."""
+    slm = isolated_slm_db
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+    with slm._conn() as cn:
+        hist = slm._meta_get(cn, "entropy_differential_history", [])
+        last = slm._meta_get(cn, "last_entropy_differential", None)
+    assert hist, "entropy_differential_history not populated by train_round"
+    assert last is not None
+    for v in hist:
+        assert v >= -1e-9, f"ΔS must be non-negative (Cauchy–Schwarz), got {v}"
+
+
+def test_entropy_differential_empty_graph_is_none(isolated_slm_db):
+    """No vocab / no edges → None (no differential to speak of), never raises."""
+    slm = isolated_slm_db
+    with slm._conn() as cn:
+        assert slm._entropy_differential(cn) is None
+
+
+def test_entropy_differential_star_beats_chain(isolated_slm_db):
+    """Hub structure raises ΔS: a star graph's exact-vs-mean-field gap must
+    exceed a regular cycle's (which is ≈ 0 by Cauchy–Schwarz equality)."""
+    slm = isolated_slm_db
+    with slm._conn() as cn:
+        # Build vocab of 8 tokens.
+        ids = []
+        for k in range(8):
+            ids.append(
+                slm._upsert_token(cn, f"__dstar{k}__", "2026-08-18T00:00:00", mesh=[0.5] * slm._EMBED_DIM)
+            )
+        # Star: token 0 connected to all others.
+        for k in range(1, 8):
+            cn.execute(
+                "INSERT OR REPLACE INTO mesh_slm_quipu(src, dst, weight, samples) "
+                "VALUES(?, ?, 0.5, 1)",
+                (ids[0], ids[k]),
+            )
+        star_ds = slm._entropy_differential(cn)
+        # Replace with a cycle (2-regular): 0→1→…→7→0.
+        cn.execute("DELETE FROM mesh_slm_quipu")
+        for k in range(8):
+            cn.execute(
+                "INSERT INTO mesh_slm_quipu(src, dst, weight, samples) "
+                "VALUES(?, ?, 0.5, 1)",
+                (ids[k], ids[(k + 1) % 8]),
+            )
+        cycle_ds = slm._entropy_differential(cn)
+    assert star_ds is not None and cycle_ds is not None
+    assert abs(cycle_ds) < 1e-6, f"regular cycle should have ΔS ≈ 0, got {cycle_ds}"
+    assert star_ds > 0.01, f"star should have clear positive ΔS, got {star_ds}"
+
+
+def test_pearson_corr_basic(isolated_slm_db):
+    """Perfect anti-correlation → −1; perfect correlation → +1; degenerate → None."""
+    slm = isolated_slm_db
+    assert slm._pearson_corr([1, 2, 3, 4], [4, 3, 2, 1]) == -1.0
+    assert slm._pearson_corr([1, 2, 3, 4], [2, 4, 6, 8]) == 1.0
+    assert slm._pearson_corr([1, 1, 1], [1, 2, 3]) is None   # zero variance
+    assert slm._pearson_corr([1, 2], [1, 2]) is None          # too short
+
+
+def test_stp_trend_reports_delta_s_signature(isolated_slm_db):
+    """stp_diagnostic_trend must surface the ΔS↔STP-torus anti-correlation:
+    rising ΔS against falling torus gap → negative corr → signature True."""
+    slm = isolated_slm_db
+    n = 40
+    with slm._conn() as cn:
+        # ΔS rising (hubs forming), torus gap falling (geodesics learned):
+        # perfect anti-correlation, well past the −0.5·Ω_Λ threshold.
+        slm._meta_set(cn, "entropy_differential_history",
+                      [round(0.001 * k, 6) for k in range(n)])
+        slm._meta_set(cn, "stp_torus_gap_history",
+                      [round(0.5 - 0.01 * k, 6) for k in range(n)])
+        slm._meta_set(cn, "stp_embed_gap_history",
+                      [round(0.5 - 0.01 * k, 6) for k in range(n)])
+        slm._meta_set(cn, "loss_history", [0.01] * n)  # plateaued
+    trend = slm.stp_diagnostic_trend(window=10)
+    assert trend["n_entropy_differential"] == n
+    assert trend["entropy_differential_slope"] is not None
+    assert trend["entropy_differential_slope"] > 0  # ΔS rising
+    assert trend["delta_s_torus_corr"] is not None
+    assert trend["delta_s_torus_corr"] <= -0.99
+    assert trend["delta_s_signature"] is True
+
+
+def test_stp_trend_delta_s_signature_absent_when_uncorrelated(isolated_slm_db):
+    """Constant ΔS (no structural evolution) → corr None → signature False."""
+    slm = isolated_slm_db
+    n = 40
+    with slm._conn() as cn:
+        slm._meta_set(cn, "entropy_differential_history", [0.002] * n)
+        slm._meta_set(cn, "stp_torus_gap_history",
+                      [round(0.5 - 0.01 * k, 6) for k in range(n)])
+        slm._meta_set(cn, "stp_embed_gap_history", [0.5] * n)
+        slm._meta_set(cn, "loss_history", [0.01] * n)
+    trend = slm.stp_diagnostic_trend(window=10)
+    assert trend["delta_s_torus_corr"] is None
+    assert trend["delta_s_signature"] is False
