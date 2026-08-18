@@ -3,6 +3,24 @@
 
 Julia protocol peer for the Supply Chain Brain **GARD Shard** model.
 
+!!! warning "Protocol divergence — this peer is v1-only"
+    The Python implementation (`src/quipu/gard_shard_model.py`) now writes
+    `gard-shard/v2`, which replaces AES-256-CBC + HMAC-SHA256 with AES-256-GCM.
+    This Julia peer still implements `gard-shard/v1` only, so parity is now
+    one-directional:
+
+    * envelopes written **here (v1)** are still readable by Python, which keeps
+      a full v1 read path;
+    * envelopes written by **Python (v2)** are **not** readable here and will
+      fail `_normalise_envelope` on the protocol check.
+
+    Porting this peer to v2 requires an AES-GCM implementation (`Nettle` does
+    not expose GCM; `OpenSSL.jl` or a GCM-capable binding is needed), the
+    `gard-shard-hkdf/v2` info label, and the `gard-shard-aad/v2` additional
+    authenticated data frame. Until that lands, treat this module as a legacy
+    reader/writer and do not rely on the "Python fixture parity" claim in
+    `selftest()` for v2 envelopes.
+
 `gard-shard/v1` turns a canonical UTF-8 JSON value into one or more encrypted,
 authenticated shards:
 
