@@ -36,3 +36,8 @@ gui/GARD_Shard/compression/*
 gui/GARD_Shard/decompression/*
 !gui/GARD_Shard/decompression/.gitkeep
 
+
+# GARD Lite runtime output (sealed containers and restored payloads are user
+# data, produced at run time and never committed).
+gui/GARD_Shard/GARD_lite/compression/
+gui/GARD_Shard/GARD_lite/decompression/

@@ -656,67 +656,241 @@
       }
     }
 
-    async function runInBrowserEngine(actionType, file, filename) {
-      let rawBytes;
-      if (file) {
-        rawBytes = new Uint8Array(await file.arrayBuffer());
-        filename = file.name;
-      } else {
-        rawBytes = new TextEncoder().encode("SAMPLE CONTENT FOR " + filename);
+    // zlib (RFC 1950) via native CompressionStream — byte-compatible with
+    // Python's zlib.compress/zlib.decompress, so containers made in the browser
+    // open in the Python engine and vice versa. No external library.
+    async function _streamThrough(bytes, stream) {
+      const ts = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+      return new Uint8Array(await ts.arrayBuffer());
+    }
+    async function zlibDeflate(bytes) {
+      if (typeof CompressionStream === "undefined") {
+        throw new Error("this browser lacks CompressionStream; use the Python engine");
       }
+      return _streamThrough(bytes, new CompressionStream("deflate"));
+    }
+    async function zlibInflate(bytes) {
+      if (typeof DecompressionStream === "undefined") {
+        throw new Error("this browser lacks DecompressionStream; use the Python engine");
+      }
+      return _streamThrough(bytes, new DecompressionStream("deflate"));
+    }
 
+    // Real client-side GARD Shard engine (WebCrypto AES-256-GCM).
+    //
+    // This path previously fabricated its results: it ignored the file's
+    // contents, wrote a hardcoded 20-byte tensor as the "compressed" download,
+    // and reported AUTHENTICATED_MATCH_ZERO_DISSOCIATION for work it never did
+    // — so a user who compressed a file here and kept only that download lost
+    // their data. It now performs the same AES-256-GCM / HKDF-SHA256
+    // GARD_WEYL_v2 construction the Python engine does, byte-compatible, and
+    // reports only what it actually verified.
+    const GARD_MAGIC_V2 = new TextEncoder().encode("GARD_WEYL_v2\u0000");
+    const GARD_PROTOCOL = "gard-shard/v2";
+    const GARD_DOMAIN = "SiCi_SQRT(-1)";
+
+    function concatBytes(...parts) {
+      const total = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const p of parts) { out.set(p, off); off += p.length; }
+      return out;
+    }
+    function u32be(n) {
+      const b = new Uint8Array(4);
+      new DataView(b.buffer).setUint32(0, n, false);
+      return b;
+    }
+    function readU32be(bytes, off) {
+      return new DataView(bytes.buffer, bytes.byteOffset + off, 4).getUint32(0, false);
+    }
+    function toHex(buf) {
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+    async function sha256Hex(bytes) {
+      return toHex(await crypto.subtle.digest("SHA-256", bytes));
+    }
+
+    // Weyl summary computed from the actual payload, not a constant.
+    function computeWeylScalars(bytes) {
+      if (!bytes.length) return [0, 0, 0, 0, 0];
+      let sum = 0, sumSq = 0;
+      const hist = new Uint32Array(256);
+      for (let i = 0; i < bytes.length; i++) { sum += bytes[i]; sumSq += bytes[i] * bytes[i]; hist[bytes[i]]++; }
+      const mean = sum / bytes.length;
+      const variance = Math.max(0, sumSq / bytes.length - mean * mean);
+      let entropy = 0;
+      for (let i = 0; i < 256; i++) {
+        if (hist[i]) { const p = hist[i] / bytes.length; entropy -= p * Math.log2(p); }
+      }
+      const clip01 = v => Math.min(1, Math.max(0, v));
+      return [
+        clip01(mean / 255), clip01(entropy / 8),
+        clip01(bytes.length / (bytes.length + 4096)),
+        clip01(Math.sqrt(variance) / 128),
+        clip01(1 - entropy / 8),
+      ];
+    }
+    function packWeyl(psi5) {
+      const f = new Float32Array(psi5.slice(0, 5));
+      return new Uint8Array(f.buffer.slice(0));
+    }
+    function unpackWeyl(bytes) {
+      return Array.from(new Float32Array(bytes.slice(0, 20).buffer.slice(0)));
+    }
+
+    async function deriveGardKey(secret, salt, filename) {
+      const enc = new TextEncoder();
+      const info = concatBytes(
+        enc.encode("gard-lite-hkdf/v2\u0000"), enc.encode(GARD_PROTOCOL),
+        new Uint8Array([0]), enc.encode(GARD_DOMAIN),
+        new Uint8Array([0]), enc.encode(filename));
+      const ikm = await crypto.subtle.importKey("raw", enc.encode(secret), "HKDF", false, ["deriveBits"]);
+      const bits = await crypto.subtle.deriveBits(
+        { name: "HKDF", hash: "SHA-256", salt: salt, info: info }, ikm, 256);
+      return crypto.subtle.importKey("raw", bits, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+    }
+
+    function requireSecret() {
+      let s = window.GARD_GRID_SECRET;
+      if (!s) {
+        s = window.prompt(
+          "Grid secret (SCBRAIN_GRID_SECRET).\n\n" +
+          "Required to seal or open a GARD Shard container. It never leaves " +
+          "this page and is not stored in the container.");
+        if (!s) throw new Error("a grid secret is required; nothing was written");
+        window.GARD_GRID_SECRET = s;
+      }
+      return s;
+    }
+
+    async function runInBrowserEngine(actionType, file, filename) {
+      if (!file) throw new Error("select a file first — this engine will not fabricate a payload");
+      const rawBytes = new Uint8Array(await file.arrayBuffer());
+      filename = file.name;
       const inBytes = rawBytes.length;
       const nowStr = new Date().toLocaleTimeString();
+      const secret = requireSecret();
 
       if (actionType === "compress") {
-        // Pack 20-byte Float32 LE Weyl tensor aspect (.gard.weyl.bin)
-        const weyl20b = new Float32Array([0.85, 0.32, 0.99, 0.85, 0.92]);
-        const tensorBytes = new Uint8Array(weyl20b.buffer);
-        LAST_BLOB = new Blob([tensorBytes], { type: "application/octet-stream" });
-        LAST_FILENAME = filename.endsWith(".gard.weyl.bin") ? filename : filename + ".gard.weyl.bin";
+        const psi5 = computeWeylScalars(rawBytes);
+        const packed20b = packWeyl(psi5);
+        const compressed = await zlibDeflate(rawBytes);
+        const rawSha = await sha256Hex(rawBytes);
+        const salt = crypto.getRandomValues(new Uint8Array(32));
+        const nonce = crypto.getRandomValues(new Uint8Array(12));
+        const key = await deriveGardKey(secret, salt, filename);
 
-        const compactionFactor = (inBytes / 20.0).toFixed(1) + "x";
+        const meta = {
+          created_at: new Date().toISOString(),
+          compressed_sha256: await sha256Hex(compressed),
+          filename: filename,
+          in_bytes: inBytes,
+          payload_sha256: rawSha,
+          protocol: GARD_PROTOCOL,
+          weyl_psi5: psi5.map(v => Math.round(v * 1e5) / 1e5),
+        };
+        const metaBytes = new TextEncoder().encode(
+          JSON.stringify(meta, Object.keys(meta).sort()));
+        const aad = concatBytes(GARD_MAGIC_V2, salt, nonce, packed20b, metaBytes);
+        const sealed = new Uint8Array(await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 }, key, compressed));
+
+        const container = concatBytes(
+          GARD_MAGIC_V2, salt, nonce, packed20b,
+          u32be(metaBytes.length), metaBytes, u32be(sealed.length), sealed);
+
+        // Verify by round-tripping what we just built, before offering it.
+        const check = new Uint8Array(await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 }, key, sealed));
+        const restored = await zlibInflate(check);
+        if (await sha256Hex(restored) !== rawSha) {
+          throw new Error("round-trip verification failed; container not written");
+        }
+
+        LAST_BLOB = new Blob([container], { type: "application/octet-stream" });
+        LAST_FILENAME = filename + ".gard.store";
 
         const result = {
           action: "compress",
           source: filename,
           output_gard_shard: LAST_FILENAME,
           in_bytes: inBytes,
-          out_bytes: 20,
-          compaction_factor: compactionFactor,
+          out_bytes: container.length,
+          compaction_factor: (inBytes / Math.max(1, container.length)).toFixed(2) + "x",
           gard_shard_info: {
-            protocol: "gard-shard/v1",
-            domain: "SiCi_SQRT(-1)",
-            weyl_tensor_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
+            protocol: GARD_PROTOCOL,
+            domain: GARD_DOMAIN,
+            encryption_cipher: "AES-256-GCM (AEAD) + HKDF-SHA256",
+            engine: "browser (WebCrypto)",
+            payload_sha256: rawSha,
+            weyl_tensor_psi5: meta.weyl_psi5,
           },
           data_consistency_statistics: {
             dissociation_error_percent: "0.000000%",
-            integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
+            aead_authenticated: true,
+            round_trip_verified: true,
+            integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION",
           },
           timestamp: nowStr
         };
         HISTORY.unshift(result);
         return result;
       } else {
-        // Decompress action - 100% bit-for-bit exact binary restoration
-        LAST_BLOB = new Blob([rawBytes], { type: "application/octet-stream" });
-        LAST_FILENAME = filename.replace(".gard.weyl.bin", "").replace(".weyl.bin", "").replace(".gz", "");
+        if (!(rawBytes.length > GARD_MAGIC_V2.length &&
+              GARD_MAGIC_V2.every((b, i) => rawBytes[i] === b))) {
+          throw new Error("not a GARD_WEYL_v2 container");
+        }
+        let cur = GARD_MAGIC_V2.length;
+        const salt = rawBytes.slice(cur, cur + 32); cur += 32;
+        const nonce = rawBytes.slice(cur, cur + 12); cur += 12;
+        const packed20b = rawBytes.slice(cur, cur + 20); cur += 20;
+        const metaLen = readU32be(rawBytes, cur); cur += 4;
+        const metaBytes = rawBytes.slice(cur, cur + metaLen); cur += metaLen;
+        const sealedLen = readU32be(rawBytes, cur); cur += 4;
+        const sealed = rawBytes.slice(cur, cur + sealedLen);
+
+        const meta = JSON.parse(new TextDecoder().decode(metaBytes));
+        const key = await deriveGardKey(secret, salt, meta.filename || filename);
+        const aad = concatBytes(GARD_MAGIC_V2, salt, nonce, packed20b, metaBytes);
+        let compressed;
+        try {
+          compressed = new Uint8Array(await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 }, key, sealed));
+        } catch (e) {
+          throw new Error("authentication failed: wrong grid secret or the container was modified");
+        }
+        const restored = await zlibInflate(compressed);
+        const recalc = await sha256Hex(restored);
+        const digestMatch = !!meta.payload_sha256 && recalc === meta.payload_sha256;
+        if (meta.payload_sha256 && !digestMatch) {
+          throw new Error("payload digest mismatch after reconstruction");
+        }
+
+        LAST_BLOB = new Blob([restored], { type: "application/octet-stream" });
+        LAST_FILENAME = meta.filename || filename.replace(".gard.store", "");
 
         const result = {
           action: "decompress",
           source: filename,
           output: LAST_FILENAME,
           in_bytes: inBytes,
-          restored_bytes: inBytes,
-          compaction_factor: "1.0x",
+          restored_bytes: restored.length,
+          compaction_factor: (restored.length / Math.max(1, inBytes)).toFixed(2) + "x",
           gard_shard_info: {
-            protocol: "gard-shard/v1",
-            domain: "SiCi_SQRT(-1)",
-            weyl_tensor_psi5: [0.85, 0.32, 0.99, 0.85, 0.92]
+            protocol: meta.protocol || GARD_PROTOCOL,
+            domain: GARD_DOMAIN,
+            encryption_cipher: "AES-256-GCM (AEAD) + HKDF-SHA256",
+            engine: "browser (WebCrypto)",
+            payload_sha256: recalc,
+            weyl_tensor_psi5: unpackWeyl(packed20b).map(v => Math.round(v * 1e5) / 1e5),
           },
           data_consistency_statistics: {
-            dissociation_error_percent: "0.000000%",
-            integrity_status: "AUTHENTICATED_MATCH_ZERO_DISSOCIATION"
+            dissociation_error_percent: digestMatch ? "0.000000%" : "unverified",
+            aead_authenticated: true,
+            digest_match: digestMatch,
+            integrity_status: digestMatch
+              ? "AUTHENTICATED_MATCH_ZERO_DISSOCIATION" : "UNVERIFIED",
           },
           timestamp: nowStr
         };
@@ -724,7 +898,6 @@
         return result;
       }
     }
-
     function renderResult(data, isServer, actionType) {
       document.getElementById("compactionFactor").innerText = data.compaction_factor || "1.0x";
       document.getElementById("inBytes").innerText = formatBytes(data.in_bytes || data.restored_bytes || 0);
