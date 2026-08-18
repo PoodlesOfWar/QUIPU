@@ -156,7 +156,7 @@ Relevant code paths:
 
 A classical third-order consistency check on Pearson correlations across consecutive GARD (Weyl) states. It is a drift / regime-change diagnostic, logged only — it does not modulate the learning rate.
 
-`gard_info` bounds the lossless GARD compression chain (canonical JSON → zlib → AES-256-CBC → HMAC-SHA256) below by the Cramér-Rao floor; the bits between the floor and the actual Float32 encoding are the *interstitial* gap — over-provisioned precision the noisy channel cannot justify, not a hidden data channel. Nothing below the CRB floor is recoverable, so nothing "survives" a lossy encoding stage.
+`gard_info` compares the CRB floor to the actual stored GARD/Weyl state encoding (a 5×Float32 pack stored base64-encoded in `brain_kv`); the difference is the *interstitial* gap — over-provisioned precision the noisy channel cannot justify, not a hidden data channel. Nothing below the CRB floor is recoverable, so nothing "survives" a lossy encoding stage.
 
 **Data flow:**
 
