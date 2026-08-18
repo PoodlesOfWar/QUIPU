@@ -933,3 +933,23 @@ def test_mesh_compaction_summary_gard_crb_present():
 def test_information_compaction_scalar_gard_in_all():
     from src.quipu import ueqgm_engine
     assert "information_compaction_scalar_gard" in ueqgm_engine.__all__
+
+
+def test_intermediary_binding_profile_alias_and_labels():
+    """Renamed from tantalum_intermediary_binding; alias kept one release.
+
+    The receiver_* strings stay in the returned dict: asset_resource_mesh
+    matches receiver_material against materials on real supply-chain part
+    records, so they are load-bearing lookup keys.
+    """
+    from src.quipu import ueqgm_engine as u
+
+    assert u.tantalum_intermediary_binding is u.intermediary_binding_profile
+    assert "intermediary_binding_profile" in u.__all__
+
+    profile = u.intermediary_binding_profile(
+        weyl_phase=0.5, coherence=2, mesh_alignment=0.6, observer_alignment=0.4,
+    )
+    assert profile["receiver_material"] == "tantalum"
+    assert 0.0 <= profile["binding_gain"] <= 1.0
+    assert profile["binding_multiplier"] >= 0.55
