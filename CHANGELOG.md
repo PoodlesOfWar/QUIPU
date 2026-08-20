@@ -4,6 +4,15 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.29.0] World Model Dialectic & Epistemic Rupture Detection (2026-08-20)
+
+### Added — World Model & Epistemic Rupture Detection
+- **`src/quipu/world_model.py`.** Complete epistemic rupture detection engine maintaining cognitive phase state (`receptive_hunger`, `empirical_precedent`, `targeted_epistemic`, `continuous_synthesis`).
+- **`assess_observation()`.** Measures epistemic surprise $\text{clamp}((1 - \text{coverage}) \cdot \text{confidence}, 0, 1)$ on incoming observations and triggers rupture events on high novelty + confidence, STP geodesic divergence, or $\Delta S$ entropy spikes.
+- **`retrieval_directive()`.** Generates phase-adaptive retrieval directives (`broad_exploration`, `precedent_building`, `targeted_gap_closing`, `synthesis_verification`) with dynamic confidence floors.
+- **`GET /world-model` endpoint.** Exposes the full world-model dialectic state, surprise EMA, rupture event log, and active retrieval directive.
+- **Guidance & Observe Integration.** `observer_service.py` integrates `world_model` data into `GET /guidance` and `POST /observe` response payloads.
+
 ## [0.28.0] GARD Shard AES-256-GCM End to End & Si/Ci Numerical Correctness (2026-08-18)
 
 ### Changed — wire protocol

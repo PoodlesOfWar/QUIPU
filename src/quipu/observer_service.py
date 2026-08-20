@@ -52,7 +52,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import brain_kv, hideout_mesh, mesh_slm
+from . import brain_kv, hideout_mesh, mesh_slm, world_model
 from ._version import __version__
 from .local_store import db_path
 
@@ -213,6 +213,8 @@ def _guidance(source: str, limit: int) -> dict[str, Any]:
         "numeric_lexicon": _lexicon(30, numeric_only=True),
         "pairs": _strong_pairs(),
         "calibration": _calibration(source),
+        "world_model": world_model.world_model_state(),
+        "retrieval_directive": world_model.retrieval_directive(),
         "sources": {
             source: _load_stats(source),
             sibling: _load_stats(sibling),
@@ -251,6 +253,14 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     stats = _record_observation(source, len(tokens), confidence)
     _bump_pending()
 
+    world_model_result = world_model.assess_observation(
+        source=source,
+        tokens=tokens,
+        confidence=confidence,
+        coverage=coverage,
+        novel_tokens=unknown,
+    )
+
     summary = mesh_slm.state_summary()
     return 200, {
         "ok": True,
@@ -264,6 +274,7 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "novel_tokens": unknown,
             "calibration": _calibration(source),
         },
+        "world_model": world_model_result,
         "totals": {
             "observations": stats.get("observations"),
             "tokens": stats.get("tokens"),
@@ -394,6 +405,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                     return
                 limit = int((qs.get("limit") or ["60"])[0])
                 self._send_json(200, _guidance(source, max(1, min(limit, 500))))
+            elif parsed.path == "/world-model":
+                self._send_json(200, world_model.world_model_state())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
