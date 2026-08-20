@@ -1,0 +1,16 @@
+.git
+__pycache__
+**/__pycache__
+.pytest_cache
+local_brain.sqlite
+local_brain.sqlite-*
+tests
+bench
+docs
+julia
+gui
+*.ps1
+Todays Learning.txt
+LEARNINGS.md
+CHANGELOG.md
+RELEASE_NOTES.md

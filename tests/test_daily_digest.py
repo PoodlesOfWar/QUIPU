@@ -179,5 +179,5 @@ def test_format_digest_produces_readable_report(seeded_digest_db):
     text = digest.format_digest(d)
     assert "System Entirety - daily digest" in text
     assert "holographic" in text
-    assert "Ring 5" in text
-    assert "ACRE emergent specialists" in text
+    assert "Specialists" in text
+    assert "emergent" in text

@@ -1,7 +1,7 @@
 """
     GardShardModel
 
-Julia protocol peer for the Supply Chain Brain **GARD Shard** model.
+Julia protocol peer for the Supply Chain Architect **GARD Shard** model.
 
 `gard-shard/v2` turns a canonical UTF-8 JSON value into one or more encrypted,
 authenticated shards:

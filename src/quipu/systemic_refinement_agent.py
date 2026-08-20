@@ -1,6 +1,6 @@
 """systemic_refinement_agent — Ring 5 strategy runner for the QUIPU System Entirety.
 
-The parent Supply Chain Brain's ``systemic_refinement_agent.py`` ran every
+The parent Supply Chain Architect's ``systemic_refinement_agent.py`` ran every
 20 min - 2 h (adaptive via ``acquisition_drive``), reading corpus/dispatch/
 self-train health and deciding actions: nudge hyperparameters, trigger a
 self-train round, expand network observation, and run ``tool_forge.forge_round``.

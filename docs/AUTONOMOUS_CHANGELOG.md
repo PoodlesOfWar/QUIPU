@@ -95,7 +95,7 @@
 - Added **Perception Mk1** as a sixth-sense visual reasoning subsystem, with task profiles, plasticity dials, temporal-spatial weighting, and corpus-round integration.
 - Restored `_sense_llm_health()` in `systemic_refinement_agent.py`, removing the refinement-loop `NameError` so every cycle can rebuild full LLM-health state and execute candidate actions.
 - Added noninteractive Oracle Fusion cache handling plus regression tests, so shared page loads now fail cleanly when a cached SSO session is missing or stale instead of forcing browser auth.
-- Added the What-If **Ask Agent** flow that routes scenario questions through the Supply Chain Brain with quest routing, scenario context, and next-step guidance.
+- Added the What-If **Ask Agent** flow that routes scenario questions through the Supply Chain Architect with quest routing, scenario context, and next-step guidance.
 - Validated the current routed surface with `test_dbi_tooltip.py -k test_all_pages_surface_primary_ui` (**26 passed**) and the new What-If/Oracle tests.
 
 ## 2026-04-21 17:41:05

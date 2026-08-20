@@ -1,7 +1,7 @@
 """
     MeshSLMSCMGLMGNN
 
-**MESH-SLM-SCM-GLM-GNN** — the holistic Supply Chain Brain model
+**MESH-SLM-SCM-GLM-GNN** — the holistic Supply Chain Architect model
 (`mesh_slm.py`, `MODEL_ARCH = "MESH-SLM-GLM-GNN"`) extended with **SCM**,
 the *Saturation-Cycle Model* predictor (technology adoption → tangential
 atrophy → modular resuscitation; see the standalone port `scm_predictor.jl`

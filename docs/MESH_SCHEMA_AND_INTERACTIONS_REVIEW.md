@@ -16,7 +16,7 @@ These directly address the top two "Critical" race conditions identified in the 
 
 ## Executive Summary
 
-The MESH is a **dual-transport distributed learning and compute fabric** for the Supply Chain Brain:
+The MESH is a **dual-transport distributed learning and compute fabric** for the Supply Chain Architect:
 
 - **Learning / Knowledge MESH**: append-only event sourcing + graph replication over the git repository itself (`cloud_learning_queue.jsonl` + `cloud_corpus_queue.jsonl`).
 - **Physical / Compute MESH**: OneDrive-synced rendezvous (`bridge_state/compute_peers/*.json`, `bridge_triggers/`) + direct TCP jobs (HMAC-protected).

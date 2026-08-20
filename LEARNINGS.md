@@ -1,6 +1,6 @@
 # LEARNINGS
 
-Distilled, transferable learnings from the Supply Chain Brain lineage (v0.1.0 through v0.24.1), carried forward so QUIPU development continues from the present state of understanding rather than rediscovering it. The complete record lives in `src/quipu/_version.py` (PHASES), `CHANGELOG.md`, `RELEASE_NOTES.md`, and `docs/`.
+Distilled, transferable learnings from the Supply Chain Architect lineage (v0.1.0 through v0.24.1), carried forward so QUIPU development continues from the present state of understanding rather than rediscovering it. The complete record lives in `src/quipu/_version.py` (PHASES), `CHANGELOG.md`, `RELEASE_NOTES.md`, and `docs/`.
 
 ## Model architecture
 

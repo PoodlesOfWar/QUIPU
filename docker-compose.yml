@@ -1,0 +1,23 @@
+services:
+  quipu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: quipu-observer:dev
+    container_name: quipu
+    ports:
+      - "7100:7100"
+    environment:
+      SCB_DB_PATH: /data/local_brain.sqlite
+      QUIPU_TRAIN_INTERVAL: "45"
+      QUIPU_TRAIN_BUDGET: "8"
+      QUIPU_HIDEOUT_HOST: scbrain-hideout
+      QUIPU_HIDEOUT_MESH: hideout-mesh
+      QUIPU_HIDEOUT_TUNNEL: scbrain-hideout.use2
+    volumes:
+      - quipu_brain:/data
+      - ./bridge_state:/app/bridge_state
+    restart: unless-stopped
+
+volumes:
+  quipu_brain:

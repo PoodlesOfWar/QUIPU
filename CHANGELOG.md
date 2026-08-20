@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **Supply Chain Brain** are documented here. Versions
+All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
@@ -65,7 +65,7 @@ truth for the version number is `src/quipu/_version.py`.
 
 ### Added
 
-- **`src/quipu/doc_annealing.py`** *(new module)* — the clean-room QUIPU reimplementation of the Supply-Chain-Brain doc-annealing worker. Each cycle reads the live 7+1-D System Entirety state (`system_entirety.system_entirety_state`), the MESH-SLM predictor snapshot (`mesh_slm.state_summary`), and the STP geodesic P1 trend (`mesh_slm.stp_diagnostic_trend`), then regenerates `docs/system_entirety_map.md`. Rewrites are gated by a **SHA-256 structural fingerprint** over version + bridge primary root + total roots + `mesh_density` + UEQGM `certainty` + `nodal_bifurcation` (each rounded to 2 dp), so only structural moves — not sub-1% jitter — trip a rewrite. On change it bumps `brain_kv["doc:system_map_version"]`, stores `brain_kv["doc:system_map_hash"]`, and appends a bounded entry to `brain_kv["doc_annealing:history"]`.
+- **`src/quipu/doc_annealing.py`** *(new module)* — the clean-room QUIPU reimplementation of the Supply-Chain-Architect doc-annealing worker. Each cycle reads the live 7+1-D System Entirety state (`system_entirety.system_entirety_state`), the MESH-SLM predictor snapshot (`mesh_slm.state_summary`), and the STP geodesic P1 trend (`mesh_slm.stp_diagnostic_trend`), then regenerates `docs/system_entirety_map.md`. Rewrites are gated by a **SHA-256 structural fingerprint** over version + bridge primary root + total roots + `mesh_density` + UEQGM `certainty` + `nodal_bifurcation` (each rounded to 2 dp), so only structural moves — not sub-1% jitter — trip a rewrite. On change it bumps `brain_kv["doc:system_map_version"]`, stores `brain_kv["doc:system_map_hash"]`, and appends a bounded entry to `brain_kv["doc_annealing:history"]`.
 - **Public API** — `anneal_docs(force=…, out_path=…, collected=…)`, `structural_change_review()`, `render_system_map()`, `run_loop(interval_s=…)`, plus an argparse CLI: `python -m src.quipu.doc_annealing [--once | --loop --interval N] [--force]`.
 - **`Start-DocAnnealing.ps1`** — runs the worker (30-min loop by default, `-Once`/`-Force` flags), mirroring `Show-TodaysLearning.ps1`.
 - **`Register-DocAnnealing.ps1`** — installs a recurring Windows Scheduled Task `QUIPUDocAnnealing` (at logon + every 30 min) so the map stays current; `-Unregister` / `-Minutes N` supported.
@@ -520,7 +520,7 @@ Raw part numbers, OCR text, conditions, and bin locations are stored only in TTL
 - **`pipeline/src/quipu/brain_dbi.py`** — tightened default and EOQ fallback copy so loading cards explicitly tell operators to wait for live rows, source badges, or ranked work before assigning action.
 
 - **Heavy pages now publish DBI immediately, before the expensive work starts:**
-  - **`pipeline/pages/1_Supply_Chain_Brain.py`** — early DBI render before graph build, plus safer parallel frame fetches during graph construction.
+  - **`pipeline/pages/1_Supply_Chain_Architect.py`** — early DBI render before graph build, plus safer parallel frame fetches during graph construction.
   - **`pipeline/pages/2_EOQ_Deviation.py`** — early pending state, explicit 10-second UI budget, and fast-fail DBI messaging when the live EOQ query overruns.
   - **`pipeline/pages/4_Procurement_360.py`** — early loading DBI before procurement frame pulls and explicit empty-data DBI fallback.
   - **`pipeline/pages/7_Lead_Time_Survival.py`** — early loading DBI before the survival query and zero-group fallback states when the live slice is not actionable.
@@ -542,7 +542,7 @@ Raw part numbers, OCR text, conditions, and bin locations are stored only in TTL
 - **`pipeline/tests/playwright/test_dbi_tooltip.py`** — expanded from a narrow DBI check into app-wide routed-page coverage:
   - route registry corrected to the real 26-page `st.navigation()` surface, including **Operational Status**
   - `test_all_pages_surface_primary_ui(...)` now smoke-tests every routed page for shell readiness and uncaught exceptions
-  - `DBI_EXPERIENCE_PAGES` now covers Supply Chain Brain, EOQ Deviation, Procurement 360, Lead-Time Survival, Multi-Echelon, and Report Creator with first-user-state timing checks
+  - `DBI_EXPERIENCE_PAGES` now covers Supply Chain Architect, EOQ Deviation, Procurement 360, Lead-Time Survival, Multi-Echelon, and Report Creator with first-user-state timing checks
 
 ### Verified
 
@@ -1021,7 +1021,7 @@ tests/test_symbiotic_torus.py ......................... 29/29 PASS
 ### Test Results (run 2026-04-23, fresh server PID 26756)
 ```
 11/19 PASS
-  PASS: Query Console, Schema Discovery, Supply Chain Brain (5/5 expanders),
+  PASS: Query Console, Schema Discovery, Supply Chain Architect (5/5 expanders),
         Supply Chain Pipeline (2/2), Connectors, Lead-Time Survival (4/4),
         Multi-Echelon (4/4), Sustainability (4/4), What-If, Decision Log (4/4),
         Benchmarks (5/5)
@@ -1051,8 +1051,8 @@ tests/test_symbiotic_torus.py ......................... 29/29 PASS
 - **`test_connector_assumptions.py` Group 8**: 11 live xlsx tests against real OneDrive files — all pass (61 PASS / 0 FAIL / 10 WARN)
 
 ### Fixed
-- **`1_Supply_Chain_Brain.py`**: `_build_graph()` switched from `@st.cache_data` to `@st.cache_resource` — `GraphContext` (NetworkX graph) is not pickle-serialisable so `cache_data` raised `UnserializableReturnValueError`
-- **`1_Supply_Chain_Brain.py`**: Connector status bar removed from the Brain page; it now lives exclusively in the Connectors page
+- **`1_Supply_Chain_Architect.py`**: `_build_graph()` switched from `@st.cache_data` to `@st.cache_resource` — `GraphContext` (NetworkX graph) is not pickle-serialisable so `cache_data` raised `UnserializableReturnValueError`
+- **`1_Supply_Chain_Architect.py`**: Connector status bar removed from the Brain page; it now lives exclusively in the Connectors page
 - **`6_Connectors.py`**: Status summary row added above the expanders; shows 🟢 green for connectors with an active handle, 🟡 yellow for unconfigured ones
 - **`connections.yaml`**: SyteLine SiteP database corrected from `PFI_App` → `PFI_SLMiscApps_DB`; `schema: cycle_count` added
 - **`connections.yaml`**: `ax_airport_rd` block added (`MicrosoftDynamicsAX`, `ActiveDirectoryIntegrated`)
@@ -1119,7 +1119,7 @@ All .py files outside .venv compile clean
 - **Local Persistence (`local_store.py`)** — Added a local SQLite database (`local_brain.sqlite`) for storing state independent of the Azure Replica. Support added for action bookmarks, NLP part categories, and manual OTD workflow comments/owners.
 - **NLP Semantic Categorization (`nlp_categorize.py`)** — Parts are now bucketed into taxonomic categories (e.g. Steel, Fasteners, Wiring, Hydraulics) dynamically using a scikit-learn TF-IDF / cosine_similarity model falling back to heuristic keyword-matching.
 - **Action Evaluation Engine (`actions.py`)** — Academic outputs are converted into layperson tasks via a deterministic Friction-to-Action semantic mapping that computes Annual Impact ($ / yr), Prioritization, Confidence metrics, and Action Owners.
-- **Brain Expert TODO List** — `1_Supply_Chain_Brain.py` now leverages `actions_for_pipeline` to load a unified list of pipeline tasks sorted by monetary value per year.
+- **Brain Expert TODO List** — `1_Supply_Chain_Architect.py` now leverages `actions_for_pipeline` to load a unified list of pipeline tasks sorted by monetary value per year.
 - **Intercompany Inventory Transfer Scan** — `4_Procurement_360.py` now cross-references obsolete list parts with global network-wide `on_hand` metrics to locate viable transfer sites.
 - **Executive ESG ROI Panel** — `10_Sustainability.py` now includes a net-present 5-Year ROI evaluation per abatement lever (mode-shifts, LTL/FTL).
 - **Interactive Daily Plant Review** — `3_OTD_Recursive.py` integrates directly into the local SQLite store allowing analysts to review rows "Opened Yesterday", claim assignment, and drop updates manually via Streamlit's `data_editor`.
@@ -1145,7 +1145,7 @@ All .py files outside .venv compile clean
 ## 0.5.0 — Value Stream Living Map
 
 ### Added
-- **Value Stream Pipeline**: Replaced generic graph on \Pages/1_Supply_Chain_Brain.py\ with an interactive Value Stream Map.
+- **Value Stream Pipeline**: Replaced generic graph on \Pages/1_Supply_Chain_Architect.py\ with an interactive Value Stream Map.
 - **Formulaic Friction Points**: Added integrated bottleneck algorithms based on MIT SCALE principles, calculating friction dynamically using \due_date_key\ tracking for POs/WOs, and \promised_ship_day_key\ for SOs.
 - **Enhanced Topology Filtering**: Added specific MIT Design Lab UI filters for Production Plant (Business Unit) and Value Stream (Part Types), pushing filter complexity upstream and using non-linear marker scaling.
 - **Function & Schema Intersection Guide** (`docs/REPO_FUNCTION_AND_SCHEMA_GUIDE.md`) — end-to-end reference mapping every brain module, MIT CTL research module, Streamlit page and `src/deck/` PPTX builder to the underlying replica tables/columns. Documents the four confirmed schema gaps (`failure_reason`, `fact_cycle_count`, point-in-time inventory, ABC part codes on `dim_part`) that surface as empty/Unknown slides in the agent-generated PowerPoint.
@@ -1186,7 +1186,7 @@ All .py files outside .venv compile clean
   fix applied; absolute fallback SQL added; `_load()` / `_port()` timeout
   raised to 120 s.
 
-- **Graph node labels** (`1_Supply_Chain_Brain.py` + `graph_context.py`) —
+- **Graph node labels** (`1_Supply_Chain_Architect.py` + `graph_context.py`) —
   nodes were labelled with raw integer keys (e.g. `221273`) instead of human
   names. Fixed by:
   - `graph_context.add_parts()` now accepts `label_col=` parameter.

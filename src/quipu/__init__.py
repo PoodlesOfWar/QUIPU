@@ -1,4 +1,4 @@
-"""QUIPU - extracted Supply Chain Brain model core.
+"""QUIPU - extracted Supply Chain Architect model core.
 
 This package replaces the parent application's ``src.brain`` package for the
 modules carried into QUIPU. Modules use relative imports internally, so the

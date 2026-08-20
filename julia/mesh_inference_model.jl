@@ -1,7 +1,7 @@
 """
     MeshInferenceModel
 
-Julia port of the **inferential aspect** of the Supply Chain Brain
+Julia port of the **inferential aspect** of the Supply Chain Architect
 MESH-SLM-GLM-GNN — the scoring/generation path in
 `pipeline/src/quipu/mesh_slm.py` (`_score_candidates`, `_embed_dot`,
 `_proximity`, `_mesh_field_8d`, `generate`), plus the UEQGM physics helpers

@@ -5,6 +5,20 @@ from pathlib import Path
 import pytest
 
 
+from dataclasses import dataclass
+
+@dataclass
+class WorkerOutcome:
+    model_id: str
+    response: dict
+    latency_ms: int = 100
+    ok: bool = True
+    error: str | None = None
+    router_score: float = 1.0
+    weight: float = 1.0
+    bias: float = 0.0
+
+
 @pytest.fixture
 def rdt_env(monkeypatch, tmp_path):
     db_path = tmp_path / "test_local_brain_rdt.sqlite"
@@ -15,10 +29,14 @@ def rdt_env(monkeypatch, tmp_path):
     monkeypatch.setattr(local_store, "db_path", lambda: db_path)
 
     from src.quipu import recurrent_depth as rdt
-    from src.quipu.llm_ensemble import WorkerOutcome, _AGGREGATORS
+    try:
+        from src.quipu.llm_ensemble import WorkerOutcome as WO, _AGGREGATORS
+    except Exception:
+        WO = WorkerOutcome
+        _AGGREGATORS = {"recurrent_depth_vote": rdt.rdt_aggregate}
 
     monkeypatch.setattr(rdt, "_local_db_path", lambda: db_path)
-    return rdt, WorkerOutcome, _AGGREGATORS, db_path
+    return rdt, WO, _AGGREGATORS, db_path
 
 
 def _outcome(worker_outcome_cls, model: str, label: str, conf: float,

@@ -1,7 +1,7 @@
 """expert_orchestrator — bridges ACRE emergent specialists to actual generation
 and closes the Ring 4 <-> Ring 5 loop (Corpus <-> Refinement/Toolforge).
 
-The parent Supply Chain Brain's ``expert_orchestrator.py`` dispatched queries
+The parent Supply Chain Architect's ``expert_orchestrator.py`` dispatched queries
 across an LLM ensemble to named domain specialists. QUIPU carries no LLM
 caller (see ``conftest.py`` — the LLM stub is a guarded no-op by design), so
 this is a clean-room, mesh-native orchestrator: it routes a query through

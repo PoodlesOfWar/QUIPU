@@ -1,6 +1,6 @@
 # QUIPU
 
-QUIPU is the extracted, self-contained continuation of the **Supply Chain Brain** model core: the MESH-SLM-SCM-GLM-GNN generational models, the Quipu knotted-memory minimal model, the GARD-shard encryption-compression protocol, and the learning-dynamics machinery (System Entirety, plasticity, rADAM, realization gating) that trains and governs them. It carries the full documentation, version lineage, and learnings of the parent system at **v0.24.1**, with none of the application bloat — no ERP connectors, no Streamlit UI, no network-bridge tooling, no operational data.
+QUIPU is the extracted, self-contained continuation of the **Supply Chain Architect** model core: the MESH-SLM-SCM-GLM-GNN generational models, the Quipu knotted-memory minimal model, the GARD-shard encryption-compression protocol, and the learning-dynamics machinery (System Entirety, plasticity, rADAM, realization gating) that trains and governs them. It carries the full documentation, version lineage, and learnings of the parent system at **v0.24.1**, with none of the application bloat — no ERP connectors, no Streamlit UI, no network-bridge tooling, no operational data.
 
 All employer-specific identifiers from the parent project were redacted at extraction time (`Contoso`/`Fabrikam`/`SiteX` placeholders, `10.0.0.x` addresses, `DESKTOP-01`-style hostnames). The lineage and mechanics are intact; the private context is not.
 
