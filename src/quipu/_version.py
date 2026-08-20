@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-__version__ = "0.28.0"
+__version__ = "0.29.0"
 __release__ = (
-    "GARD Shard AES-256-GCM end to end (gard-shard/v2) and Si/Ci numerical correctness. "
-    "Envelopes seal with a single AEAD primitive instead of AES-256-CBC + separate "
-    "HMAC-SHA256, with a full v1 read path retained; the Julia peer is ported to match, "
-    "restoring cross-language parity. The sine/cosine integrals are re-implemented via "
-    "Taylor series plus a modified-Lentz continued fraction, fixing a divergence past "
-    "|phi| ~ 2pi that returned ~1.9e13 for a ~1.7e-2 value whenever scipy was absent. "
-    "The GARD Lite GUI, which advertised encryption it never performed and reported "
-    "hardcoded integrity results, now really encrypts and reports only what it verified."
+    "World Model Dialectic & Epistemic Rupture Detection: The QUIPU Observer now actively "
+    "monitors the dialectic between top-down corpus priors and empirical observations from "
+    "Loadopoly-OCR (Vision) and Bakugo (Touch). Implements epistemic surprise computation, "
+    "4-phase cognitive transitions (receptive_hunger, empirical_precedent, targeted_epistemic, "
+    "continuous_synthesis), rupture detection (novelty x confidence, STP geodesic divergence, "
+    "and Delta S entropy spikes), retrieval directives, and lossy physical channel grounding."
 )
-__build_date__ = "2026-08-18"
+__build_date__ = "2026-08-20"
 
 PHASES = {
+    "0.29.0": "World Model Dialectic & Epistemic Rupture Detection: src/quipu/world_model.py tracks cognitive phases and acquisition pressure; assess_observation detects epistemic ruptures from high novelty + confidence, STP divergence, and Delta S spikes; retrieval_directive steers learning retrieval across broad_exploration, precedent_building, targeted_gap_closing, and synthesis_verification; GET /world-model endpoint and guidance payload integration.",
     "0.28.0": "GARD Shard AES-256-GCM end to end plus Si/Ci numerical correctness. gard_shard_model.py seals envelopes with AES-256-GCM (gard-shard/v2) instead of AES-256-CBC + PKCS#7 + separate HMAC-SHA256: padding-oracle surface removed, second HKDF key dropped, 32-byte HMAC replaced by a 16-byte tag, raw per-shard overhead 144 -> 110 bytes. The context v1 bound into its MAC preimage becomes GCM additional authenticated data, so shard reordering, nonce substitution and compression-level edits all fail the tag. v1 stays fully readable: the v1 HKDF info and MAC preimage bind the protocol string, so those paths pin GARD_PROTOCOL_V1 rather than the module constant, and assignment proofs stay pinned to v1 so issued proofs still verify. julia/gard_shard_model.jl is ported to v2, restoring cross-language parity -- Nettle.jl exposes no GCM, so GCM is built from Nettle AES per SP 800-38D, validated in Python against three NIST CAVP vectors and 300 randomised differential cases before transliteration, with those vectors re-run inside selftest() so the port self-validates in production. ueqgm_engine._raw_sici replaces a fixed-order power series that diverged past |phi| ~ 2pi (returning ~1.9e13 against ~1.7e-2 at coherence 20) with Taylor series below |x|=2 and a modified-Lentz continued fraction for E1(ix) above; verified against mpmath at <= 6.7e-16 for x in [1e-8, 1e6]. Identity tests are parametrised over the scipy and pure-Python paths so the fallback cannot go untested. GARD_STATE_STORED_BYTES / MESH_BRAIN_KV_WEYL_STORED_BYTES (=28) correct the 20-byte designator, which described the raw Float32 pack rather than the base64 text actually stored. tantalum_intermediary_binding -> intermediary_binding_profile with a deprecated alias; the receiver_* labels stay because asset_resource_mesh matches them against real part records. The GARD Lite GUI advertised AES-256-CBC while performing no encryption, keyed its HMAC with the public domain string, and returned hardcoded integrity results; it now seals with AES-256-GCM (server and browser alike, byte-compatible), fails closed without a grid secret, verifies by round-tripping, and reports UNVERIFIED when it has not verified.",
     "0.27.2": "Entropy-differential ↔ STP-gap anti-correlation signature: train_round persists entropy_differential_history (ΔS = exact-SQL von Neumann entropy minus mean-field approximation, the real-vs-computational curvature of the quipu graph) next to the STP gap histories; stp_diagnostic_trend() computes the Pearson correlation between ΔS and the torus gap over the trailing 2·window and flags delta_s_signature when anti-correlated at |ρ| ≥ 0.5·Ω_Λ — the measured coupling between information-geometric and trajectory curvature. New helpers _entropy_differential (dual-path SQL, never raises) and _pearson_corr; last_entropy_differential surfaced in state_summary. 6 focused tests in tests/test_mesh_slm.py (non-negativity, empty-graph None, star>chain ordering, Pearson basics, signature present/absent).",
     "0.27.0": "System Entirety Control Plane GUI & GARD Shard High-Performance Neural Tensor Compression: Full 7-D System Entirety state re-materialization with non-zero sense manifold axes, local hardware asset discovery, active UEQGM adaptive runtime, multi-drive file selection, and GARD Shard authenticated container packing (gui/GARD_Shard/compression & gui/GARD_Shard/decompression) yielding 100% exact lossless binary file reconstruction with zero data dissociation error.",

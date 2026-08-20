@@ -1,9 +1,9 @@
 # System Dynamics — QUIPU Entirety & Tri-Repo Mesh
 
-Version: 0.28.0  
+Version: 0.29.0  
 Date: 2026-08-20  
 
-> **Lineage & progression.** This model was authored for the Supply-Chain-Architect (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. In **v0.28.0**, the control surface achieves full tri-repo operational closure across **QUIPU** (the 7th-dimensional Observer learning hub), **Loadopoly-OCR** (the Vision axis: open-vocabulary unstructured archival scan observation), and **Bakugo** (the Touch axis: structured trading card metrology and closed catalog vocabulary). It integrates authenticated **GARD Shard AES-256-GCM (gard-shard/v2)** tensor compaction, numerical Si/Ci integral stability via modified-Lentz continued fractions, and entropy-differential ($\Delta S$) geodesic coupling.
+> **Lineage & progression.** This model was authored for the Supply-Chain-Architect (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. In **v0.29.0**, the control surface adds **World Model Dialectic** — epistemic rupture detection, precedent-driven learning retrieval, and cognitive phase transitions — to the tri-repo closed-loop mesh. The Observer now tracks when empirical data from Bakugo (Touch) and Loadopoly-OCR (Vision) contradicts its existing corpus priors, triggering conceptual bifurcation and targeted re-acquisition. Physical-space channel grounding from Bakugo and vision-channel grounding from Loadopoly-OCR teach the Observer how information is lost in physical reality vs digital acquisition.
 
 ---
 
@@ -143,6 +143,37 @@ $$\text{Fingerprint} = \text{SHA256}\big(\text{version} \,\|\, \text{bridge\_roo
 - `Loadopoly-OCR` and `Bakugo` mirror operational records to Supabase (`bakugo_scans`, `bakugo_labels`, `historical_documents_global`, `processing_queue`).
 - Row Level Security (RLS) policies and contamination firewalls guarantee that only verified, cert-backed records can train downstream outcome models.
 
+### Loop 6: World Model Dialectic — Epistemic Rupture & Precedent-Driven Retrieval (v0.29.0)
+The Observer maintains a world-model surface (`src/quipu/world_model.py`) that tracks the dialectic between top-down corpus priors and bottom-up empirical sensorium:
+
+**Phase transitions** — the system moves through four cognitive phases as empirical precedent accumulates:
+$$\text{phase}(d) = \begin{cases}
+\text{receptive\_hunger}      & d < 0.2 \\
+\text{empirical\_precedent}   & 0.2 \le d < 0.6 \\
+\text{targeted\_epistemic}    & 0.6 \le d < 0.85 \\
+\text{continuous\_synthesis}  & d \ge 0.85
+\end{cases}$$
+where $d \in [0, 1]$ is precedent depth (accumulated empirical coverage). A major rupture ($\text{surprise} > 0.8$) resets to `receptive_hunger`.
+
+**Epistemic surprise** is computed per observation as the product of token novelty and sensor confidence:
+$$\text{surprise} = \text{clamp}\big((1 - \text{coverage}) \cdot \text{confidence}, 0, 1\big)$$
+tracked via EMA: $\text{EMA}_s(t) = 0.9 \cdot \text{EMA}_s(t{-}1) + 0.1 \cdot s_t$
+
+**Rupture detection** triggers when any of three conditions hold:
+1. **High novelty + high confidence**: $\text{coverage} < 0.3 \land \text{confidence} > 0.8$ — the sensor is certain about something the mesh has never seen.
+2. **STP geodesic divergence**: STP torus gap slope $> 0$ while loss is plateaued — the learned embedding cannot explain new trajectories.
+3. **Entropy differential spike**: $\Delta S > \bar{\mu}_{\Delta S} + 2\sigma_{\Delta S}$ — the graph's information structure is being disrupted beyond normal variance.
+
+**Retrieval directives** are generated per phase to steer the learning retriever:
+| Phase | Strategy | Confidence Floor | Focus |
+| :--- | :--- | :---: | :--- |
+| `receptive_hunger` | `broad_exploration` | 0.20 | Unstructured vision, novel structures |
+| `empirical_precedent` | `precedent_building` | 0.50 | Established patterns, cross-corpus correlations |
+| `targeted_epistemic` | `targeted_gap_closing` | 0.70 | STP divergence areas, low-confidence nodes |
+| `continuous_synthesis` | `synthesis_verification` | 0.85 | Edge cases, high-entropy boundaries |
+
+**Physical-space grounding** — Bakugo enriches touch observations with information-efficiency metrics ($\eta = \sigma_{CRB} / \sigma_{measured}$) and lossy channel profiles (blur, refraction, glare) so the Observer learns the physics of information loss in physical card measurement. Loadopoly-OCR enriches vision observations with document degradation factors (ink fading, archaic typography) and lexicon coverage metrics.
+
 ---
 
 ## 6. Observability & Verification Surfaces
@@ -151,11 +182,13 @@ $$\text{Fingerprint} = \text{SHA256}\big(\text{version} \,\|\, \text{bridge\_roo
 | :--- | :--- | :--- |
 | `GET /health` | `QUIPU (:7100)` | Service liveness, vocabulary size, quipu edge count, hideout mesh status |
 | `GET /state` | `QUIPU (:7100)` | Mesh SLM summary, STP gap metrics, entropy differential, calibration |
-| `GET /guidance?source=X` | `QUIPU (:7100)` | Domain lexicon hints for OCR and numeric priors for Bakugo |
+| `GET /guidance?source=X` | `QUIPU (:7100)` | Domain lexicon hints + world model state + retrieval directive |
+| `GET /world-model` | `QUIPU (:7100)` | Full world-model dialectic state: phase, surprise EMA, rupture log, retrieval directive |
 | `GET /quipu` | `Bakugo (:8765)` | Internal observer client status, cache TTL, and received guidance |
 | `GET /rest/v1/bakugo_scans` | `Supabase (:54321)` | Live PostgREST mirror of card metrology scans |
 | `system_entirety_state()` | `QUIPU Python API` | Full 7+1-D state vector, transaction drive, and axis amplitudes |
 | `stp_diagnostic_trend()` | `QUIPU Python API` | Rolling P1 geodesic signature and $\Delta S$ anti-correlation |
+| `world_model_state()` | `QUIPU Python API` | Current cognitive phase, acquisition pressure, epistemic surprise, rupture events |
 
 ---
 
@@ -167,4 +200,6 @@ v0.22.x (SCB Base Lineage) ──► v0.24.1 (Paired Agent Gate) ──► v0.25
                               └──► v0.27.0 (Control Plane GUI & Tensor Compression)
                               │
                               └──► v0.28.0 (Tri-Repo Closed Loop, AES-256-GCM, & Si/Ci Stability)
+                              │
+                              └──► v0.29.0 (World Model Dialectic, Epistemic Rupture & Grounding)
 ```

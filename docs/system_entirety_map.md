@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
-> **Version**: 0.27.0  
-> **Annealed**: 2026-07-23T19:14:06.468763+00:00  
-> **Map revision**: v3 · fingerprint `fd21e419f5f63fd7`  
+> **Version**: 0.29.0  
+> **Annealed**: 2026-08-20T19:44:08.686959+00:00  
+> **Map revision**: v5 · fingerprint `46bad90693753017`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,21 +31,21 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-07-23T19:14:06.468763+00:00`
+> Snapshot at annealing time `2026-08-20T19:44:08.686959+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
 | Sense | Value |
 |---|---|
-| vision | 83.0% |
+| vision | 3.0% |
 | touch | 4.2% |
 | smell | 3.4% |
 | body | 3.2% |
-| brain | 69.9% |
+| brain | 3.2% |
 | perception | 4.0% |
 
-**Observer tangent** (7th-D orthogonal excitation): 34.3%  
-**7-D magnitude**: 1.1407
+**Observer tangent** (7th-D orthogonal excitation): 0.9%  
+**7-D magnitude**: 0.0867
 
 ### 2.2 Material Bifurcation
 
@@ -61,7 +61,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Transaction drive | 32.1% |
+| Transaction drive | 18.1% |
 | Transaction kind | `n/a` |
 
 ### 2.4 UEQGM Runtime
@@ -89,26 +89,28 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Vocab size | 4097 / 4096 (100.02%) |
-| Quipu edges (GNN) | 242360 |
-| Training rounds | 421 |
-| Last loss | 0.10630323426160236 |
-| 8th-D MESH field | 0.9289 |
-| Last STP embed gap | 1.533458 |
-| Last STP torus gap | 1.638672 |
+| Vocab size | 4098 / 4096 (100.05%) |
+| Quipu edges (GNN) | 914088 |
+| Training rounds | 2873 |
+| Last loss | 0.5756296139010031 |
+| 8th-D MESH field | 0.9764 |
+| Last STP embed gap | 0.927144 |
+| Last STP torus gap | 1.359541 |
 
 **STP P1 trend** (loss plateau while the geodesic gap keeps falling):
 
 | Series | Slope | P1 |
 |---|---|---|
-| loss | -0.028303000000000023 | plateaued: False |
-| STP embed gap | -0.037025550000000074 | False |
-| STP torus gap | 0.002441650000000184 | False |
+| loss | -0.019252050000000076 | plateaued: False |
+| STP embed gap | 0.04321274999999991 | False |
+| STP torus gap | 0.08529714999999993 | False |
 
 ---
 
 ## 4. Structural Changelog
 
+- **2026-08-20T19:14:09.610778+00:00** map v4 (0.28.0) — hash `5dde21aa68e7bbd1`
+- **2026-07-23T19:14:06.468763+00:00** map v3 (0.27.0) — hash `fd21e419f5f63fd7`
 - **2026-07-23T18:44:06.424649+00:00** map v2 (0.26.0) — hash `95232d12f98265c4`
 - **2026-07-23T16:13:05.345781+00:00** map v1 (0.26.0) — hash `1654d33aaadbafd1`
 

@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.29.0 - 2026-08-20
+
+**World Model Dialectic, Epistemic Rupture Detection, and Physical/Vision Channel Grounding**
+
+### Added & Enhanced
+- **World Model Epistemic Rupture Engine (`src/quipu/world_model.py`)** — Maintains cognitive phase transitions across four states (`receptive_hunger`, `empirical_precedent`, `targeted_epistemic`, `continuous_synthesis`), computing acquisition pressure and tracking rolling epistemic surprise.
+- **Epistemic Rupture Detection** — Discovers worldview-breaking empirical anomalies via three concurrent gates: high novelty + sensor confidence, Semantic-Tube-Prediction (STP) geodesic gap divergence under plateaued loss, and $\Delta S$ graph entropy spikes exceeding $2\sigma$.
+- **Precedent-Driven Retrieval Directives** — Dynamically steers the learning retriever with phase-appropriate strategies (`broad_exploration`, `precedent_building`, `targeted_gap_closing`, `synthesis_verification`) and calibrated confidence floors.
+- **Observer Integration & `/world-model` Endpoint** — Exposes full dialectic state via `GET /world-model`, injects world model metrics and retrieval directives into `GET /guidance`, and evaluates epistemic impact on every `POST /observe`.
+- **Physical & Vision Channel Grounding** — Ingests physical-space information efficiency ($\eta = \sigma_{CRB} / \sigma$) and lossy channel profiles (blur, refraction, glare) from Bakugo, paired with document degradation factors from Loadopoly-OCR.
+
+---
+
 ## v0.28.0 - 2026-08-20
 
 **Tri-Repo Closed Loop & Systems Dynamics, GARD Shard AES-256-GCM (v2), and Si/Ci Stability**
