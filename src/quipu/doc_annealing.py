@@ -1,6 +1,6 @@
 """doc_annealing — regenerate the QUIPU Entirety living system map.
 
-This is QUIPU's clean-room reimplementation of the Supply-Chain-Brain doc
+This is QUIPU's clean-room reimplementation of the Supply-Chain-Architect doc
 annealing worker. On each cycle it:
 
 1. reads the live 7+1-D System Entirety state (``system_entirety``), the
@@ -198,7 +198,7 @@ def render_system_map(collected: dict, map_version: int, fingerprint: str) -> st
     # 1. Architecture overview
     L.append("## 1. Architecture Overview")
     L.append("")
-    L.append("The QUIPU Entirety (descended from the Supply-Chain-Brain) is a "
+    L.append("The QUIPU Entirety (descended from the Supply-Chain-Architect) is a "
              "**closed-loop attractor system**. The bridge/material/entirety/bit-flip "
              "stack densifies the torus; at the centre the **MESH-SLM predictor** reads "
              "the resulting 7+1-D state and returns a ranked continuation, writing its "

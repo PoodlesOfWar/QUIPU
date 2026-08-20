@@ -1,6 +1,6 @@
 """brain_kv — canonical key/value persistence for the QUIPU mesh.
 
-The parent Supply Chain Brain shipped a ``brain_kv`` module that several
+The parent Supply Chain Architect shipped a ``brain_kv`` module that several
 extracted modules still expect:
 
 * ``mesh_slm`` reads a ``brain_kv`` table directly (``_brain_kv_get``) for

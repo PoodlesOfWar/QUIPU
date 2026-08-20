@@ -1,6 +1,6 @@
 """daily_digest — "what has the System Entirety learned today?"
 
-A read-only report over QUIPU's own mesh database (never Supply-Chain-Brain's
+A read-only report over QUIPU's own mesh database (never Supply-Chain-Architect's
 — see the module-separation note in local_store.py: each repo computes its
 `local_brain.sqlite` path relative to its own file location, so this always
 reads QUIPU's corpus even if both repos happen to be checked out side by side).

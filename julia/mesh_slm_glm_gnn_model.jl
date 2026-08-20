@@ -1,7 +1,7 @@
 """
     MeshSLMGLMGNN
 
-Julia port of the **holistic** Supply Chain Brain MESH-SLM-GLM-GNN
+Julia port of the **holistic** Supply Chain Architect MESH-SLM-GLM-GNN
 (`pipeline/src/quipu/mesh_slm.py`, `MODEL_ARCH = "MESH-SLM-GLM-GNN"`),
 single-file and self-contained (no `include` of the companion
 `mesh_inference_model.jl` — some functions below intentionally duplicate

@@ -2,7 +2,7 @@
     MeshCompressionModel
 
 Julia port of the **read/write compression accounting** layer of the
-Supply Chain Brain MESH-SLM-GLM-GNN
+Supply Chain Architect MESH-SLM-GLM-GNN
 (`pipeline/src/quipu/ueqgm_engine.py` + `pipeline/src/quipu/quipu_minimal.py`).
 
 This is a *model-output* prototype for future (e.g. native/accelerated)

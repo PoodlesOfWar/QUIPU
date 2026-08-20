@@ -1,6 +1,6 @@
 # MESH-SLM Expert Skills — the specialist roster and its associative interactions
 
-Brought over from the Supply Chain Brain documentation (originally
+Brought over from the Supply Chain Architect documentation (originally
 `GOOGLE_EDGE_GALLERY_SKILLS.md`) and namespaced to QUIPU. This is the reference
 for how the mesh's **specialists** relate to one another — the model the
 emergent ACRE specialists must be *dimensionally relative and associative* with.

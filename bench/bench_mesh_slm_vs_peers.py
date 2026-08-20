@@ -8,7 +8,7 @@ Run from pipeline/ directory (PowerShell example):
     .\.venv\Scripts\python.exe -m bench.bench_mesh_slm_vs_peers --tasks 8
 
 This adapts standard LM benchmarks (reasoning/math, classification, knowledge,
-tool use) to the Supply Chain Brain domain using:
+tool use) to the Supply Chain Architect domain using:
 - Existing research modules (EOQ, bullwhip, multi-echelon, etc.)
 - Recovered + live corpus (ml_research papers, citations)
 - ToolForge generated tools

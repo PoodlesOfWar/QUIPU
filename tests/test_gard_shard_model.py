@@ -336,11 +336,11 @@ def test_committed_hub_assets_and_launcher_wiring_are_consistent():
     portal_manifest = read_envelope_json(
         _WORKSPACE_ROOT / "Loadopoly-Portal" / "gard-shard-model.json"
     )
-    documentation = json.loads(
-        (_WORKSPACE_ROOT / "pipeline" / "docs" / "GARD_SHARD_MODEL_MANIFEST.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    repo_root = Path(__file__).resolve().parents[1]
+    doc_path = repo_root / "docs" / "GARD_SHARD_MODEL_MANIFEST.json"
+    if not doc_path.exists():
+        doc_path = _WORKSPACE_ROOT / "pipeline" / "docs" / "GARD_SHARD_MODEL_MANIFEST.json"
+    documentation = json.loads(doc_path.read_text(encoding="utf-8"))
     portal = (_WORKSPACE_ROOT / "Loadopoly-Portal" / "index.html").read_text(encoding="utf-8")
     launcher = (_WORKSPACE_ROOT / "Launch-Loadopoly.ps1").read_text(encoding="utf-8")
 
@@ -360,13 +360,21 @@ def test_committed_hub_assets_and_launcher_wiring_are_consistent():
 
 
 def test_julia_peer_and_corrected_compression_reference_are_declared():
-    gard_julia = (
-        _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "gard_shard_model.jl"
-    ).read_text(encoding="utf-8")
-    compression_julia = (
-        _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "mesh_compression_model.jl"
-    ).read_text(encoding="utf-8")
-    project = (_WORKSPACE_ROOT / "pipeline" / "Project.toml").read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[1]
+    gard_path = repo_root / "julia" / "gard_shard_model.jl"
+    if not gard_path.exists():
+        gard_path = _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "gard_shard_model.jl"
+    gard_julia = gard_path.read_text(encoding="utf-8")
+
+    comp_path = repo_root / "julia" / "mesh_compression_model.jl"
+    if not comp_path.exists():
+        comp_path = _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "mesh_compression_model.jl"
+    compression_julia = comp_path.read_text(encoding="utf-8")
+
+    proj_path = repo_root / "julia" / "Project.toml"
+    if not proj_path.exists():
+        proj_path = _WORKSPACE_ROOT / "pipeline" / "Project.toml"
+    project = proj_path.read_text(encoding="utf-8")
 
     assert "module GardShardModel" in gard_julia
     assert "using CodecZlib" in gard_julia
@@ -383,9 +391,11 @@ def test_julia_peer_and_corrected_compression_reference_are_declared():
 
 
 def test_mesh_compression_julia_declares_packed_weyl_kv_record():
-    compression_julia = (
-        _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "mesh_compression_model.jl"
-    ).read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[1]
+    comp_path = repo_root / "julia" / "mesh_compression_model.jl"
+    if not comp_path.exists():
+        comp_path = _WORKSPACE_ROOT / "pipeline" / "src" / "brain" / "mesh_compression_model.jl"
+    compression_julia = comp_path.read_text(encoding="utf-8")
 
     assert "using Base64: base64encode" in compression_julia
     assert "MESH_BRAIN_KV_WEYL_PACKED_BYTES = 20" in compression_julia

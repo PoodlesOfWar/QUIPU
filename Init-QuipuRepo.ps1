@@ -13,9 +13,9 @@ if (Test-Path "$Repo\.git") {
 }
 git init -b main
 git add -A
-git commit -m "QUIPU v0.24.1 - Supply Chain Brain model core, clean-room extraction (MESH-SLM-SCM-GLM-GNN, Quipu, GARD-shard, System Entirety)"
+git commit -m "QUIPU v0.24.1 - Supply Chain Architect model core, clean-room extraction (MESH-SLM-SCM-GLM-GNN, Quipu, GARD-shard, System Entirety)"
 Write-Host ""
 Write-Host "Done. To publish:" -ForegroundColor Cyan
-Write-Host "  1. Create an empty GitHub repo (e.g. loadopoly/QUIPU) - do NOT fork Supply-Chain-Brain."
+Write-Host "  1. Create an empty GitHub repo (e.g. loadopoly/QUIPU) - do NOT fork Supply-Chain-Architect."
 Write-Host "  2. git remote add origin https://github.com/loadopoly/QUIPU.git"
 Write-Host "  3. git push -u origin main"

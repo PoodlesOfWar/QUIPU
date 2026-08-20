@@ -4,7 +4,7 @@ A strict mathematical superset of the existing :func:`brain_body_signals._adam_s
 optimizer.  When all extension knobs are at their identity values, ``radam_step``
 produces bit-for-bit the same trajectory as vanilla Adam.  Turn the knobs on and
 the optimizer gains five additional behaviours, each of which corresponds to a
-concrete piece of the Supply Chain Brain's existing closed loop:
+concrete piece of the Supply Chain Architect's existing closed loop:
 
     1. Complex (bifurcated) gradient  g_re + i*g_im
        - g_re : realised gradient (Touch firings + Resolved relief + Vision ops)

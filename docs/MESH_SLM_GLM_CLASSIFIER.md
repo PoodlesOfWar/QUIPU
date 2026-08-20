@@ -4,7 +4,7 @@
 **Last Updated:** 2026-07-23
 **Module:** `src/quipu/mesh_slm.py`
 
-> **Lineage.** This predictor descends from the Supply-Chain-Brain (SCB) MESH-SLM-GLM and was extracted clean-room into QUIPU. The classifier-integration notes below (the `erp_dbo` shipping path) are retained as history; the **authoritative** description is now the QUIPU predictor as it stands, driven by the live System Entirety state rather than an external SCB checkout.
+> **Lineage.** This predictor descends from the Supply-Chain-Architect (SCB) MESH-SLM-GLM and was extracted clean-room into QUIPU. The classifier-integration notes below (the `erp_dbo` shipping path) are retained as history; the **authoritative** description is now the QUIPU predictor as it stands, driven by the live System Entirety state rather than an external SCB checkout.
 
 ---
 

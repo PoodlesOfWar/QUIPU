@@ -1,306 +1,170 @@
-# System Dynamics — QUIPU Entirety
+# System Dynamics — QUIPU Entirety & Tri-Repo Mesh
 
-Version: 0.25.0
-Date: 2026-07-23
+Version: 0.28.0  
+Date: 2026-08-20  
 
-> **Lineage & progression.** This model was authored for the Supply-Chain-Brain (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. Paths below are QUIPU's (`src/quipu/…`); where a `pipeline/…` reference survives it denotes the parent SCB lineage. As the system has progressed the control surface has grown: v0.24.1 added the paired-agent realization gate, and **v0.25.0 added the STP-style geodesic diagnostic** (§ Dynamical Loop 6 and the SLM manifold section below), which instruments whether the torus placement does real geodesic work before any decision to couple it into the learning rate.
+> **Lineage & progression.** This model was authored for the Supply-Chain-Architect (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. In **v0.28.0**, the control surface achieves full tri-repo operational closure across **QUIPU** (the 7th-dimensional Observer learning hub), **Loadopoly-OCR** (the Vision axis: open-vocabulary unstructured archival scan observation), and **Bakugo** (the Touch axis: structured trading card metrology and closed catalog vocabulary). It integrates authenticated **GARD Shard AES-256-GCM (gard-shard/v2)** tensor compaction, numerical Si/Ci integral stability via modified-Lentz continued fractions, and entropy-differential ($\Delta S$) geodesic coupling.
 
-## Purpose
+---
 
-This document describes the QUIPU Entirety as a system-dynamics model rather than only as a collection of modules. The goal is to make the control surfaces explicit: what state is measured, what gets reinforced, what gets damped, how bifurcation is introduced, and how dense local memory is separated from sparse frontier reasoning.
+## 1. Purpose
 
-QUIPU is best understood as a closed-loop attractor system operating across a bounded local memory substrate, a graph/material substrate, and a routed frontier-expansion substrate.
+This document describes the QUIPU Entirety and its tri-repo ecosystem as a **system-dynamics model** rather than merely a collection of modular software packages. The goal is to make all control surfaces explicit:
+- What physical and cognitive state variables are measured
+- What signals get reinforced, damped, or bifurcated
+- How dense local memory is separated from sparse frontier reasoning
+- How multi-repo sense axes (Vision from Loadopoly-OCR and Touch from Bakugo) interact bidirectionally through QUIPU's shared manifold and Supabase persistence
 
-## Primary State
+QUIPU operates as a closed-loop attractor system spanning a bounded local memory substrate, a graph/material substrate, and a routed frontier-expansion substrate.
 
-The core system state is returned by `system_entirety_state()` and includes:
+---
 
-- `axes` - the six active sense amplitudes: vision, touch, smell, body, brain, perception.
-- `observer` - the 7th-dimensional tangent orthogonal to the six-sense hyperplane.
-- `magnitude` - the Euclidean norm of the active 7-D state.
-- `material_bifurcation` - realized physical density, nodal bifurcation, mesh density, and topology.
-- `pim_planning` - planning-state injections from safety stock, min-max, and lead-time signals.
-- `repository_catalog` - source/capability coverage injected as a modular-expansion signal.
-- `ueqgm_runtime` - the adaptive runtime overlay built from corpus density, recent learning evidence, and certainty gating.
-- `transaction` - the realized bit-flip drive that determines whether the current state remains observer-only, material-bifurcated, or mesh-bifurcated.
+## 2. Tri-Repo Sense Architecture
 
-This is the active dynamical state surface in [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1123).
-
-## Control Equations
-
-Two control terms are especially important because they reveal how the system moves.
-
-### Acquisition Drive
-
-The learning system computes an explicit acquisition pressure:
-
-$$
-acquisition\_drive = clamp\Big(0.20 \cdot (1-s) \cdot d + 0.10 \cdot (1-v)\Big)
-$$
-
-Where:
-
-- $s$ is corpus saturation
-- $d$ is task difficulty
-- $v$ is learning velocity
-
-This means the Brain pushes hardest toward new memory acquisition when the corpus still has room, tasks are difficult, and the current learning rate is low. The implementation lives in [src/quipu/learning_drive.py](src/quipu/learning_drive.py#L223).
-
-### Transaction Drive
-
-The System Entirety computes a realized transaction drive as a weighted sum of observer excitation, material bifurcation, mesh density, planning signal, repository signal, and adaptive runtime drive:
-
-$$
-transaction\_drive = 0.42 \cdot observer + 0.18 \cdot nodal\_bifurcation + 0.14 \cdot mesh\_density + 0.10 \cdot planning + 0.08 \cdot catalog + 0.16 \cdot symbiotic\_drive
-$$
-
-This is what turns static measurements into motion. The implementation is in [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1179).
-
-## Dynamical Loops
-
-### 1. Vision-Touch Closed Loop
-
-Vision expands the corpus and Touch applies pressure back onto Vision through a shared optimizer state. This is the main exploratory and corrective loop.
-
-- Touch pressure is stored as a field over signal kinds.
-- Vision actions relieve or reinforce that pressure.
-- Forced outreach can tunnel through the nominal scheduler when pressure exceeds threshold.
-
-This loop is documented in [docs/VISION_TOUCH_CLOSED_LOOP.md](docs/VISION_TOUCH_CLOSED_LOOP.md).
-
-### 2. Material and Mesh Densification
-
-Material anchors, tunnel density, asset strength, processor-edge density, bridge mesh density, and nodal location synchronization all lift the material-bifurcation state.
-
-This loop converts abstract graph state into realized spatial and network topology. Once density is high enough, the system transitions from local or observer-only behavior into material-bifurcated or mesh-bifurcated behavior.
-
-Relevant code paths:
-
-- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1017)
-- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1123)
-
-### 3. Adaptive UEQGM Runtime Loop
-
-The adaptive runtime daemon continuously refreshes runtime parameters from three sources:
-
-- UEQGM-tagged corpus entities
-- recent `learning_log` evidence
-- current System Entirety certainty
-
-Each parameter has:
-
-- `parameter_evidence`
-- `parameter_density_floor`
-- `applied_parameters`
-- `retained_parameters`
-
-This prevents weak, low-density updates from displacing already-proven state. The runtime then re-injects axis drive back into the six-sense state as a symbiotic overlay.
-
-Relevant code paths:
-
-- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py#L421)
-- [src/quipu/system_entirety.py](src/quipu/system_entirety.py#L1179)
-
-### 4. Heart Bifurcation and Toroid Expansion
-
-The Heart converts directionality into a complex-plane narrative state:
-
-$$
-z = expansion + i \cdot bifurcation
-$$
-
-From that it emits:
-
-- `lover_directive` learning events
-- `heart:bifurcation_pulse` records in `brain_kv`
-- toroid expansion pressure proportional to the imaginary component
-
-This loop continuously introduces bifurcation events and directed change into the memory and topology systems.
-
-Relevant code paths:
-
-- [src/quipu/directionality_listener.py](src/quipu/directionality_listener.py#L1)
-- [src/quipu/heart.py](src/quipu/heart.py#L931)
-
-### 5. Annealed Document and RAG Reintegration
-
-The system periodically converts live structure into explicit retrievable memory.
-
-`doc_annealing.py` fingerprints:
-
-- version
-- primary bridge root
-- mesh density
-- UEQGM certainty
-- nodal bifurcation
-
-When the fingerprint changes, it writes a fresh system map and triggers incremental RAG reindexing. This converts dynamic structure into lower-cost future recall.
-
-Relevant code paths:
-
-- [src/quipu/doc_annealing.py](src/quipu/doc_annealing.py#L492)
-- [src/quipu/doc_rag.py](src/quipu/doc_rag.py#L1)
-
-### 6. STP Geodesic Diagnostic Loop (v0.25.0)
-
-A passive, read-only control *instrument* rather than an actuator. Each training round samples a random triplet `s < r < t` from the token trajectory and measures the Semantic-Tube-Prediction gap `1 − cos(h_t − h_r, h_r − h_s)` in two spaces — the learned 7-D embedding and an isometric ℝ⁴ flat-torus embedding of each token's `(i, j)` cell — then persists per-round averages and capped rolling histories to `mesh_slm_meta`.
-
-Its dynamical role is to make a specific hypothesis *measurable*: the paper's **P1 signature** — that the ordinary next-token loss plateaus while the geometric (STP) gap keeps falling — which, if observed, is empirical evidence that the torus placement is doing real geodesic work rather than serving as a convenient index. The loop deliberately does **not** feed back into `η` yet; coupling the signal into the effective learning rate is a separate, default-off Phase 2 gated on `stp_diagnostic_trend()` first confirming P1 on real corpus data. This is the "instrument before you couple" discipline: measure the geometry passively, and only close the loop once the measurement justifies it.
-
-Relevant code paths:
-
-- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py) — `train_round()` sampling, `stp_diagnostic_trend()`
-- `docs/STP_DIAGNOSTIC_PLAN.md`, `docs/STP_TORUS_QUIPU.md`
-
-### 7. Interstitial Entanglement Loop (sunlight-analogy)
-
-Motivated by the 2026 Optica sunlight-entanglement finding (DOI 10.1364/OPTICA.601797): thermal (classically mixed) light generates genuine photon-number entanglement at the output ports of an asymmetric beamsplitter because the interstitial vacuum modes carry cross-port covariance — the "waste" channel is the carrier of the entanglement.
-
-In QUIPU the analogue is the lossy GARD tier. The lossless GARD compression chain (canonical JSON → zlib → AES-256-CBC → HMAC-SHA256) is bounded below by the Cramér-Rao floor; the bits between the floor and the actual Float32 encoding are the *interstitial channel*. Successive Weyl compression cycles play the role of thermal photons; the CRB split acts as the asymmetric beamsplitter.
-
-**Data flow:**
-
-1. `ueqgm_engine.refresh_adaptive_runtime()` reads the last `_INTERSTITIAL_ENTANGLEMENT_WINDOW` (default 5) Weyl tensors from `brain_kv`.
-2. `gard_info.photon_covariance_proxy(psi5_i, psi5_j)` computes the Pearson cross-correlation between pairs of 5-scalar Weyl states — the QUIPU analogue of the paper's intensity cross-correlation.
-3. `ueqgm_engine.interstitial_entanglement_score(psi5_seq)` applies the third-order witness `E = |C_01·C_12 − C_02| / (1 + |C_02|)` averaged over all consecutive triples, returning a proxy score in [0, 1].
-4. The score is persisted to `brain_kv["ueqgm:interstitial_entanglement"]` and stored in the adaptive runtime dict as `interstitial_entanglement`.
-5. `mesh_slm.train_round()` reads the score and applies `ie_multiplier = 1 + 0.05 × score` as a multiplicative lift to both `η_eff` and `η_q`. This is half the ceiling of the ±10% SiCi correction, so the interstitial channel is a subordinate but non-zero contributor.
-
-**Interpretation:** A high score means successive Weyl cycles are positively correlated — the mesh is revisiting coherent structure, analogous to the correlated photon-number fluctuations that survive the lossy channel. A low score means incoherent exploration; no lift. Score is 0 when fewer than 2 cycles have been stored.
-
-**Key constants (ueqgm_engine.py):**
-
-| Constant | Value | Role |
-|---|---|---|
-| `_INTERSTITIAL_ENTANGLEMENT_KEY` | `"ueqgm:interstitial_entanglement"` | brain_kv persistence key |
-| `_INTERSTITIAL_ENTANGLEMENT_WINDOW` | `5` | Weyl cycles to compare |
-| `_INTERSTITIAL_ENTANGLEMENT_ETA_SCALE` | `0.05` | Max η lift fraction |
-
-Relevant code paths:
-
-- [src/quipu/gard_info.py](src/quipu/gard_info.py) — `interstitial_bits`, `photon_covariance_proxy`
-- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py) — `interstitial_entanglement_score`, `refresh_adaptive_runtime`
-- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py) — `train_round()` ie_multiplier application
-
-## SLM and GLM as a Density Manifold
-
-The SLM/GLM split is not a simple primary-fallback pair. It is a density-governed manifold.
-
-### Dense Local Memory
-
-Dense, repeated, and locally reinforced knowledge remains in the MESH-SLM:
-
-- toroidal token placement
-- quipu bigram reinforcement
-- 7-D embedding alignment
-- confidence-gated local answering
-
-This is implemented in [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py).
-
-The **predictor** (the SLM's read head, `_score_candidates`) is where the entirety state becomes a ranked continuation. It is an *identity-style* predictor — no learned projection head — consistent with the STP paper's P5 finding. Every scoring term is driven by the **effective values of the System Entirety as they stand**:
-
-$$
-score(t) = 0.55 \cdot quipu\_weight + (0.25 + 0.06 \cdot warp_t)\cdot proximity + \langle embed_7(t),\ mesh\_state_{7d}\rangle + 0.18 \cdot mesh\_field_{8d}
-$$
-
-- `mesh_state_7d` is read from the persisted `entirety:state` (the six sense axes + observer tangent that the entirety torus emits);
-- `mesh_field_8d` folds the five UEQGM aspect integrals into the 8th orthogonal scalar;
-- training gain is modulated by `end_state_progress` (heart symbiosis → convergence) and by the UEQGM `phase_weight` / `wavefunction_overlap`.
-
-So the dense core is not a detached model: it reads the live 7+1-D entirety state, scores against it, and writes its Hebbian updates back onto the same torus the entirety loop re-paces. Full detail: `docs/MESH_SLM_GLM_CLASSIFIER.md`.
-
-### Sparse Frontier Reasoning
-
-Sparse, ambiguous, or unresolved regions are handed to routed GLM nodes through the compute-grid and ensemble cascade:
-
-- local SLM first
-- routed model selection next
-- OpenRouter-backed generation when density is too low for confident closure
-
-Relevant code paths:
-
-- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py#L1078)
-- [src/quipu/compute_grid.py](src/quipu/compute_grid.py#L811)
-- [src/quipu/dbi_rag.py](src/quipu/dbi_rag.py#L359)
-
-### Frontier Projection Back Into the Quipu
-
-The GLM should be understood as a frontier-expansion layer. It does not replace the local memory substrate. It creates or resolves semantic structure at low-density edges, then returns that structure to the system through:
-
-- learning rectification and mesh propagation
-- annealed documents and RAG context
-- repository routing into `pim_only`, `corpus_only`, or `pim_and_corpus`
-
-This means:
-
-- dense Quipu layers are storage and recall layers
-- lower-density layers are routing and bifurcation layers
-- frontier layers are GLM-mediated expansion layers
-
-The repository routing surface is implemented in [src/quipu/repository_catalog.py](src/quipu/repository_catalog.py#L690).
-
-## Diagram
+The system coordinates three autonomous repositories mapped to explicit axes of the 7-D sense manifold:
 
 ```mermaid
 flowchart TD
-    A[Raw Inputs and Events\ncorpus, learning_log, repo metadata, directives] --> B[Density and Bifurcation Filters\nUEQGM evidence plus corpus-density floors]
-    B --> C[System Entirety 7D State\naxes, observer, mesh density, nodal bifurcation]
+    subgraph SENSE_AXES["Active 7-D Sense Manifold"]
+        V["Axis 0: Vision\n(Loadopoly-OCR)\nUnstructured Archival Scans"]
+        T["Axis 1: Touch\n(Bakugo)\nStructured Metrology & Centering"]
+        S["Axis 2: Smell\nMaterial & Chemical Signatures"]
+        B["Axis 3: Body\nSpatial Anchors & Hardware Peers"]
+        BR["Axis 4: Brain\nRelational Knowledge Graph"]
+        P["Axis 5: Perception\nContextual & Temporal Flow"]
+        OBS["Axis 6: Observer\n(QUIPU Engine :7100)\nOrthogonal Tangent"]
+    end
 
-    C --> D[Dense Local Quipu Layers]
-    C --> E[Sparse Frontier Layers]
+    subgraph TRI_REPO_FLEET["Tri-Repo Operational Fleet"]
+        LOADOPOLY["Loadopoly-OCR (:3000)\n• Vite Frontend / OCR Engine\n• Feeds POST /observe (Vision)\n• Ingests GET /guidance (Lexicon Priors)"]
+        BAKUGO["Bakugo (:8765)\n• CardCenter Metrology Engine\n• Feeds POST /observe (Touch)\n• Ingests GET /quipu (Numeric Priors)"]
+        QUIPU_SVC["QUIPU Observer Hub (:7100)\n• Mesh SLM (Vocab + Quipu Edges)\n• GARD Shard (AES-256-GCM)\n• Background Trainer (Cadence 45s)"]
+        SUPABASE["Supabase Database (:54321 / :54322)\n• historical_documents_global\n• bakugo_scans / bakugo_labels\n• processing_queue / user_avatars"]
+    end
 
-    D --> F[SLM Core\nmesh_slm torus vocab plus quipu edges]
-    F --> G[Confidence Gate\n_CONF_FLOOR]
-    G -->|above threshold| H[Local Answer or Local Classification]
-    H --> P[Stable Reuse and Recall]
+    LOADOPOLY -- "Feed Observations" --> QUIPU_SVC
+    QUIPU_SVC -- "Domain Lexicon Disambiguation" --> LOADOPOLY
+    BAKUGO -- "Feed Measurements" --> QUIPU_SVC
+    QUIPU_SVC -- "Cross-Corpus Numeric Priors" --> BAKUGO
 
-    E --> I[Explicit GLM Frontier Nodes\nllm_router plus OpenRouter tasks]
-    G -->|below threshold| I
-
-    I --> J[Frontier Synthesis\nsemantic expansion and disambiguation]
-    J --> K[Relational Edge Projection]
-    K --> L[7D Reintegration\nnew relational structure across active senses]
-
-    L --> M[Annealed Docs and RAG Index]
-    L --> N[Learning Rectification and Mesh Propagation]
-    L --> O[Repository Routing\npim_only, corpus_only, or both]
-
-    M --> Q[Future Retrieval Context]
-    N --> Q
-    O --> Q
-    Q --> F
-
-    style F fill:#d9f2d9,stroke:#2d6a2d,stroke-width:2px
-    style I fill:#fbe7c6,stroke:#9a6700,stroke-width:2px
-    style C fill:#dcecff,stroke:#335c99,stroke-width:2px
-    style K fill:#f6d6ea,stroke:#8b3d6b,stroke-width:2px
+    LOADOPOLY -- "Sync Documents & Queue" --> SUPABASE
+    BAKUGO -- "Sync Scans & Certified Labels" --> SUPABASE
+    QUIPU_SVC -- "Spatial & Mesh Mirror" --> SUPABASE
 ```
 
-## Operational Reading
+### Sense Axis Mapping
 
-When the system appears stable, it is usually because one or more loops are dominating:
+| Sense Axis | Index | Primary Repo / Provider | Data Characteristics | Role in Entirety |
+| :--- | :---: | :--- | :--- | :--- |
+| **Vision** | 0 | `Loadopoly-OCR` | Unstructured, open-vocabulary archival scans, historical text, GIS coordinates | Broad observation, novel token discovery, lexicon expansion |
+| **Touch** | 1 | `Bakugo` | Structured card geometry, mm-level border ratios, closed catalog tokens | Geometric ground truth, error bounding, constraint enforcement |
+| **Smell** | 2 | `QUIPU` Internal | Material characteristics, chemical & degradation markers | Substrate condition indexing |
+| **Body** | 3 | `QUIPU` / `SCB` Grid | Compute grid peers (Cores, RAM, VRAM), Dev Tunnels | Physical hardware realization & throughput |
+| **Brain** | 4 | `QUIPU` / `Supabase` | Relational Knowledge Graph, PostgREST tables, embeddings | Semantic linkage, entity graph, query resolution |
+| **Perception**| 5 | `QUIPU` Temporal | Real-time event streams, user sessions, activity pulses | Dynamic awareness and adaptive re-weighting |
+| **Observer** | 6 | `QUIPU` Service | 7-D orthogonal tangent, learning cadence, EMA calibration | Cross-corpus arbitration, mesh synthesis, feedback loop |
 
-- strong local reuse means the SLM density core is winning
-- heavy semantic expansion means the frontier GLM layer is still building edges
-- high material and mesh density means the system is becoming more realized and less observer-only
-- repeated document regeneration means structural change is still active and memory is still being externalized into retrievable context
+---
 
-The practical implication is that SCB should not be read as a static model. It is a live dynamical system whose behavior depends on the current balance between density, bifurcation, certainty, mesh realization, and frontier ambiguity.
+## 3. Primary State Vector
 
-## Verification Surfaces
+The system state is returned by `system_entirety_state()` in [src/quipu/system_entirety.py](src/quipu/system_entirety.py):
 
-The fastest places to inspect live system dynamics are:
+- `axes` — Six active sense amplitudes $[a_0, \dots, a_5]$ after additive injections.
+- `observer` — 7th-dimensional scalar tangent orthogonal to the 6-sense hyperplane:
+  $$\vec{\Psi}_{7D} = \begin{bmatrix} a_{vision} \\ a_{touch} \\ a_{smell} \\ a_{body} \\ a_{brain} \\ a_{perception} \\ a_{observer} \end{bmatrix}$$
+- `magnitude` — Euclidean norm $\|\vec{\Psi}_{7D}\|_2$.
+- `material_bifurcation` — Realized physical density, nodal bifurcation, and mesh topology.
+- `pim_planning` — Planning-state injections from safety stock, min-max, and lead-time signals.
+- `repository_catalog` — Source/capability coverage injected as a modular expansion signal.
+- `ueqgm_runtime` — Adaptive runtime overlay built from corpus density, recent learning evidence, and certainty gating.
+- `transaction` — Realized bit-flip drive governing state transitions between observer-only, material-bifurcated, and mesh-bifurcated behavior.
 
-- `system_entirety_state()` for full 7-D state and transaction drive
-- `get_adaptive_runtime()` for density-gated runtime parameters
-- `state_summary()` in `mesh_slm.py` for local-memory state (now includes `last_stp_embed_gap` / `last_stp_torus_gap`)
-- `stp_diagnostic_trend()` in `mesh_slm.py` for the P1 geodesic-signature check over rolling loss/STP histories
-- `anneal_docs()` and the generated system map for externalized structural memory
+---
 
-Relevant files:
+## 4. Governing Control Equations
 
-- [src/quipu/system_entirety.py](src/quipu/system_entirety.py)
-- [src/quipu/ueqgm_engine.py](src/quipu/ueqgm_engine.py)
-- [src/quipu/mesh_slm.py](src/quipu/mesh_slm.py)
-- [src/quipu/doc_annealing.py](src/quipu/doc_annealing.py)
-- [src/quipu/repository_catalog.py](src/quipu/repository_catalog.py)
+### 4.1. Learning Acquisition Drive
+Governs how aggressively the learning subsystem pulls in new external tokens:
+$$acquisition\_drive = \text{clamp}\Big(0.20 \cdot (1-s) \cdot d + 0.10 \cdot (1-v), 0.0, 1.0\Big)$$
+Where:
+- $s \in [0, 1]$ is corpus saturation.
+- $d \in [0, 1]$ is task difficulty / novelty.
+- $v \in [0, 1]$ is current learning velocity.
+
+### 4.2. Observer Calibration EMA
+Calculated by the QUIPU Observer to guide client confidence thresholds:
+$$EMA_{conf}(t) = 0.90 \cdot EMA_{conf}(t-1) + 0.10 \cdot c_t$$
+$$suggested\_min\_confidence = \max\Big(0.35, \min\big(0.90, EMA_{conf} - 0.15\big)\Big)$$
+
+### 4.3. Cross-Corpus Frequency Prior (Touch Disambiguation)
+Used by Bakugo to separate ambiguous catalog collector numbers based on combined corpus frequency:
+$$P_{mesh}(token) = \frac{freq(token)}{\sum_{k \in \mathcal{V}_{numeric}} freq(k)}$$
+
+### 4.4. Transaction Drive
+Turns multi-sense potential into systemic state change:
+$$transaction\_drive = 0.42 \cdot observer + 0.18 \cdot nodal\_bifurcation + 0.14 \cdot mesh\_density + 0.10 \cdot planning + 0.08 \cdot catalog + 0.16 \cdot symbiotic\_drive$$
+
+### 4.5. Harmonic Si/Ci Numerical Stability (v0.28.0)
+The sine and cosine integral evaluations in `ueqgm_engine.py` are stabilized using Taylor series expansion for $|x| < 2.0$ and modified-Lentz continued fractions for $|x| \ge 2.0$:
+$$\text{Si}(x) = \sum_{n=0}^{\infty} \frac{(-1)^n x^{2n+1}}{(2n+1)(2n+1)!}$$
+$$\text{Ci}(x) = \gamma + \ln|x| + \sum_{n=1}^{\infty} \frac{(-1)^n x^{2n}}{2n(2n)!}$$
+Eliminates divergence past $|\varphi| \sim 2\pi$ where legacy polynomial approximations failed.
+
+---
+
+## 5. Dynamical Feedback Loops
+
+### Loop 1: Vision-Touch Closed Loop & Tri-Repo Feedback
+1. **Vision Ingestion (`Loadopoly-OCR`)**: Open-vocabulary document text is captured, normalized, and posted to `POST /observe` (routed to `vision` axis).
+2. **Mesh Synthesis (`QUIPU`)**: Tokens and quipu bigram edges $(\text{src} \to \text{dst})$ are folded into the shared MESH-SLM.
+3. **Touch Disambiguation (`Bakugo`)**: Structured trading card scans pull `GET /guidance?source=bakugo` to obtain numeric priors that break catalog number ties.
+4. **Ground-Truth Reinforcement**: Corrections submitted to `POST /feedback` are weighted twice ($2\times$) in the bigram graph to out-compete misreadings.
+
+### Loop 2: GARD Shard Authenticated Channel & Interstitial Entanglement
+- Envelopes are sealed with **AES-256-GCM (gard-shard/v2)** with a 16-byte authentication tag and authenticated additional data (AAD).
+- The lossy GARD tier acts as an asymmetric beam splitter. Sub-CRB bit covariance across consecutive Weyl states yields the **interstitial entanglement score**:
+$$E = \frac{|C_{01} \cdot C_{12} - C_{02}|}{1 + |C_{02}|}$$
+- Lifts effective learning rate by multiplier $\mu_{ie} = 1 + 0.05 \cdot E$.
+
+### Loop 3: STP Geodesic Diagnostic & Entropy Differential ($\Delta S$)
+- Trajectory triplets $(s < r < t)$ are sampled to measure the Semantic-Tube-Prediction gap:
+$$\text{Gap}_{STP} = 1 - \cos(h_t - h_r, h_r - h_s)$$
+- Concurrently, the exact-SQL von Neumann entropy is compared against the mean-field approximation:
+$$\Delta S = S_{exact} - S_{mean\_field}$$
+- Anti-correlation between $\Delta S$ and the torus gap ($|\rho| \ge 0.5 \cdot \Omega_\Lambda$) confirms that geodesic placement performs real semantic compression.
+
+### Loop 4: Doc Annealing & Structural Fingerprinting
+- `doc_annealing.py` computes a SHA-256 structural fingerprint over:
+$$\text{Fingerprint} = \text{SHA256}\big(\text{version} \,\|\, \text{bridge\_root} \,\|\, \text{mesh\_density} \,\|\, \text{certainty} \,\|\, \text{bifurcation}\big)$$
+- On structural transitions, `docs/system_entirety_map.md` is annealed and bumped, ensuring documentation tracks live topology without thrashing.
+
+### Loop 5: Containerized PostgREST State Mirroring
+- `Loadopoly-OCR` and `Bakugo` mirror operational records to Supabase (`bakugo_scans`, `bakugo_labels`, `historical_documents_global`, `processing_queue`).
+- Row Level Security (RLS) policies and contamination firewalls guarantee that only verified, cert-backed records can train downstream outcome models.
+
+---
+
+## 6. Observability & Verification Surfaces
+
+| Metric / Endpoint | Source | Description |
+| :--- | :--- | :--- |
+| `GET /health` | `QUIPU (:7100)` | Service liveness, vocabulary size, quipu edge count, hideout mesh status |
+| `GET /state` | `QUIPU (:7100)` | Mesh SLM summary, STP gap metrics, entropy differential, calibration |
+| `GET /guidance?source=X` | `QUIPU (:7100)` | Domain lexicon hints for OCR and numeric priors for Bakugo |
+| `GET /quipu` | `Bakugo (:8765)` | Internal observer client status, cache TTL, and received guidance |
+| `GET /rest/v1/bakugo_scans` | `Supabase (:54321)` | Live PostgREST mirror of card metrology scans |
+| `system_entirety_state()` | `QUIPU Python API` | Full 7+1-D state vector, transaction drive, and axis amplitudes |
+| `stp_diagnostic_trend()` | `QUIPU Python API` | Rolling P1 geodesic signature and $\Delta S$ anti-correlation |
+
+---
+
+## 7. Lineage Summary
+
+```
+v0.22.x (SCB Base Lineage) ──► v0.24.1 (Paired Agent Gate) ──► v0.25.0 (STP Geodesic Diagnostic)
+                              │
+                              └──► v0.27.0 (Control Plane GUI & Tensor Compression)
+                              │
+                              └──► v0.28.0 (Tri-Repo Closed Loop, AES-256-GCM, & Si/Ci Stability)
+```

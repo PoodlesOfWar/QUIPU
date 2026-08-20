@@ -1,8 +1,18 @@
 # Release Notes
 
-## v0.27.0 - 2026-07-23
+## v0.28.0 - 2026-08-20
 
-**System Entirety Control Plane GUI & GARD Shard High-Performance Neural Tensor Compression**
+**Tri-Repo Closed Loop & Systems Dynamics, GARD Shard AES-256-GCM (v2), and Si/Ci Stability**
+
+### Added & Enhanced
+- **Tri-Repo Closed-Loop Learning Hub (`quipu-observer`)** — Realizes the 7-D Observer manifold orchestrating **Loadopoly-OCR** (Vision axis, unstructured archival scans) and **Bakugo** (Touch axis, structured card metrology). Feeds observations (`POST /observe`), emits domain lexicon disambiguation guidance (`GET /guidance`), delivers cross-corpus numeric priors for catalog numbers, and processes ground-truth reinforcement (`POST /feedback` with $2\times$ weighting).
+- **System Dynamics Documentation Overhaul** — Updated `docs/SYSTEM_DYNAMICS.md` and `docs/SYSTEM_DYNAMICS_SIGNALS.md` detailing the active 7+1-D state surfaces, mathematical control equations, EMA confidence calibration, and cross-repo feedback topology.
+- **GARD Shard AES-256-GCM (`gard-shard/v2`)** — Replaced legacy AES-CBC + HMAC-SHA256 with single-primitive authenticated encryption, reducing raw crypto overhead from 144 to 110 bytes with full backwards v1 readability.
+- **Si/Ci Integral Stability** — Resolved series divergence past $|\varphi| \sim 2\pi$ via Taylor series ($|x| < 2.0$) and modified-Lentz continued fractions ($|x| \ge 2.0$), verified against `mpmath` within $\le 6.7 \times 10^{-16}$.
+- **Entropy Differential $\Delta S$ Geodesic Coupling** — Live tracking of von Neumann graph entropy differential against the STP torus gap, flagging anti-correlation signatures when $|\rho| \ge 0.5 \cdot \Omega_\Lambda$.
+- **Docker Compose Topology** — Unified container fleet orchestration with healthchecks and direct PostgREST Supabase state mirroring.
+
+---
 
 ### Added & Fixed
 
@@ -495,7 +505,7 @@ python -m src.quipu.doc_annealing --once                              # or run o
 
 ### New Files
 
-- **`Launch-SCB.ps1`** — Root-level PowerShell launcher for the Supply Chain Brain. Double-click the desktop shortcut (or the script) to start the app with a single click:
+- **`Launch-SCB.ps1`** — Root-level PowerShell launcher for the Supply Chain Architect. Double-click the desktop shortcut (or the script) to start the app with a single click:
   - Detects if SCB is already running on `localhost:8501`; if so, just opens the browser.
   - Otherwise spawns `streamlit run pipeline/app.py` as a fully hidden background process using the project venv.
   - Polls port 8501 (up to 30 s) before opening the default browser to `http://localhost:8501`.
@@ -503,7 +513,7 @@ python -m src.quipu.doc_annealing --once                              # or run o
 
 ### Desktop Shortcut
 
-- **`Supply Chain Brain.lnk`** placed on the user Desktop (not committed — user-local artifact). The shortcut runs `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File Launch-SCB.ps1`, presenting a zero-terminal, single-icon launch experience.
+- **`Supply Chain Architect.lnk`** placed on the user Desktop (not committed — user-local artifact). The shortcut runs `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File Launch-SCB.ps1`, presenting a zero-terminal, single-icon launch experience.
 
 ### Security
 

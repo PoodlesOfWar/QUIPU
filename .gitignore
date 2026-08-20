@@ -6,6 +6,7 @@ __pycache__/
 venv/
 
 # Runtime state (recreated locally; never commit)
+bridge_state/
 *.sqlite
 *.sqlite3
 *sqlite-shm
