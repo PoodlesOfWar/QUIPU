@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.30.0] Tri-Repo Closed-Loop Training & Epistemic Self-Annealing (2026-08-22)
+
+### Added — Tri-Repo Feedback Loop & Annealing Engine
+- **`src/quipu/world_model.py:annealing_cycle()`**. Executes on-demand self-annealing across the 7-D manifold, calculates information efficiency convergence, updates cognitive phases, and persists living state in `world_model:anneal_history`.
+- **`src/quipu/world_model.py:source_guidance_directive()`**. Generates client-molding sensory feedback and priors: prompt directives and vocabulary guidance for Loadopoly-OCR (Vision), Snell refractive priors ($n=1.491, 1.586$) and SPRT sequential boundary limits for Bakugo (Touch).
+- **`POST /anneal` & `GET /anneal` Endpoints**. Triggers on-demand sensory fusion and MESH-SLM self-annealing iterations.
+- **Tenant Device Scoping**. `GET /guidance` extracts client `device_id` from queries/headers to personalize guidance without exposing cross-tenant data.
+
 ## [0.29.0] World Model Dialectic & Epistemic Rupture Detection (2026-08-20)
 
 ### Added — World Model & Epistemic Rupture Detection

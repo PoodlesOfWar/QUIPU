@@ -200,7 +200,7 @@ def _calibration(source: str) -> dict[str, Any]:
     }
 
 
-def _guidance(source: str, limit: int) -> dict[str, Any]:
+def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str, Any]:
     profile = SOURCE_PROFILES[source]
     sibling = profile["sibling"]
     summary = mesh_slm.state_summary()
@@ -215,6 +215,7 @@ def _guidance(source: str, limit: int) -> dict[str, Any]:
         "calibration": _calibration(source),
         "world_model": world_model.world_model_state(),
         "retrieval_directive": world_model.retrieval_directive(),
+        "guidance_directive": world_model.source_guidance_directive(source, device_id=device_id),
         "sources": {
             source: _load_stats(source),
             sibling: _load_stats(sibling),
@@ -404,9 +405,13 @@ class ObserverHandler(BaseHTTPRequestHandler):
                     })
                     return
                 limit = int((qs.get("limit") or ["60"])[0])
-                self._send_json(200, _guidance(source, max(1, min(limit, 500))))
+                device_id = (qs.get("device_id") or [self.headers.get("X-Device-ID")])[0]
+                self._send_json(200, _guidance(source, max(1, min(limit, 500)), device_id=device_id))
             elif parsed.path == "/world-model":
                 self._send_json(200, world_model.world_model_state())
+            elif parsed.path == "/anneal":
+                # Execute on-demand self-annealing cycle across the sensory manifold
+                self._send_json(200, world_model.annealing_cycle())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -439,6 +444,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _observe(body)
             elif parsed.path == "/feedback":
                 code, payload = _feedback(body)
+            elif parsed.path == "/anneal":
+                code, payload = 200, world_model.annealing_cycle()
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
             self._send_json(code, payload)
