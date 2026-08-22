@@ -1,9 +1,9 @@
 # System Dynamics — QUIPU Entirety & Tri-Repo Mesh
 
-Version: 0.30.0  
+Version: 0.31.0  
 Date: 2026-08-22  
 
-> **Lineage & progression.** This model was authored for the Supply-Chain-Architect (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. In **v0.30.0**, the control surface adds **Tri-Repo Closed-Loop Training & Epistemic Self-Annealing** — continuous feedback from Loadopoly-OCR (Vision) and Bakugo (Touch) molded by the Observer's 7-D manifold, on-demand `/anneal` iterations, phase-adaptive client guidance directives, and strict multi-tenant user isolation.
+> **Lineage & progression.** This model was authored for the Supply-Chain-Architect (SCB) and carried forward, clean-room, into the **QUIPU Entirety**. In **v0.31.0**, the control surface adds **Infodynamic Gravity & Analog Traveling-Wave Cognition** — active bounded priors derived from Vopson's computational universe / entropic gravity ($ig\_multiplier$ quipu edge lift from information compression) and Miller et al.'s traveling-wave spatial computing ($ac\_multiplier$ Kuramoto phase coherence and per-token wave-crest stencil gating).
 
 ---
 
@@ -144,6 +144,10 @@ $$\text{Rupture} \iff (\text{coverage} < 0.30 \land \text{confidence} > 0.80) \l
 - **Multi-Tenant Device Isolation**: External users querying via `bakugo.loadopoly.com` or `loadopoly.com` are scoped strictly by `device_id` (`WHERE device_id = ?`) preventing unauthorized access to host databases or the shared DuckDB Vault.
 - **Contamination Firewall**: Uncertified crowd inputs are recorded as `SELF_REPORTED` and firewalled from ground-truth training datasets.
 
+### Loop 8: Infodynamic Gravity & Analog Traveling-Wave Cognition (v0.31.0)
+- **Infodynamic Gravity Coupling (Vopson 2025)**: Negative feedback lift $\mu_{ig} = 1.0 + 0.05 \cdot \text{clamp01}(1.0 - \text{compression})$ accelerates early quipu bigram formation when vocabulary is diffuse, annealing into stable clusters as data compacts. Verified via `infodynamic_trend()`.
+- **Analog Traveling-Wave Stencil Gating (Miller et al. 2026)**: Macroscopic Kuramoto phase coherence modulates learning rates by $\pm 5\%$ ($\mu_{ac}$), while mobile traveling wave crests gate per-token embedding nudges by $\text{stencil\_gain} = 0.90 + 0.20 \cdot \text{interaction\_gain}[\text{cell}]$, performing spatial analog arithmetic. Verified via `analog_coherence_trend()`.
+
 ---
 
 ## 6. Observability & Verification Surfaces
@@ -161,6 +165,8 @@ $$\text{Rupture} \iff (\text{coverage} < 0.30 \land \text{confidence} > 0.80) \l
 | `GET /rest/v1/bakugo_scans` | `Supabase (:54321)` | Live PostgREST mirror of card metrology scans |
 | `system_entirety_state()` | `QUIPU Python API` | Full 7+1-D state vector, transaction drive, and axis amplitudes |
 | `stp_diagnostic_trend()` | `QUIPU Python API` | Rolling P1 geodesic signature and $\Delta S$ anti-correlation |
+| `infodynamic_trend()` | `QUIPU Python API` | Second-law-of-infodynamics compression and bit-entropy trend |
+| `analog_coherence_trend()` | `QUIPU Python API` | Kuramoto coherence and wave-stencil contrast trend |
 | `world_model_state()` | `QUIPU Python API` | Current cognitive phase, acquisition pressure, epistemic surprise, rupture events |
 
 ---
@@ -177,4 +183,6 @@ v0.22.x (SCB Base Lineage) ──► v0.24.1 (Paired Agent Gate) ──► v0.25
                               └──► v0.29.0 (World Model Dialectic, Epistemic Rupture & Grounding)
                               │
                               └──► v0.30.0 (Tri-Repo Epistemic Self-Annealing & Multi-Tenant Firewall)
+                              │
+                              └──► v0.31.0 (Infodynamic Gravity & Analog Traveling-Wave Cognition)
 ```

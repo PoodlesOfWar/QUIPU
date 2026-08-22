@@ -224,6 +224,11 @@ _INTERSTITIAL_ENTANGLEMENT_KEY: str = "ueqgm:interstitial_entanglement"
 _INTERSTITIAL_ENTANGLEMENT_WINDOW: int = 5  # number of successive Weyl cycles to compare
 _INTERSTITIAL_ENTANGLEMENT_ETA_SCALE: float = 0.05  # max η_eff lift from entanglement score
 
+_INFODYNAMIC_KEY: str = "ueqgm:infodynamic_gravity"
+"""brain_kv key storing infodynamic bit entropy and compression scores."""
+_ANALOG_COHERENCE_KEY: str = "ueqgm:analog_coherence"
+"""brain_kv key storing the analog traveling-wave Kuramoto phase coherence order."""
+
 # ---------------------------------------------------------------------------
 # MESH System Entirety — memory budget constants for compaction accounting.
 #
@@ -399,6 +404,9 @@ ADAPTIVE_RUNTIME_MAP: dict[str, dict[str, str]] = {
 #   phase_evolution_total(φ)     δμ + δq + δγ + axial·2π/Γ   total 6D CAT phase change
 #   entropic_bayesian_step(S,∇²) S + η·∇²S + δφ + axial      Bayesian terrain update
 #   tantalum_intermediary_bind.  Floquet+axial+overlap blend  bounded Weyl pulse routing
+#   infodynamic_bit_entropy(occ) H = -p·log2 p - (1-p)log2(1-p) binary occupancy entropy (Vopson 2025)
+#   infodynamic_compression(f)   1 - H(p)/ln N                frequency mass compaction
+#   phase_coherence_order(φ)     R = |Σ e^(iφ)| / N            Kuramoto order (Miller 2026)
 #
 UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
     "coherence_to_phi": {
@@ -473,6 +481,32 @@ UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
                    "across consecutive Weyl compression cycles; persisted to "
                    "_INTERSTITIAL_ENTANGLEMENT_KEY and applied as a ±5% η_eff lift in "
                    "mesh_slm.train_round() when evidence is sufficient.",
+    },
+    "infodynamic_bit_entropy": {
+        "formula": "H = -p·log2(p) - (1-p)·log2(1-p)  where p = n_occupied / n_cells",
+        "range":   "[0.0, 1.0]  — 0=empty or full, 1=maximum entropy (50% fill)",
+        "note":    "Binary occupancy entropy of discrete space (Melvin M. Vopson, "
+                   "AIP Adv. 15, 045035 (2025), DOI 10.1063/5.0264945); contested "
+                   "(Hossenfelder 2025 critique; Vopson et al. IPI Letters response) — "
+                   "coupling bounded <=5%, kill-switch QUIPU_INFODYNAMIC_COUPLING",
+    },
+    "infodynamic_compression_score": {
+        "formula": "1 - H(p)/ln(N)  over positive frequency mass p_i = f_i / sum(f)",
+        "range":   "[0.0, 1.0]  — 0=uniform/empty, 1=single-cell merged limit",
+        "note":    "Information compaction score measuring vocabulary clustering; "
+                   "drives the self-extinguishing infodynamic gravity lift in train_round() "
+                   "(DOI 10.1063/5.0264945); contested (Hossenfelder 2025 critique; "
+                   "Vopson et al. IPI Letters response) — coupling bounded <=5%, "
+                   "kill-switch QUIPU_INFODYNAMIC_COUPLING",
+    },
+    "phase_coherence_order": {
+        "formula": "R = (1/N)·|Σ e^{i·φ_j}|",
+        "range":   "[0.0, 1.0]  — 0=incoherent/uniform phase spread, 1=fully aligned",
+        "note":    "Kuramoto (1975) macroscopic phase order parameter; applied to "
+                   "counter-propagating traveling waves in the analog cognition "
+                   "framework (Earl K. Miller et al., J. Neurosci. 2026, "
+                   "DOI 10.1523/JNEUROSCI.0711-26.2026); drives ac_multiplier in "
+                   "train_round(), kill-switch QUIPU_ANALOG_STENCIL",
     },
 }
 
@@ -1329,6 +1363,63 @@ def refresh_adaptive_runtime(
     except Exception:
         pass
 
+    # -- Infodynamic gravity & compression (Vopson 2025) -----------------------
+    info_bit_entropy: float = float(previous.get("infodynamic_bit_entropy", 0.0) or 0.0)
+    info_compression: float = float(previous.get("infodynamic_compression", 0.0) or 0.0)
+    n_occupied: int = int(previous.get("infodynamic_n_occupied", 0) or 0)
+    try:
+        vocab_rows = cn.execute(
+            "SELECT freq FROM mesh_slm_vocab WHERE freq > 0"
+        ).fetchall()
+        if vocab_rows:
+            freqs = [float(r[0]) for r in vocab_rows]
+            n_occupied = len(freqs)
+            info_bit_entropy = round(infodynamic_bit_entropy(n_occupied, _MESH_VOCAB_LIMIT), 6)
+            info_compression = round(infodynamic_compression_score(freqs), 6)
+    except Exception:
+        pass  # keep values from previous runtime
+
+    try:
+        cn.execute(
+            "INSERT OR REPLACE INTO brain_kv(key, value, updated_at) VALUES(?,?,?)",
+            (
+                _INFODYNAMIC_KEY,
+                json.dumps({
+                    "bit_entropy": info_bit_entropy,
+                    "compression": info_compression,
+                    "n_occupied": n_occupied,
+                }),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+    except Exception:
+        pass
+
+    # -- Analog wave coherence (Miller et al. 2026) ---------------------------
+    analog_coherence: float = float(previous.get("analog_coherence", 0.5) or 0.5)
+    try:
+        node_rows = cn.execute(
+            "SELECT photon_phase FROM mesh_slm_quipu_node"
+        ).fetchall()
+        if node_rows:
+            phases = [float(r[0]) for r in node_rows if r[0] is not None]
+            if phases:
+                analog_coherence = round(phase_coherence_order(phases), 6)
+    except Exception:
+        pass  # keep values from previous runtime
+
+    try:
+        cn.execute(
+            "INSERT OR REPLACE INTO brain_kv(key, value, updated_at) VALUES(?,?,?)",
+            (
+                _ANALOG_COHERENCE_KEY,
+                json.dumps({"coherence": analog_coherence}),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+    except Exception:
+        pass
+
     runtime_state = {
         "active": True,
         "certainty": round(certainty, 4),
@@ -1349,6 +1440,10 @@ def refresh_adaptive_runtime(
         "runtime_keywords": runtime_keywords,
         "learning_kinds": learning_kinds,
         "interstitial_entanglement": ie_score,
+        "infodynamic_bit_entropy": info_bit_entropy,
+        "infodynamic_compression": info_compression,
+        "infodynamic_n_occupied": n_occupied,
+        "analog_coherence": analog_coherence,
         "axis_drive": {
             sense: round(_clip01((axis_drive or {}).get(sense, 0.0)), 4)
             for sense in _UEQGM_SENSES
@@ -1696,6 +1791,131 @@ def holographic_entropy(
         degree_pair_sum = (n * n) / (4.0 * float(n_edges))
     s = 1.0 - (1.0 / n) - (float(degree_pair_sum) / (n * n))
     return _clip01(s)
+
+
+def infodynamic_bit_entropy(
+    n_occupied: int,
+    n_cells: int = _MESH_VOCAB_LIMIT,
+) -> float:
+    """Binary occupancy entropy of discrete space (Vopson 2025).
+
+    Models space as a grid of elementary cells each registering a binary
+    bit (0 = empty, 1 = occupied). The Shannon information entropy of the
+    binary distribution with occupancy probability p = n_occupied / n_cells is:
+
+    .. math::
+
+        H = -p \\log_2 p - (1-p) \\log_2(1-p)
+
+    Parameters
+    ----------
+    n_occupied:
+        Number of occupied cells (non-negative integer).
+    n_cells:
+        Total number of cells in the grid (defaults to _MESH_VOCAB_LIMIT = 4096).
+
+    Returns
+    -------
+    H in [0.0, 1.0]. Returns 0.0 for degenerate inputs (p <= 0 or p >= 1 or n_cells <= 0).
+
+    References
+    ----------
+    Melvin M. Vopson, "Is gravity evidence of a computational universe?",
+    AIP Advances 15, 045035 (2025), DOI: 10.1063/5.0264945.
+    Note: Contested in physics literature (Hossenfelder 2025 critique;
+    Vopson et al. IPI Letters 2025 response).
+    """
+    if n_cells <= 0 or n_occupied <= 0 or n_occupied >= n_cells:
+        return 0.0
+    p = float(n_occupied) / float(n_cells)
+    h = -p * math.log2(p) - (1.0 - p) * math.log2(1.0 - p)
+    return _clip01(h)
+
+
+def infodynamic_compression_score(
+    freqs: Sequence[int | float],
+) -> float:
+    """Information compaction score over positive token frequency mass.
+
+    Calculates normalized information compression:
+
+    .. math::
+
+        \\text{score} = 1 - \\frac{H(p)}{\\ln N}
+
+    where H(p) is Shannon entropy in nats over positive frequencies, and N is
+    the count of positive items.
+
+    Returns 0.0 for empty or uniform distributions (entropy maximal, zero compression),
+    and 1.0 when all frequency mass concentrates in a single cell (Vopson's merged-objects limit).
+
+    Parameters
+    ----------
+    freqs:
+        Sequence of frequency counts or masses.
+
+    Returns
+    -------
+    Score in [0.0, 1.0].
+
+    References
+    ----------
+    Melvin M. Vopson, "Is gravity evidence of a computational universe?",
+    AIP Advances 15, 045035 (2025), DOI: 10.1063/5.0264945.
+    """
+    pos = [float(f) for f in freqs if f > 0]
+    n = len(pos)
+    if n == 0:
+        return 0.0
+    if n == 1:
+        return 1.0
+    total = sum(pos)
+    if total <= 0.0:
+        return 0.0
+    probs = [f / total for f in pos]
+    h = -sum(p * math.log(p) for p in probs if p > 0.0)
+    max_h = math.log(n)
+    if max_h <= 1e-12:
+        return 1.0
+    score = 1.0 - (h / max_h)
+    return _clip01(score)
+
+
+def phase_coherence_order(
+    phases: Sequence[float],
+) -> float:
+    """Kuramoto macroscopic phase coherence order parameter R.
+
+    Calculates the order parameter across a population of phase angles:
+
+    .. math::
+
+        R = \\frac{1}{N} \\left| \\sum_{j=1}^N e^{i\\phi_j} \\right|
+          = \\frac{1}{N} \\sqrt{\\left(\\sum \\cos\\phi_j\\right)^2 + \\left(\\sum \\sin\\phi_j\\right)^2}
+
+    Parameters
+    ----------
+    phases:
+        Sequence of phase angles in radians.
+
+    Returns
+    -------
+    R in [0.0, 1.0]. Returns 0.0 if phases is empty; 1.0 if all phases are identical.
+
+    References
+    ----------
+    Yoshiki Kuramoto, Lecture Notes in Physics 39, 420-422 (1975).
+    Earl K. Miller, Scott L. Brincat, Jefferson E. Roy, "Analog Cognition and
+    Consciousness", J. Neurosci. 46(33) e0711262026 (2026),
+    DOI: 10.1523/JNEUROSCI.0711-26.2026.
+    """
+    n = len(phases)
+    if n == 0:
+        return 0.0
+    sum_cos = sum(math.cos(p) for p in phases)
+    sum_sin = sum(math.sin(p) for p in phases)
+    r = math.sqrt(sum_cos * sum_cos + sum_sin * sum_sin) / float(n)
+    return _clip01(r)
 
 
 def hawking_information_remnant_score(
@@ -2117,12 +2337,14 @@ def entropic_bayesian_step(
 _UEQGM_TAGS: tuple[str, ...] = (
     '"ueqgm"', '"wavefunction"', '"quantum field"',
     '"quantum dynamics"', '"holographic"', '"floquet"', '"entanglement"',
+    '"infodynamics"', '"infodynamic"', '"analog cognition"', '"analog_coherence"',
 )
 
 # Feature keywords for the bag-of-words feature vector.
 _UEQGM_KEYWORDS: list[str] = [
     "quantum", "wavefunction", "holographic", "floquet",
     "entanglement", "ueqgm", "topological", "entropy",
+    "infodynamics", "infodynamic", "analog", "coherence",
 ]
 
 
@@ -2231,6 +2453,9 @@ __all__ = [
     "intermediary_binding_profile",
     "tantalum_intermediary_binding",  # deprecated alias
     "holographic_entropy",
+    "infodynamic_bit_entropy",
+    "infodynamic_compression_score",
+    "phase_coherence_order",
     "hawking_information_remnant_score",
     "weyl_scalar_tensor",
     "information_compaction_scalar",
@@ -2262,6 +2487,9 @@ __all__ = [
     "_WEYL_PRECISION",
     "_WEYL_UPVOTE_WEIGHT",
     "_WEYL_CITATION_WEIGHT",
+    "_INTERSTITIAL_ENTANGLEMENT_KEY",
+    "_INFODYNAMIC_KEY",
+    "_ANALOG_COHERENCE_KEY",
     "_MESH_TORUS_N",
     "_MESH_VOCAB_LIMIT",
     "_MESH_EMBED_DIMS",
