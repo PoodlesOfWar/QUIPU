@@ -182,3 +182,95 @@ def retrieval_directive() -> dict[str, Any]:
         "confidence_floor": confidence_floor,
         "rationale": rationale,
     }
+
+
+def source_guidance_directive(source: str, device_id: str | None = None) -> dict[str, Any]:
+    """Generate source-specific, phase-adaptive feedback and sensory priors.
+    
+    Molds the downstream client (Loadopoly-OCR or Bakugo) based on the
+    Observer's annealed cross-corpus model.
+    """
+    phase = brain_kv.kv_get_json("world_model:phase", "receptive_hunger")
+    directive = retrieval_directive()
+    
+    if source == "loadopoly-ocr":
+        # Vision Axis: provide prompt directives, lexicon priors, and confidence gates
+        return {
+            "source": source,
+            "axis": "vision",
+            "phase": phase,
+            "confidence_floor": directive["confidence_floor"],
+            "strategy": directive["strategy"],
+            "prompt_guidance": {
+                "broad_exploration": "Extract all novel tokens and spatial entity relationships aggressively.",
+                "precedent_building": "Prioritize structured catalog numbers and cross-referenced archival dates.",
+                "targeted_epistemic": "Focus on high-uncertainty text regions and verify ambiguous character sequences.",
+                "continuous_synthesis": "Execute strict semantic validation and verify graph edge consistency.",
+            }.get(directive["strategy"], "Standard OCR extraction"),
+            "device_isolated": bool(device_id),
+        }
+    elif source == "bakugo":
+        # Touch Axis: provide metrology calibration, Snell refraction indices, SPRT stopping
+        return {
+            "source": source,
+            "axis": "touch",
+            "phase": phase,
+            "confidence_floor": directive["confidence_floor"],
+            "strategy": directive["strategy"],
+            "refraction_priors": {
+                "pmma_n": 1.491,
+                "pc_n": 1.586,
+                "air_n": 1.000,
+            },
+            "sprt_parameters": {
+                "alpha": 0.05,
+                "beta": 0.05,
+                "boundary_threshold": 55.0,
+                "info_value_cutoff": 0.02,
+            },
+            "device_isolated": bool(device_id),
+        }
+    
+    return {
+        "source": source,
+        "phase": phase,
+        "directive": directive,
+        "device_isolated": bool(device_id),
+    }
+
+
+def annealing_cycle() -> dict[str, Any]:
+    """Execute a self-annealing iteration across the sensory manifold.
+    
+    Folds sensory feedback into the 7-D manifold, updates cognitive phases,
+    and returns the updated living state.
+    """
+    t0 = time.time()
+    state = world_model_state()
+    summary = mesh_slm.state_summary()
+    
+    # Anneal precedent depth slightly towards synthesis if loss is healthy
+    precedent = state["precedent_depth"]
+    if summary.get("stp_loss", 1.0) < 0.5:
+        precedent = min(1.0, precedent + 0.005)
+        brain_kv.kv_set_json("world_model:precedent_depth", precedent)
+        
+    history = brain_kv.kv_get_json("world_model:anneal_history", []) or []
+    event = {
+        "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "phase": state["phase"],
+        "precedent_depth": round(precedent, 4),
+        "vocab_size": summary.get("vocab_size", 0),
+        "quipu_edges": summary.get("quipu_edges", 0),
+        "elapsed_ms": round((time.time() - t0) * 1000, 2),
+    }
+    history.append(event)
+    brain_kv.kv_set_json("world_model:anneal_history", history[-50:])
+    
+    return {
+        "status": "annealed",
+        "event": event,
+        "world_model": world_model_state(),
+        "mesh_summary": summary,
+    }
+
