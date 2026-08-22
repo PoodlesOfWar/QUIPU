@@ -4,6 +4,28 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.31.0] Infodynamic Gravity & Analog Traveling-Wave Cognition (2026-08-22)
+
+### Added — Melvin M. Vopson Infodynamic Gravity & Information-Compression Prior
+- **`src/quipu/ueqgm_engine.py:infodynamic_bit_entropy(n_occupied, n_cells=4096)`**. Evaluates Shannon binary bit entropy $H(p) = -p \log_2(p) - (1-p) \log_2(1-p)$ for spatial bit-allocation of occupied vocabulary cells on the 64x64 discrete manifold ($H(0)=H(1)=0$, max at $p=0.5$).
+- **`src/quipu/ueqgm_engine.py:infodynamic_compression_score(freqs)`**. Normalized frequency compression metric $1 - \frac{H(X)}{\log_2(k)}$ measuring data compaction and clustering of mass-energy-information on the torus grid.
+- **Adaptive Runtime & `brain_kv` Integration**. `refresh_adaptive_runtime` persists infodynamic metrics into `ueqgm:infodynamic_gravity` (`infodynamic_bit_entropy`, `infodynamic_compression`, `infodynamic_n_occupied`).
+- **Negative Feedback Quipu Coupling**. `ig_multiplier = 1.0 + 0.05 * clamp01(1.0 - compression)` dynamically drives Hebbian quipu bigram edge formation, annealing as data clusters.
+- **Observability & Trend Detection**. `mesh_slm.py:infodynamic_trend(window=16)` detects the second-law-of-infodynamics compression signature ($d(\text{compression})/dt \ge 0$ while $d(N_{\text{occupied}})/dt > 0$).
+- **Documentation & Scientific Lineage**. Complete mapping doc `docs/INFODYNAMIC_GRAVITY_QUIPU.md` mapping Vopson (AIP Advances 2025, DOI: 10.1063/5.0264945) and entropic gravity to QUIPU, carrying forward the Hossenfelder critique (2025) and Vopson et al. rebuttal.
+
+### Added — Earl K. Miller Analog Cognition & Traveling-Wave Spatial Computing
+- **`src/quipu/ueqgm_engine.py:phase_coherence_order(phases)`**. Computes the macroscopic Kuramoto phase synchronization order parameter $R = \frac{1}{N}\left|\sum_{j=1}^N e^{i \theta_j}\right| \in [0, 1]$ over traveling wave phases.
+- **Adaptive Runtime & `brain_kv` Integration**. `refresh_adaptive_runtime` persists analog wave coherence into `ueqgm:analog_coherence`.
+- **Analog Coherence Multiplier**. `ac_multiplier = 1.0 + 0.05 * clamp(2R - 1, -1, 1)` scales round-level learning rates based on global wave synchronization.
+- **Per-Token Traveling-Wave Stencil Gating**. During token embedding updates, tokens are gated by mobile wave crests: $\text{stencil\_gain} = 0.90 + 0.20 \cdot \text{interaction\_gain}[\text{cell}]$, modulating Hebbian nudges by local constructive vs. destructive wave superposition.
+- **Observability & Contrast Signature**. `mesh_slm.py:analog_coherence_trend(window=16)` tracks trailing gating contrast between occupied concepts and background nodes (`stencil_signature`).
+- **Documentation & Scientific Lineage**. Complete mapping doc `docs/ANALOG_COGNITION_QUIPU.md` mapping Miller et al. (*J. Neurosci.* 2026, DOI: 10.1523/JNEUROSCI.0711-26.2026) traveling-wave stencils, analog arithmetic superposition, and propofol-collapse evidence.
+
+### Added — Kill-Switches & Fail-Safe Diagnostics
+- **Environment Flags**: `QUIPU_INFODYNAMIC_DIAGNOSTIC`, `QUIPU_ANALOG_COGNITION_DIAGNOSTIC`, `QUIPU_INFODYNAMIC_COUPLING`, `QUIPU_ANALOG_STENCIL` (all default enabled with graceful pass-through / fail-to-legacy behavior).
+- **Diagnostics & Telemetry**: `state_summary()` exposes `last_infodynamic_bit_entropy`, `last_infodynamic_compression`, `last_analog_coherence_all`, `last_analog_coherence_occupied`, `last_analog_gating_contrast`, `last_infogravity_multiplier`, `last_analog_multiplier`, `last_stencil_gain_mean`.
+
 ## [0.30.0] Tri-Repo Closed-Loop Training & Epistemic Self-Annealing (2026-08-22)
 
 ### Added — Tri-Repo Feedback Loop & Annealing Engine

@@ -1,7 +1,7 @@
 # System Dynamics Equations and Signals
 
-Version: 0.28.0  
-Date: 2026-08-20  
+Version: 0.31.0  
+Date: 2026-08-22  
 
 ## Purpose
 
@@ -72,6 +72,20 @@ $$\text{Gap}_{STP} = 1 - \cos(h_t - h_r, h_r - h_s)$$
 $$\Delta S = S_{exact} - S_{mean\_field}$$
 $$\rho(\Delta S, \text{Gap}_{STP}) \le -0.5 \cdot \Omega_\Lambda \implies \text{delta\_s\_signature} = \text{true}$$
 
+### 2.10. Infodynamic Gravity & Compression Lift (Vopson 2025)
+Defined in [src/quipu/ueqgm_engine.py](../src/quipu/ueqgm_engine.py) and [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py):
+$$H_{bit}(p) = -p \log_2(p) - (1-p) \log_2(1-p), \quad p = \frac{N_{occ}}{N_{cells}}$$
+$$\text{compression} = 1 - \frac{H(X)}{\log_2(k)}$$
+$$\mu_{ig} = 1.0 + 0.05 \cdot \text{clamp01}(1.0 - \text{compression})$$
+$$\frac{d(\text{compression})}{dt} \ge 0 \land \frac{d(N_{occ})}{dt} > 0 \implies \text{second\_law\_signature} = \text{true}$$
+
+### 2.11. Analog Traveling-Wave Coherence & Stencil Gating (Miller et al. 2026)
+Defined in [src/quipu/ueqgm_engine.py](../src/quipu/ueqgm_engine.py) and [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py):
+$$R = \frac{1}{N} \left|\sum_{j=1}^N e^{i \theta_j}\right| \in [0, 1]$$
+$$\mu_{ac} = 1.0 + 0.05 \cdot \text{clamp}(2R - 1.0, -1.0, 1.0)$$
+$$\text{stencil\_gain}(cell) = 0.90 + 0.20 \cdot \text{interaction\_gain}[cell]$$
+$$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
+
 ---
 
 ## 3. Measurable Signal Inventory
@@ -86,6 +100,9 @@ $$\rho(\Delta S, \text{Gap}_{STP}) \le -0.5 \cdot \Omega_\Lambda \implies \text{
 | `stp_torus_gap` | `mesh_slm` | $[0.0, 2.0]$ | `stp_diagnostic_trend()` |
 | `entropy_differential` | `mesh_slm` | $[0.0, \infty)$ | `stp_diagnostic_trend()` |
 | `interstitial_entanglement`| `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
+| `infodynamic_compression` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
+| `analog_coherence` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
+| `stencil_gain_mean` | `mesh_slm` | $[0.90, 1.10]$ | `mesh_slm.train_round()` |
 | `transaction_drive` | `system_entirety` | $[0.0, 1.0]$ | `self_realization_loop` |
 | `structural_fingerprint` | `doc_annealing` | SHA-256 hex | `doc_annealing` map trigger |
 

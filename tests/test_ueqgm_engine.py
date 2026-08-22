@@ -24,6 +24,8 @@ from src.quipu.ueqgm_engine import (
     _SICI_SCALE_FACTOR,
     _SICI_SERIES_CUTOFF,
     _UEQGM_RUNTIME_KEY,
+    _INFODYNAMIC_KEY,
+    _ANALOG_COHERENCE_KEY,
     _raw_sici,
     PLANCK18_CENSUS,
     coherence_to_phi,
@@ -33,6 +35,9 @@ from src.quipu.ueqgm_engine import (
     get_adaptive_runtime,
     hawking_information_remnant_score,
     holographic_entropy,
+    infodynamic_bit_entropy,
+    infodynamic_compression_score,
+    phase_coherence_order,
     metric_perturbation,
     phase_evolution_total,
     refresh_adaptive_runtime,
@@ -971,3 +976,151 @@ def test_intermediary_binding_profile_alias_and_labels():
     assert profile["receiver_material"] == "tantalum"
     assert 0.0 <= profile["binding_gain"] <= 1.0
     assert profile["binding_multiplier"] >= 0.55
+
+
+# ── Infodynamic Gravity (Vopson 2025) ─────────────────────────────────────────
+
+def test_infodynamic_bit_entropy_bounds_and_symmetry():
+    """infodynamic_bit_entropy is symmetric around p=0.5 and unit-interval bounded."""
+    # Degenerate / boundary
+    assert infodynamic_bit_entropy(0, 4096) == 0.0
+    assert infodynamic_bit_entropy(4096, 4096) == 0.0
+    assert infodynamic_bit_entropy(-5, 4096) == 0.0
+    assert infodynamic_bit_entropy(5000, 4096) == 0.0
+    assert infodynamic_bit_entropy(10, 0) == 0.0
+
+    # Max entropy at 50% occupancy (p = 0.5 -> H = 1.0)
+    assert infodynamic_bit_entropy(2048, 4096) == pytest.approx(1.0, abs=1e-6)
+
+    # Symmetry: H(p) == H(1-p)
+    h_25 = infodynamic_bit_entropy(1024, 4096)  # p = 0.25
+    h_75 = infodynamic_bit_entropy(3072, 4096)  # p = 0.75
+    assert h_25 == pytest.approx(h_75, abs=1e-6)
+    assert 0.0 < h_25 < 1.0
+
+
+def test_infodynamic_compression_score_properties():
+    """infodynamic_compression_score satisfies expected limits and monotonicity."""
+    # Empty or zero frequency mass -> 0.0
+    assert infodynamic_compression_score([]) == 0.0
+    assert infodynamic_compression_score([0, 0, 0]) == 0.0
+
+    # Single cell concentration (Vopson merged objects limit) -> 1.0
+    assert infodynamic_compression_score([42]) == 1.0
+    assert infodynamic_compression_score([0, 0, 50, 0]) == 1.0
+
+    # Perfectly uniform distribution -> 0.0 (maximal entropy)
+    assert infodynamic_compression_score([10, 10, 10, 10]) == pytest.approx(0.0, abs=1e-6)
+    assert infodynamic_compression_score([1] * 100) == pytest.approx(0.0, abs=1e-6)
+
+    # Monotonicity: clustered/skewed distribution has higher compression than diffuse
+    skewed = infodynamic_compression_score([1000, 1, 1, 1])
+    diffuse = infodynamic_compression_score([400, 300, 200, 100])
+    assert 0.0 < diffuse < skewed <= 1.0
+
+
+# ── Analog Wave Coherence (Miller et al. 2026) ────────────────────────────────
+
+def test_phase_coherence_order_kuramoto():
+    """phase_coherence_order computes the Kuramoto order parameter R."""
+    # Empty -> 0.0
+    assert phase_coherence_order([]) == 0.0
+
+    # Perfectly aligned -> 1.0
+    assert phase_coherence_order([1.23, 1.23, 1.23, 1.23]) == pytest.approx(1.0, abs=1e-6)
+
+    # Uniform orthogonal cancellation -> approx 0.0
+    orthogonal_spread = [0.0, math.pi / 2.0, math.pi, 3.0 * math.pi / 2.0]
+    assert phase_coherence_order(orthogonal_spread) == pytest.approx(0.0, abs=1e-6)
+
+    # Opposite phases cancel
+    assert phase_coherence_order([0.0, math.pi]) == pytest.approx(0.0, abs=1e-6)
+
+    # In-between coherence in [0, 1]
+    r_partial = phase_coherence_order([0.1, 0.2, 0.3, 0.8])
+    assert 0.0 < r_partial < 1.0
+
+
+# ── Registrations & Mathematical Mapping ──────────────────────────────────────
+
+def test_ueqgm_math_map_infodynamic_and_analog_registrations():
+    """UEQGM_MATH_MAP registers infodynamic gravity and analog wave coherence."""
+    from src.quipu.ueqgm_engine import UEQGM_MATH_MAP
+
+    assert "infodynamic_bit_entropy" in UEQGM_MATH_MAP
+    assert "infodynamic_compression_score" in UEQGM_MATH_MAP
+    assert "phase_coherence_order" in UEQGM_MATH_MAP
+
+    # Check contested status note in Vopson entries
+    bit_ent_note = UEQGM_MATH_MAP["infodynamic_bit_entropy"]["note"]
+    comp_note = UEQGM_MATH_MAP["infodynamic_compression_score"]["note"]
+    assert "contested" in bit_ent_note.lower() or "hossenfelder" in bit_ent_note.lower()
+    assert "QUIPU_INFODYNAMIC_COUPLING" in bit_ent_note
+    assert "QUIPU_INFODYNAMIC_COUPLING" in comp_note
+
+    # Check Miller citation in phase coherence entry
+    ac_note = UEQGM_MATH_MAP["phase_coherence_order"]["note"]
+    assert "Miller" in ac_note
+    assert "QUIPU_ANALOG_STENCIL" in ac_note
+
+
+def test_ueqgm_engine_all_exports_new_symbols():
+    """__all__ exports new helper functions and brain_kv keys."""
+    import src.quipu.ueqgm_engine as ueqgm
+
+    for sym in (
+        "infodynamic_bit_entropy",
+        "infodynamic_compression_score",
+        "phase_coherence_order",
+        "_INFODYNAMIC_KEY",
+        "_ANALOG_COHERENCE_KEY",
+    ):
+        assert sym in ueqgm.__all__
+        assert hasattr(ueqgm, sym)
+
+
+def test_refresh_adaptive_runtime_persists_infodynamic_and_analog_keys():
+    """refresh_adaptive_runtime computes and persists infodynamic and analog keys."""
+    cn = _ueqgm_db()
+
+    # 1. First refresh on empty DB (no mesh tables) -> should not crash, returns default values
+    rt1 = refresh_adaptive_runtime(cn)
+    assert "infodynamic_bit_entropy" in rt1
+    assert "infodynamic_compression" in rt1
+    assert "infodynamic_n_occupied" in rt1
+    assert "analog_coherence" in rt1
+
+    # Check brain_kv rows written
+    row_info = cn.execute("SELECT value FROM brain_kv WHERE key=?", (_INFODYNAMIC_KEY,)).fetchone()
+    assert row_info is not None
+    info_dict = json.loads(row_info[0])
+    assert "bit_entropy" in info_dict
+    assert "compression" in info_dict
+
+    row_ac = cn.execute("SELECT value FROM brain_kv WHERE key=?", (_ANALOG_COHERENCE_KEY,)).fetchone()
+    assert row_ac is not None
+    ac_dict = json.loads(row_ac[0])
+    assert "coherence" in ac_dict
+
+    # 2. Populate mesh_slm_vocab and mesh_slm_quipu_node, then refresh again
+    cn.execute(
+        "CREATE TABLE mesh_slm_vocab(token_id INTEGER PRIMARY KEY, token TEXT, i INT, j INT, freq INT, created_at TEXT, updated_at TEXT)"
+    )
+    cn.execute(
+        "CREATE TABLE mesh_slm_quipu_node(node_id INTEGER PRIMARY KEY, i INT, j INT, node_phase REAL, weyl_phase REAL, photon_phase REAL, neutrino_phase REAL, interaction_gain REAL, resuscitation_weight REAL, directed_target INT, source_key TEXT, source_label TEXT, updated_at TEXT)"
+    )
+    cn.execute("INSERT INTO mesh_slm_vocab(token_id, token, i, j, freq) VALUES(1, 'quantum', 0, 0, 100)")
+    cn.execute("INSERT INTO mesh_slm_vocab(token_id, token, i, j, freq) VALUES(2, 'gravity', 0, 1, 50)")
+    for n in range(16):
+        cn.execute(
+            "INSERT INTO mesh_slm_quipu_node(node_id, i, j, photon_phase, interaction_gain) VALUES(?, ?, ?, ?, ?)",
+            (n, n // 4, n % 4, 0.785, 0.8),
+        )
+    cn.commit()
+
+    rt2 = refresh_adaptive_runtime(cn)
+    assert rt2["infodynamic_n_occupied"] == 2
+    assert rt2["infodynamic_bit_entropy"] > 0.0
+    assert rt2["infodynamic_compression"] > 0.0
+    assert rt2["analog_coherence"] == pytest.approx(1.0, abs=1e-4)
+

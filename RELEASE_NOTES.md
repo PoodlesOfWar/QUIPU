@@ -1,5 +1,41 @@
 # Release Notes
 
+## v0.31.0 - 2026-08-22
+
+**Infodynamic Gravity and Analog Traveling-Wave Cognition**
+
+Active bounded physical and cognitive priors from published peer-reviewed computational physics and neuroscience:
+
+### Added & Enhanced
+- **Melvin M. Vopson Infodynamic Gravity (`docs/INFODYNAMIC_GRAVITY_QUIPU.md`)**
+  - **Bit Entropy & Compression Metrics (`ueqgm_engine.py`)**: Implements discrete spatial bit-allocation entropy $H(p) = -p \log_2(p) - (1-p) \log_2(1-p)$ and normalized frequency compression score $1 - H(X)/\log_2(k)$ across the 64×64 torus manifold.
+  - **Negative Feedback Quipu Bigram Coupling**: Multiplies edge learning rate $\eta_q$ by $ig\_multiplier = 1.0 + 0.05 \cdot \text{clamp01}(1.0 - \text{compression})$, driving early exploratory edge formation and annealing into tight clusters as data compacts.
+  - **Second-Law Trend Signature**: `infodynamic_trend()` tracks trailing-window slopes to verify the second-law-of-infodynamics compression signature ($d(\text{comp})/dt \ge 0$ while $d(N_{\text{occ}})/dt > 0$).
+  - **Contested Status Annotation**: All mathematical mappings and telemetry records travel with explicit references to the Hossenfelder critique (May 2025) and Vopson et al. response in *IPI Letters* (2025).
+
+- **Earl K. Miller Analog Traveling-Wave Cognition (`docs/ANALOG_COGNITION_QUIPU.md`)**
+  - **Kuramoto Phase Coherence $R$ (`ueqgm_engine.py`)**: Quantifies global traveling-wave synchronization order parameter $R = \frac{1}{N}\left|\sum_{j=1}^N e^{i \theta_j}\right| \in [0, 1]$.
+  - **Analog Coherence Round Multiplier**: Multiplies embedding learning rate $\eta_{\text{eff}}$ by $ac\_multiplier = 1.0 + 0.05 \cdot \text{clamp}(2R - 1, -1, 1)$, boosting consolidation under coherent wave resonance.
+  - **Per-Token Traveling-Wave Stencil Gating**: Modulates per-token Hebbian updates in `train_round()` by $\text{stencil\_gain} = 0.90 + 0.20 \cdot \text{interaction\_gain}[\text{cell}]$, gating learning updates by constructive wave crests.
+  - **Wave-Stencil Contrast Signature**: `analog_coherence_trend()` monitors trailing gating contrast between occupied concepts and background nodes.
+
+- **Kill-Switches & Telemetry**:
+  - `QUIPU_INFODYNAMIC_DIAGNOSTIC`, `QUIPU_ANALOG_COGNITION_DIAGNOSTIC`, `QUIPU_INFODYNAMIC_COUPLING`, `QUIPU_ANALOG_STENCIL` env kill-switches with graceful fail-to-legacy mechanics.
+  - Telemetry keys surfaced in `state_summary()` and `train_round()` returns.
+
+---
+
+## v0.30.0 - 2026-08-22
+
+**Tri-Repo Closed-Loop Training & Epistemic Self-Annealing**
+
+### Added & Enhanced
+- **Tri-Repo Feedback Loop & Annealing Engine (`src/quipu/world_model.py:annealing_cycle()`)** — Executes on-demand self-annealing across the 7-D manifold, calculates information efficiency convergence, updates cognitive phases, and persists living state in `world_model:anneal_history`.
+- **Sensory Guidance Directives** — Generates prompt directives and vocabulary guidance for Loadopoly-OCR (Vision), Snell refractive priors ($n=1.491, 1.586$) and SPRT sequential boundary limits for Bakugo (Touch).
+- **`/anneal` Endpoints & Tenant Device Scoping** — Adds `POST /anneal` and `GET /anneal` endpoints and personalizes `GET /guidance` by client device ID.
+
+---
+
 ## v0.29.0 - 2026-08-20
 
 **World Model Dialectic, Epistemic Rupture Detection, and Physical/Vision Channel Grounding**

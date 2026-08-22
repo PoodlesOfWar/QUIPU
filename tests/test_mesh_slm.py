@@ -550,3 +550,162 @@ def test_stp_trend_delta_s_signature_absent_when_uncorrelated(isolated_slm_db):
     trend = slm.stp_diagnostic_trend(window=10)
     assert trend["delta_s_torus_corr"] is None
     assert trend["delta_s_signature"] is False
+
+
+# ---------------------------------------------------------------------------
+# Infodynamic Gravity & Analog Cognition tests (Vopson 2025, Miller 2026)
+# ---------------------------------------------------------------------------
+
+def test_infodynamic_diagnostic_and_summary_fields(isolated_slm_db):
+    """train_round populates infodynamic bit entropy, compression, and coupling keys."""
+    slm = isolated_slm_db
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert "ig_multiplier" in summary
+    assert "ac_multiplier" in summary
+    assert "stencil_gain_mean" in summary
+    assert 1.0 <= summary["ig_multiplier"] <= 1.05
+    assert 0.95 <= summary["ac_multiplier"] <= 1.05
+    assert 0.90 <= summary["stencil_gain_mean"] <= 1.10
+
+    assert summary["last_infodynamic_bit_entropy"] is not None
+    assert summary["last_infodynamic_compression"] is not None
+    assert 0.0 <= summary["last_infodynamic_bit_entropy"] <= 1.0
+    assert 0.0 <= summary["last_infodynamic_compression"] <= 1.0
+
+    state = slm.state_summary()
+    assert state["last_infodynamic_bit_entropy"] == summary["last_infodynamic_bit_entropy"]
+    assert state["last_infodynamic_compression"] == summary["last_infodynamic_compression"]
+    assert state["last_infogravity_multiplier"] == summary["ig_multiplier"]
+    assert state["last_analog_multiplier"] == summary["ac_multiplier"]
+    assert state["last_stencil_gain_mean"] == summary["stencil_gain_mean"]
+
+
+def test_infodynamic_flag_disabled(isolated_slm_db, monkeypatch):
+    """QUIPU_INFODYNAMIC_DIAGNOSTIC=0 suppresses infodynamic snapshot without failing training."""
+    slm = isolated_slm_db
+    monkeypatch.setenv("QUIPU_INFODYNAMIC_DIAGNOSTIC", "0")
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert summary["last_infodynamic_bit_entropy"] is None
+    assert summary["last_infodynamic_compression"] is None
+
+
+def test_analog_wave_snapshot_and_resuscitation(isolated_slm_db):
+    """Analog wave metrics populate after map_resuscitation_quipu creates node table."""
+    slm = isolated_slm_db
+    # Round 1: before resuscitation -> node table absent -> analog wave snapshot None
+    s1 = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert s1["last_analog_coherence_all"] is None
+
+    # Resuscitate nodes -> creates mesh_slm_quipu_node with wave phases
+    res = slm.map_resuscitation_quipu()
+    assert res["node_count"] == 4096
+
+    # Round 2: after resuscitation -> analog wave snapshot populated
+    slm._LAST_TRAIN_TS = 0.0
+    s2 = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert s2["last_analog_coherence_all"] is not None
+    assert s2["last_analog_coherence_occupied"] is not None
+    assert s2["last_analog_gating_contrast"] is not None
+    assert 0.0 <= s2["last_analog_coherence_all"] <= 1.0
+
+    state = slm.state_summary()
+    assert state["last_analog_coherence_all"] == s2["last_analog_coherence_all"]
+    assert state["last_analog_gating_contrast"] == s2["last_analog_gating_contrast"]
+
+
+def test_analog_diag_flag_disabled(isolated_slm_db, monkeypatch):
+    """QUIPU_ANALOG_COGNITION_DIAGNOSTIC=off suppresses analog wave snapshot."""
+    slm = isolated_slm_db
+    slm.map_resuscitation_quipu()
+    monkeypatch.setenv("QUIPU_ANALOG_COGNITION_DIAGNOSTIC", "off")
+    slm._LAST_TRAIN_TS = 0.0
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert summary["last_analog_coherence_all"] is None
+    assert summary["last_analog_gating_contrast"] is None
+
+
+def test_history_capping_infodynamic_and_analog(isolated_slm_db):
+    """Rolling histories are capped at _STP_HISTORY_CAP (200)."""
+    slm = isolated_slm_db
+    cap = slm._STP_HISTORY_CAP
+    with slm._conn() as cn:
+        slm._meta_set(cn, "infodynamic_compression_history", [0.1] * (cap + 50))
+        slm._meta_set(cn, "infodynamic_n_occupied_history", [10] * (cap + 50))
+        slm._meta_set(cn, "analog_gating_contrast_history", [0.05] * (cap + 50))
+
+    slm.map_resuscitation_quipu()
+    slm._LAST_TRAIN_TS = 0.0
+    slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    with slm._conn() as cn:
+        assert len(slm._meta_get(cn, "infodynamic_compression_history", [])) == cap
+        assert len(slm._meta_get(cn, "infodynamic_n_occupied_history", [])) == cap
+        assert len(slm._meta_get(cn, "analog_gating_contrast_history", [])) == cap
+
+
+def test_infodynamic_trend_second_law_signature(isolated_slm_db):
+    """infodynamic_trend detects second-law-of-infodynamics compression signature."""
+    slm = isolated_slm_db
+    # 1. Empty history
+    t_empty = slm.infodynamic_trend(window=10)
+    assert t_empty["insufficient_data"] is True
+    assert t_empty["second_law_signature"] is False
+
+    # 2. Positive compression and occupancy slope (second law signature holds)
+    n = 30
+    with slm._conn() as cn:
+        slm._meta_set(cn, "infodynamic_compression_history", [round(0.01 * k, 6) for k in range(n)])
+        slm._meta_set(cn, "infodynamic_n_occupied_history", [10 + k * 2 for k in range(n)])
+
+    t_pos = slm.infodynamic_trend(window=10)
+    assert t_pos["insufficient_data"] is False
+    assert t_pos["compression_slope"] is not None and t_pos["compression_slope"] > 0
+    assert t_pos["occupancy_slope"] is not None and t_pos["occupancy_slope"] > 0
+    assert t_pos["second_law_signature"] is True
+
+    # 3. Falling compression slope -> signature False
+    with slm._conn() as cn:
+        slm._meta_set(cn, "infodynamic_compression_history", [round(0.50 - 0.01 * k, 6) for k in range(n)])
+    t_neg = slm.infodynamic_trend(window=10)
+    assert t_neg["second_law_signature"] is False
+
+
+def test_analog_coherence_trend_stencil_signature(isolated_slm_db):
+    """analog_coherence_trend detects Miller wave-stencil contrast signature."""
+    slm = isolated_slm_db
+    # 1. Empty history
+    t_empty = slm.analog_coherence_trend(window=10)
+    assert t_empty["insufficient_data"] is True
+    assert t_empty["stencil_signature"] is False
+
+    # 2. Positive mean gating contrast over trailing window -> signature True
+    with slm._conn() as cn:
+        slm._meta_set(cn, "analog_gating_contrast_history", [0.05] * 25)
+    t_pos = slm.analog_coherence_trend(window=10)
+    assert t_pos["insufficient_data"] is False
+    assert t_pos["mean_gating_contrast"] is not None and t_pos["mean_gating_contrast"] > 0.0
+    assert t_pos["stencil_signature"] is True
+
+    # 3. Non-positive gating contrast -> signature False
+    with slm._conn() as cn:
+        slm._meta_set(cn, "analog_gating_contrast_history", [-0.02] * 25)
+    t_neg = slm.analog_coherence_trend(window=10)
+    assert t_neg["stencil_signature"] is False
+
+
+def test_coupling_kill_switches_restore_legacy(isolated_slm_db, monkeypatch):
+    """QUIPU_INFODYNAMIC_COUPLING=0 and QUIPU_ANALOG_STENCIL=0 fix multipliers to 1.0."""
+    slm = isolated_slm_db
+    slm.map_resuscitation_quipu()
+    monkeypatch.setenv("QUIPU_INFODYNAMIC_COUPLING", "0")
+    monkeypatch.setenv("QUIPU_ANALOG_STENCIL", "0")
+    slm._LAST_TRAIN_TS = 0.0
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+
+    assert summary["ig_multiplier"] == 1.0
+    assert summary["ac_multiplier"] == 1.0
+    assert summary["stencil_gain_mean"] == 1.0
+

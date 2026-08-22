@@ -6,7 +6,7 @@ services:
     image: quipu-observer:dev
     container_name: quipu
     ports:
-      - "7100:7100"
+      - "127.0.0.1:7100:7100"
     environment:
       SCB_DB_PATH: /data/local_brain.sqlite
       QUIPU_TRAIN_INTERVAL: "45"

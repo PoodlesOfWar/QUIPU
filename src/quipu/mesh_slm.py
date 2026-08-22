@@ -96,10 +96,15 @@ shorter r).
 
 Training Objective
 ------------------
-Next-token prediction with effective learning rate modulated by three signals::
+Next-token prediction with effective learning rate modulated by physical and computational priors::
 
     η_eff = η_base · (1 − end_state_progress) · phase_weight
             · (0.70 + 0.30 · wavefunction_overlap(mean_embed7, MESH))
+            · ie_multiplier · ac_multiplier
+            (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain)
+
+    η_q   = _QUIPU_LR · (1 − end_state_progress) · phase_weight
+            · ie_multiplier · ig_multiplier
 
 * End-State progress reduces LR as the Brain converges (attractor:
   ``symbiosis_pct > 0.90`` and ``coherence > 0.85``).
@@ -107,6 +112,10 @@ Next-token prediction with effective learning rate modulated by three signals::
   current harmonic coherence phase.
 * Wavefunction overlap amplifies learning when the collective SLM
   embedding is already co-aligned with the MESH attractor.
+* ``ie_multiplier`` (≤5% lift) scales LR from surviving cross-cycle Weyl covariance.
+* ``ig_multiplier`` (≤5% lift) scales quipu edge attraction from infodynamic compression (Vopson 2025).
+* ``ac_multiplier`` (±5% scale) modulates LR by Kuramoto traveling-wave coherence, with per-token
+  ``stencil_gain`` gating ensemble participation (Miller et al. 2026).
 
 Local Executor Integration
 --------------------------
@@ -151,6 +160,9 @@ from .ueqgm_engine import (
     get_adaptive_runtime as _ueqgm_get_adaptive_runtime,
     wavefunction_overlap as _ueqgm_wavefunction_overlap,
     holographic_entropy as _ueqgm_holographic_entropy,
+    infodynamic_bit_entropy as _ueqgm_infodynamic_bit_entropy,
+    infodynamic_compression_score as _ueqgm_infodynamic_compression_score,
+    phase_coherence_order as _ueqgm_phase_coherence_order,
     floquet_modulation_factor as _ueqgm_floquet_modulation,
     metric_perturbation as _ueqgm_metric_perturbation,
     phase_evolution_total as _ueqgm_phase_evolution_total,
@@ -462,8 +474,11 @@ SCORING_FORMULA_MAP: dict[str, dict[str, object]] = {
 #
 #   η_eff = η_base · (1 − end_state_progress) · phase_weight
 #           · (0.70 + 0.30 · wavefunction_overlap(mean_embed7, MESH))
+#           · ie_multiplier · ac_multiplier
+#           (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain)
 #
 #   η_q   = _QUIPU_LR · (1 − end_state_progress) · phase_weight
+#           · ie_multiplier · ig_multiplier
 #
 #   Component                   Default    Source
 #   ─────────────────────────   ───────    ─────────────────────────────────
@@ -473,6 +488,10 @@ SCORING_FORMULA_MAP: dict[str, dict[str, object]] = {
 #   phase_weight                ≈1.0±0.1   ueqgm_engine.sici_phase_weight(coherence)
 #   wavefunction_overlap        [0,1]      ueqgm_engine.wavefunction_overlap(mean_embed,MESH)
 #   0.70 + 0.30·overlap         [0.70,1.0] alignment amplifier (base 70% + 30% overlap bonus)
+#   ie_multiplier               [1.0,1.05] 1 + 0.05 · interstitial_entanglement
+#   ig_multiplier               [1.0,1.05] 1 + 0.05 · (1 - infodynamic_compression) (Vopson 2025)
+#   ac_multiplier               [0.95,1.05] 1 + 0.05 · (2·Kuramoto_R - 1) (Miller 2026)
+#   stencil_gain                [0.90,1.10] 0.90 + 0.20 · interaction_gain[cell]
 #
 LR_MAP: dict[str, dict[str, object]] = {
     "eta_base": {
@@ -497,6 +516,26 @@ LR_MAP: dict[str, dict[str, object]] = {
         "formula":  "0.70 + 0.30 · wavefunction_overlap(mean_embed7, mesh_state7)",
         "range":    "[0.70, 1.00]",
         "role":     "Amplifies learning when SLM embedding is already aligned with MESH",
+    },
+    "ie_multiplier": {
+        "formula":  "1.0 + 0.05 · clamp01(interstitial_entanglement)",
+        "range":    "[1.00, 1.05]",
+        "role":     "Lift from surviving cross-cycle Weyl covariance",
+    },
+    "ig_multiplier": {
+        "formula":  "1.0 + 0.05 · clamp01(1.0 - infodynamic_compression)",
+        "range":    "[1.00, 1.05]",
+        "role":     "Negative feedback lift on quipu edge attraction decaying as vocabulary compacts (Vopson 2025)",
+    },
+    "ac_multiplier": {
+        "formula":  "1.0 + 0.05 · clamp(2·Kuramoto_R - 1, -1, 1)",
+        "range":    "[0.95, 1.05]",
+        "role":     "Modulation from macro Kuramoto traveling-wave phase coherence (Miller et al. 2026)",
+    },
+    "stencil_gain": {
+        "formula":  "0.90 + 0.20 · interaction_gain[cell]",
+        "range":    "[0.90, 1.10]",
+        "role":     "Per-token wave-crest gating on embedding update rate (Miller et al. 2026)",
     },
 }
 
@@ -722,8 +761,8 @@ CORPUS_NUDGE_MAP: dict[str, dict[str, float]] = {
 #   As coherence_depth → ∞:  Si(φ) → π/2,  Ci(φ) → 0,  phase_weight → 1.0
 #
 #   mesh_slm usage:
-#     eta_eff  = LR_BASE · (1 − progress) · phase_weight · (0.70 + 0.30 · overlap)
-#     eta_q    = QUIPU_LR · (1 − progress) · phase_weight
+#     eta_eff  = LR_BASE · (1 − progress) · phase_weight · (0.70 + 0.30 · overlap) · ie_multiplier · ac_multiplier
+#     eta_q    = QUIPU_LR · (1 − progress) · phase_weight · ie_multiplier · ig_multiplier
 #     field_8d  includes F = 0.5·(1 + cos(phase_weight · weyl_phase))
 #
 PHASE_MAP: dict[str, str] = {
@@ -2299,6 +2338,118 @@ def _torus_cell_for_token(
 
 
 # ---------------------------------------------------------------------------
+# Infodynamic Gravity & Analog Cognition Flags & Snapshots
+# ---------------------------------------------------------------------------
+_INFODYNAMIC_DIAG_ENV: str = "QUIPU_INFODYNAMIC_DIAGNOSTIC"
+_ANALOG_DIAG_ENV: str = "QUIPU_ANALOG_COGNITION_DIAGNOSTIC"
+_INFODYNAMIC_COUPLING_ENV: str = "QUIPU_INFODYNAMIC_COUPLING"
+_ANALOG_STENCIL_ENV: str = "QUIPU_ANALOG_STENCIL"
+
+
+def _infodynamic_enabled() -> bool:
+    """True unless ``QUIPU_INFODYNAMIC_DIAGNOSTIC`` is explicitly falsy (default: on)."""
+    return str(os.environ.get(_INFODYNAMIC_DIAG_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _analog_diag_enabled() -> bool:
+    """True unless ``QUIPU_ANALOG_COGNITION_DIAGNOSTIC`` is explicitly falsy (default: on)."""
+    return str(os.environ.get(_ANALOG_DIAG_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _infodynamic_coupling_enabled() -> bool:
+    """True unless ``QUIPU_INFODYNAMIC_COUPLING`` is explicitly falsy (default: on)."""
+    return str(os.environ.get(_INFODYNAMIC_COUPLING_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _analog_stencil_enabled() -> bool:
+    """True unless ``QUIPU_ANALOG_STENCIL`` is explicitly falsy (default: on)."""
+    return str(os.environ.get(_ANALOG_STENCIL_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _infodynamic_snapshot(cn: sqlite3.Connection) -> dict[str, Any] | None:
+    """Capture discrete bit entropy and compression metrics from ``mesh_slm_vocab``.
+
+    Returns ``None`` if diagnostic is disabled, vocabulary is empty, or an error occurs.
+    """
+    if not _infodynamic_enabled():
+        return None
+    try:
+        rows = cn.execute(
+            "SELECT freq FROM mesh_slm_vocab WHERE freq > 0"
+        ).fetchall()
+        if not rows:
+            return None
+        freqs = [float(r["freq"]) for r in rows]
+        n_occ = len(freqs)
+        bit_ent = _ueqgm_infodynamic_bit_entropy(n_occ, _VOCAB_LIMIT)
+        comp = _ueqgm_infodynamic_compression_score(freqs)
+        return {
+            "bit_entropy": round(bit_ent, 6),
+            "compression": round(comp, 6),
+            "n_occupied": n_occ,
+        }
+    except Exception as exc:
+        logger.debug("_infodynamic_snapshot: computation failed: %s", exc)
+        return None
+
+
+def _analog_wave_snapshot(cn: sqlite3.Connection) -> dict[str, Any] | None:
+    """Capture Kuramoto coherence and stencil gating contrast from ``mesh_slm_quipu_node``.
+
+    Returns ``None`` if diagnostic is disabled, node table is empty/absent, or an error occurs.
+    """
+    if not _analog_diag_enabled():
+        return None
+    try:
+        node_rows = cn.execute(
+            "SELECT i, j, photon_phase, interaction_gain FROM mesh_slm_quipu_node"
+        ).fetchall()
+        if not node_rows:
+            return None
+        vocab_rows = cn.execute(
+            "SELECT i, j FROM mesh_slm_vocab"
+        ).fetchall()
+        occupied_coords = {(int(r["i"]), int(r["j"])) for r in vocab_rows}
+
+        all_phases: list[float] = []
+        all_gains: list[float] = []
+        occ_phases: list[float] = []
+        occ_gains: list[float] = []
+
+        for r in node_rows:
+            p = float(r["photon_phase"]) if r["photon_phase"] is not None else 0.0
+            g = float(r["interaction_gain"]) if r["interaction_gain"] is not None else 0.0
+            all_phases.append(p)
+            all_gains.append(g)
+            if (int(r["i"]), int(r["j"])) in occupied_coords:
+                occ_phases.append(p)
+                occ_gains.append(g)
+
+        coh_all = _ueqgm_phase_coherence_order(all_phases)
+        coh_occ = _ueqgm_phase_coherence_order(occ_phases) if occ_phases else 0.0
+        mean_all_gain = (sum(all_gains) / len(all_gains)) if all_gains else 0.0
+        mean_occ_gain = (sum(occ_gains) / len(occ_gains)) if occ_gains else 0.0
+        gating_contrast = mean_occ_gain - mean_all_gain
+
+        return {
+            "coherence_all": round(coh_all, 6),
+            "coherence_occupied": round(coh_occ, 6),
+            "gating_contrast": round(gating_contrast, 6),
+        }
+    except Exception as exc:
+        logger.debug("_analog_wave_snapshot: computation failed: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Corpus stream — pull training text from the Brain's own state
 # ---------------------------------------------------------------------------
 def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[tuple[str, str]]:
@@ -2434,9 +2585,30 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 # Low/zero score → no-op (multiplier stays at 1.0).
                 _ie_score = float(runtime.get("interstitial_entanglement", 0.0) or 0.0)
                 ie_multiplier = 1.0 + 0.05 * max(0.0, min(1.0, _ie_score))
+                # Infodynamic gravity lift (Vopson 2025): diffuses vocabulary clustering
+                # by boosting η_q up to +5% when compression is low; decays to 1.0 as
+                # vocabulary compacts.
+                _comp_score = float(runtime.get("infodynamic_compression", 0.0) or 0.0)
+                if _infodynamic_coupling_enabled():
+                    ig_multiplier = 1.0 + 0.05 * max(0.0, min(1.0, 1.0 - _comp_score))
+                else:
+                    ig_multiplier = 1.0
+                # Analog wave coherence multiplier (Miller et al. 2026): Kuramoto R
+                # modulates round-level LR by ±5% (no-op at R = 0.5 or when phases absent).
+                _coherence_r = float(
+                    runtime.get("analog_coherence", 0.5)
+                    if runtime.get("analog_coherence") is not None
+                    else 0.5
+                )
+                if _analog_stencil_enabled():
+                    ac_multiplier = 1.0 + 0.05 * max(-1.0, min(1.0, 2.0 * _coherence_r - 1.0))
+                else:
+                    ac_multiplier = 1.0
             except Exception:
                 phase_weight = 1.0
                 ie_multiplier = 1.0
+                ig_multiplier = 1.0
+                ac_multiplier = 1.0
             try:
                 mean_embed = _mean_embed_7d(cn_rt)
                 overlap = _ueqgm_wavefunction_overlap(mean_embed, mesh)
@@ -2444,9 +2616,10 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 overlap = 0.5
 
         # Effective LR: End-State × SiCi phase correction × wavefunction alignment
-        #               × interstitial entanglement lift (≤ 5%, sunlight-analogy).
-        eta = _LR_BASE * (1.0 - progress) * phase_weight * (0.70 + 0.30 * overlap) * ie_multiplier
-        eta_q = _QUIPU_LR * (1.0 - progress) * phase_weight * ie_multiplier
+        #               × interstitial entanglement lift (≤ 5%, sunlight-analogy)
+        #               × analog Kuramoto wave coherence (± 5%, Miller et al. 2026).
+        eta = _LR_BASE * (1.0 - progress) * phase_weight * (0.70 + 0.30 * overlap) * ie_multiplier * ac_multiplier
+        eta_q = _QUIPU_LR * (1.0 - progress) * phase_weight * ie_multiplier * ig_multiplier
         now_iso = datetime.now(timezone.utc).isoformat()
         # Start the per-round time budget AFTER setup so the first chunk
         # is always processed even on slow systems.
@@ -2473,6 +2646,21 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
 
             random.shuffle(chunks)
 
+            # Load wave interaction gain map for per-token stencil gating (Miller et al. 2026)
+            stencil_map: dict[tuple[int, int], float] = {}
+            stencil_on = _analog_stencil_enabled()
+            if stencil_on:
+                try:
+                    node_rows = cn.execute(
+                        "SELECT i, j, interaction_gain FROM mesh_slm_quipu_node"
+                    ).fetchall()
+                    for nr in node_rows:
+                        if nr["interaction_gain"] is not None:
+                            stencil_map[(int(nr["i"]), int(nr["j"]))] = float(nr["interaction_gain"])
+                except Exception:
+                    stencil_map = {}
+            applied_stencil_gains: list[float] = []
+
             for chunk, source in chunks:
                 if time.time() - started >= max_seconds:
                     break
@@ -2492,6 +2680,16 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 for tok in tokens:
                     tid = _upsert_token(cn, tok, now_iso, mesh=target_mesh)
                     ids.append(tid)
+
+                    # Per-token wave stencil gate (Miller et al. 2026):
+                    cell = _torus_cell_for_token(cn, tid)
+                    if stencil_on and cell and cell in stencil_map:
+                        stencil_gain = 0.90 + 0.20 * stencil_map[cell]
+                    else:
+                        stencil_gain = 1.0
+                    applied_stencil_gains.append(stencil_gain)
+                    eff_eta = eta * stencil_gain
+
                     # Nudge embedding toward the (possibly biased) mesh target
                     # (Hebbian on the 7-D axis activations).
                     cn.execute(
@@ -2505,9 +2703,9 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                         "e_entirety   = e_entirety   + ? * (? - e_entirety) "
                         "WHERE token_id=?",
                         (
-                            eta, target_mesh[0], eta, target_mesh[1], eta, target_mesh[2],
-                            eta, target_mesh[3], eta, target_mesh[4], eta, target_mesh[5],
-                            eta, target_mesh[6], tid,
+                            eff_eta, target_mesh[0], eff_eta, target_mesh[1], eff_eta, target_mesh[2],
+                            eff_eta, target_mesh[3], eff_eta, target_mesh[4], eff_eta, target_mesh[5],
+                            eff_eta, target_mesh[6], tid,
                         ),
                     )
                     n_tokens += 1
@@ -2535,7 +2733,7 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                             pass
                         try:
                             cell_s = _torus_cell_for_token(cn, ids[si])
-                            cell_r = _torus_cell_for_token
+                            cell_r = _torus_cell_for_token(cn, ids[ri])
                             cell_t = _torus_cell_for_token(cn, ids[ti])
                             if cell_s and cell_r and cell_t:
                                 gap_t = _stp_cos_gap(
@@ -2578,6 +2776,10 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
 
             rounds = int(_meta_get(cn, "rounds", 0) or 0) + 1
             avg_loss = (loss_acc / n_loss) if n_loss else 0.0
+            stencil_gain_mean = (
+                sum(applied_stencil_gains) / len(applied_stencil_gains)
+                if applied_stencil_gains else 1.0
+            )
             _meta_set(cn, "rounds", rounds)
             _meta_set(cn, "last_loss", avg_loss)
             _meta_set(cn, "last_eta", eta)
@@ -2628,6 +2830,34 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 _meta_set(
                     cn, "entropy_differential_history", hist_d[-_STP_HISTORY_CAP:]
                 )
+
+            # ── Infodynamic Gravity snapshot & history (Vopson 2025) ───────────
+            info_snap = _infodynamic_snapshot(cn)
+            if info_snap is not None:
+                _meta_set(cn, "last_infodynamic_bit_entropy", info_snap["bit_entropy"])
+                _meta_set(cn, "last_infodynamic_compression", info_snap["compression"])
+                _meta_set(cn, "last_infodynamic_n_occupied", info_snap["n_occupied"])
+                hist_c = _meta_get(cn, "infodynamic_compression_history", []) or []
+                hist_c.append(info_snap["compression"])
+                _meta_set(cn, "infodynamic_compression_history", hist_c[-_STP_HISTORY_CAP:])
+                hist_occ = _meta_get(cn, "infodynamic_n_occupied_history", []) or []
+                hist_occ.append(info_snap["n_occupied"])
+                _meta_set(cn, "infodynamic_n_occupied_history", hist_occ[-_STP_HISTORY_CAP:])
+
+            # ── Analog Wave & Coherence snapshot & history (Miller et al. 2026) ─
+            wave_snap = _analog_wave_snapshot(cn)
+            if wave_snap is not None:
+                _meta_set(cn, "last_analog_coherence_all", wave_snap["coherence_all"])
+                _meta_set(cn, "last_analog_coherence_occupied", wave_snap["coherence_occupied"])
+                _meta_set(cn, "last_analog_gating_contrast", wave_snap["gating_contrast"])
+                hist_g = _meta_get(cn, "analog_gating_contrast_history", []) or []
+                hist_g.append(wave_snap["gating_contrast"])
+                _meta_set(cn, "analog_gating_contrast_history", hist_g[-_STP_HISTORY_CAP:])
+
+            # ── Couplings auditing ─────────────────────────────────────────────
+            _meta_set(cn, "last_infogravity_multiplier", round(ig_multiplier, 6))
+            _meta_set(cn, "last_analog_multiplier", round(ac_multiplier, 6))
+            _meta_set(cn, "last_stencil_gain_mean", round(stencil_gain_mean, 6))
 
             # ── ACRE — accumulate multi-axial interaction; attempt emergence ──
             try:
@@ -2686,6 +2916,9 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             "end_state_progress": round(progress, 4),
             "phase_weight": round(phase_weight, 4),
             "ie_multiplier": round(ie_multiplier, 6),
+            "ig_multiplier": round(ig_multiplier, 6),
+            "ac_multiplier": round(ac_multiplier, 6),
+            "stencil_gain_mean": round(stencil_gain_mean, 6),
             "wavefunction_overlap": round(overlap, 4),
             "mesh_field_8d": round(mesh_field, 4),
             "stp_embed_gap": (
@@ -2693,6 +2926,21 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             ),
             "stp_torus_gap": (
                 round(avg_stp_torus, 6) if avg_stp_torus is not None else None
+            ),
+            "last_infodynamic_bit_entropy": (
+                info_snap["bit_entropy"] if info_snap is not None else None
+            ),
+            "last_infodynamic_compression": (
+                info_snap["compression"] if info_snap is not None else None
+            ),
+            "last_analog_coherence_all": (
+                wave_snap["coherence_all"] if wave_snap is not None else None
+            ),
+            "last_analog_coherence_occupied": (
+                wave_snap["coherence_occupied"] if wave_snap is not None else None
+            ),
+            "last_analog_gating_contrast": (
+                wave_snap["gating_contrast"] if wave_snap is not None else None
             ),
             "acre": acre,
             "mcd": mcd_result,
@@ -3377,6 +3625,107 @@ def stp_diagnostic_trend(
     }
 
 
+def infodynamic_trend(
+    cn: sqlite3.Connection | None = None,
+    window: int = 16,
+) -> dict:
+    """Check the second-law-of-infodynamics signature from accumulated history.
+
+    Compares the trailing-window slope of ``infodynamic_compression_history``
+    against the trailing-window slope of ``infodynamic_n_occupied_history``.
+    Slope is defined as ``mean(last window) - mean(previous window)``.
+
+    ``second_law_signature`` is True when the compression slope is non-negative
+    (``compression_slope >= 0.0``) while vocabulary occupancy grew (``occupancy_slope > 0.0``)
+    over the trailing ``2 * window`` rounds.
+    """
+    def _slope(series: list[float]) -> float | None:
+        if len(series) < 2 * window:
+            return None
+        prev = series[-2 * window:-window]
+        last = series[-window:]
+        return (sum(last) / len(last)) - (sum(prev) / len(prev))
+
+    own_conn = cn is None
+    if own_conn:
+        _cm = _conn()
+        cn = _cm.__enter__()
+    try:
+        comp_hist = _meta_get(cn, "infodynamic_compression_history", []) or []
+        occ_hist = _meta_get(cn, "infodynamic_n_occupied_history", []) or []
+    finally:
+        if own_conn:
+            _cm.__exit__(None, None, None)
+
+    comp_slope = _slope([float(x) for x in comp_hist])
+    occ_slope = _slope([float(x) for x in occ_hist])
+
+    second_law_signature = bool(
+        comp_slope is not None
+        and occ_slope is not None
+        and comp_slope >= 0.0
+        and occ_slope > 0.0
+    )
+
+    return {
+        "window": window,
+        "n_compression": len(comp_hist),
+        "n_occupied_history": len(occ_hist),
+        "compression_slope": comp_slope,
+        "occupancy_slope": occ_slope,
+        "second_law_signature": second_law_signature,
+        "insufficient_data": comp_slope is None or occ_slope is None,
+    }
+
+
+def analog_coherence_trend(
+    cn: sqlite3.Connection | None = None,
+    window: int = 16,
+) -> dict:
+    """Check Miller's wave-stencil signature from accumulated history.
+
+    Evaluates trailing gating contrast (mean interaction gain on occupied
+    cells minus mean interaction gain across all nodes). ``stencil_signature``
+    is True when mean gating contrast over the trailing window is strictly positive.
+    """
+    def _slope(series: list[float]) -> float | None:
+        if len(series) < 2 * window:
+            return None
+        prev = series[-2 * window:-window]
+        last = series[-window:]
+        return (sum(last) / len(last)) - (sum(prev) / len(prev))
+
+    own_conn = cn is None
+    if own_conn:
+        _cm = _conn()
+        cn = _cm.__enter__()
+    try:
+        contrast_hist = _meta_get(cn, "analog_gating_contrast_history", []) or []
+    finally:
+        if own_conn:
+            _cm.__exit__(None, None, None)
+
+    n_contrast = len(contrast_hist)
+    contrast_slope = _slope([float(x) for x in contrast_hist])
+    mean_contrast: float | None = None
+    if n_contrast >= window:
+        tail = [float(x) for x in contrast_hist[-window:]]
+        mean_contrast = round(sum(tail) / len(tail), 6)
+
+    stencil_signature = bool(
+        mean_contrast is not None and mean_contrast > 0.0
+    )
+
+    return {
+        "window": window,
+        "n_gating_contrast": n_contrast,
+        "gating_contrast_slope": contrast_slope,
+        "mean_gating_contrast": mean_contrast,
+        "stencil_signature": stencil_signature,
+        "insufficient_data": n_contrast < window,
+    }
+
+
 def state_summary() -> dict:
     """Return a snapshot of SLM state for diagnostics / dashboards."""
     with _conn() as cn:
@@ -3398,6 +3747,14 @@ def state_summary() -> dict:
         last_stp_embed_gap = _meta_get(cn, "last_stp_embed_gap", None)
         last_stp_torus_gap = _meta_get(cn, "last_stp_torus_gap", None)
         last_entropy_differential = _meta_get(cn, "last_entropy_differential", None)
+        last_infodynamic_bit_entropy = _meta_get(cn, "last_infodynamic_bit_entropy", None)
+        last_infodynamic_compression = _meta_get(cn, "last_infodynamic_compression", None)
+        last_analog_coherence_all = _meta_get(cn, "last_analog_coherence_all", None)
+        last_analog_coherence_occupied = _meta_get(cn, "last_analog_coherence_occupied", None)
+        last_analog_gating_contrast = _meta_get(cn, "last_analog_gating_contrast", None)
+        last_infogravity_multiplier = _meta_get(cn, "last_infogravity_multiplier", None)
+        last_analog_multiplier = _meta_get(cn, "last_analog_multiplier", None)
+        last_stencil_gain_mean = _meta_get(cn, "last_stencil_gain_mean", None)
         mesh = _mesh_state_7d()
         mesh_field = _mesh_field_8d(cn, mesh)
         try:
@@ -3427,6 +3784,14 @@ def state_summary() -> dict:
         "last_stp_embed_gap":    last_stp_embed_gap,
         "last_stp_torus_gap":    last_stp_torus_gap,
         "last_entropy_differential": last_entropy_differential,
+        "last_infodynamic_bit_entropy": last_infodynamic_bit_entropy,
+        "last_infodynamic_compression": last_infodynamic_compression,
+        "last_analog_coherence_all": last_analog_coherence_all,
+        "last_analog_coherence_occupied": last_analog_coherence_occupied,
+        "last_analog_gating_contrast": last_analog_gating_contrast,
+        "last_infogravity_multiplier": last_infogravity_multiplier,
+        "last_analog_multiplier": last_analog_multiplier,
+        "last_stencil_gain_mean": last_stencil_gain_mean,
         "patched_local_executor": _PATCHED,
         "resuscitation_quipu":   resuscitation,
         "acre_specialists":      emergent,
