@@ -75,6 +75,24 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis_source": "bakugo/code/hideout-mesh",
         "sibling": "loadopoly-ocr",
     },
+    "supply-chain-brain": {
+        "kind": "analytical",
+        "axis": "brain",
+        "axis_source": "supply-chain-brain/arxiv/hideout-mesh",
+        "sibling": "hubcore",
+    },
+    "hubcore": {
+        "kind": "governance",
+        "axis": "perception",
+        "axis_source": "hubcore/self-docs/hideout-mesh",
+        "sibling": "supply-chain-brain",
+    },
+    "hub-floor": {
+        "kind": "tasks",
+        "axis": "body",
+        "axis_source": "hub-floor/wiki/hideout-mesh",
+        "sibling": "hubcore",
+    },
 }
 
 _ALIASES = {
@@ -83,6 +101,16 @@ _ALIASES = {
     "loadopolyocr": "loadopoly-ocr",
     "geograph": "loadopoly-ocr",
     "cardcenter": "bakugo",
+    "scb": "supply-chain-brain",
+    "scb-brain": "supply-chain-brain",
+    "scb_brain": "supply-chain-brain",
+    "supply_chain_brain": "supply-chain-brain",
+    "supply-chain": "supply-chain-brain",
+    "hub": "hubcore",
+    "hub-core": "hubcore",
+    "hub_core": "hubcore",
+    "floor": "hub-floor",
+    "hub_floor": "hub-floor",
 }
 
 _STATS_KEY = "observer:{source}:stats"
@@ -315,6 +343,45 @@ def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     return 200, {"ok": True, "source": source, "recorded": True, "log_size": len(log)}
 
 
+def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, dict[str, Any]]:
+    """Execute universal MESH-SLM inference, classification, or scoring over HTTP."""
+    try:
+        specialist = body.get("specialist")
+        decision = type("D", (), {"model_id": "mesh-slm/torus-quipu-7d", "score": 0.85})()
+        kind = endpoint_kind or body.get("kind")
+
+        if kind == "classify":
+            labels = body.get("labels") or []
+            prompt = body.get("prompt") or body.get("text") or ""
+            payload = {"kind": "classify", "labels": labels, "prompt": prompt}
+            result = mesh_slm.slm_caller(decision, payload, {}, specialist=specialist)
+            return 200, {"ok": True, "result": result}
+        elif kind == "score":
+            text = body.get("text") or body.get("prompt") or ""
+            payload = {"kind": "score", "text": text}
+            result = mesh_slm.slm_caller(decision, payload, {}, specialist=specialist)
+            return 200, {"ok": True, "result": result}
+        else:
+            prompt = body.get("prompt") or body.get("text") or ""
+            max_new_tokens = int(body.get("max_new_tokens", 24))
+            out = mesh_slm.generate(prompt, max_new_tokens=max_new_tokens, specialist=specialist)
+            return 200, {
+                "ok": True,
+                "result": {
+                    "text": out.get("text", ""),
+                    "confidence": out.get("confidence", 0.0),
+                    "tokens_emitted": out.get("tokens_emitted", 0),
+                    "mesh_field_8d": out.get("mesh_field_8d", 0.0),
+                    "specialist": specialist,
+                    "model": "mesh-slm/torus-quipu-7d",
+                },
+            }
+    except mesh_slm.MeshSLMUnavailable as exc:
+        return 503, {"ok": False, "error": f"MeshSLMUnavailable: {exc}"}
+    except Exception as exc:
+        return 500, {"ok": False, "error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Background trainer — the Observer's learning loop.
 # ---------------------------------------------------------------------------
@@ -401,7 +468,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 if source is None:
                     self._send_json(400, {
                         "ok": False,
-                        "error": "guidance requires ?source=loadopoly-ocr|bakugo",
+                        "error": "guidance requires ?source=" + "|".join(sorted(SOURCE_PROFILES)),
                     })
                     return
                 limit = int((qs.get("limit") or ["60"])[0])
@@ -446,6 +513,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _feedback(body)
             elif parsed.path == "/anneal":
                 code, payload = 200, world_model.annealing_cycle()
+            elif parsed.path == "/slm":
+                code, payload = _slm(body)
+            elif parsed.path == "/classify":
+                code, payload = _slm(body, endpoint_kind="classify")
+            elif parsed.path == "/generate":
+                code, payload = _slm(body, endpoint_kind="generate")
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
             self._send_json(code, payload)
