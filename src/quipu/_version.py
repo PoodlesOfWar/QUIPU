@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-__version__ = "0.31.0"
+__version__ = "0.32.0"
 __release__ = (
-    "Infodynamic Gravity & Analog Cognition Couplings: Active, bounded learning-rate modulations "
-    "from Vopson (2025) infodynamic compression and Miller et al. (2026) analog wave stencils; "
-    "STP-style mapping docs, Kuramoto phase coherence, and trend diagnostics with kill-switches."
+    "Google gVisor (runsc) Sentry Sandboxing & Hardened OCI Containment: Defense-in-depth "
+    "isolation with kernel syscall boundaries, payload safety limits (512KB payload max, "
+    "dictionary recursion depth <= 5, key whitelist), GET /security posture reporting, "
+    "and container capability drops (ALL) with no-new-privileges."
 )
-__build_date__ = "2026-08-22"
+__build_date__ = "2026-09-08"
 
 PHASES = {
+    "0.32.0": "Google gVisor (runsc) Sentry Sandboxing & Hardened OCI Containment: Defense-in-depth isolation with kernel syscall boundaries, payload safety limits (512KB payload max, dictionary recursion depth <= 5, key whitelist) enforced on /observe and /feedback, GET /security posture reporting, security tier indicators in /health and /state, and container capability drops (ALL) with no-new-privileges.",
     "0.31.0": "Infodynamic Gravity & Analog Cognition Couplings: Melvin M. Vopson (AIP Adv. 15, 045035 (2025)) infodynamic bit entropy and compression scores integrated as an active, bounded (<=5%) negative-feedback lift on quipu edge learning rate (eta_q) decaying as the vocabulary compacts, with dispute record in UEQGM_MATH_MAP and kill-switch QUIPU_INFODYNAMIC_COUPLING; Earl K. Miller et al. (J. Neurosci. 46(33) e0711262026 (2026)) analog traveling-wave and Kuramoto coherence gating integrated into embedding updates (stencil_gain in [0.90, 1.10] and ac_multiplier in [0.95, 1.05]) behind QUIPU_ANALOG_STENCIL; STP-style mapping docs (docs/INFODYNAMIC_GRAVITY_QUIPU.md, docs/ANALOG_COGNITION_QUIPU.md), measurement snapshots, and rolling trend diagnostics (infodynamic_trend, analog_coherence_trend); fixed VERSION drift (0.28.0 -> 0.31.0); no Julia changes required as couplings are confined to train_round.",
     "0.30.0": "Tri-Repo Closed-Loop Training & Epistemic Self-Annealing: on-demand /anneal endpoint, source_guidance_directive with prompt lexicons and metrology priors, and multi-tenant device isolation.",
     "0.29.0": "World Model Dialectic & Epistemic Rupture Detection: src/quipu/world_model.py tracks cognitive phases and acquisition pressure; assess_observation detects epistemic ruptures from high novelty + confidence, STP divergence, and Delta S spikes; retrieval_directive steers learning retrieval across broad_exploration, precedent_building, targeted_gap_closing, and synthesis_verification; GET /world-model endpoint and guidance payload integration.",

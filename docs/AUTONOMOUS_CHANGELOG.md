@@ -1,3 +1,18 @@
+## 2026-09-08 — Google gVisor (runsc) Sentry Containment & Hardened OCI Containment (v0.32.0)
+
+- **`src/quipu/security.py`** (new):
+  - Google gVisor Sentry detection across `/proc/version` and `/proc/sys/kernel/osrelease`.
+  - Strict payload validation for `/observe` and `/feedback`: 512 KB payload max, 100,000 char text limit, maximum dictionary depth of 5, and root key whitelisting.
+  - Telemetry and active boundary reporting via `get_security_posture()`.
+- **`src/quipu/observer_service.py`**:
+  - Bound incoming `/observe` and `/feedback` requests to `security.validate_observe_payload` and `security.validate_feedback_payload`.
+  - Added `gvisor_sandboxed` and `security_tier` fields to `GET /health` and `GET /state`.
+  - Added new `GET /security` endpoint.
+- **`docker-compose.yml`**:
+  - Hardened `quipu` container with `runtime: ${DOCKER_RUNTIME_SANDBOX:-runc}`, `security_opt: ["no-new-privileges:true"]`, `cap_drop: ["ALL"]`, and `cap_add: ["NET_BIND_SERVICE"]`.
+- **`tests/test_gvisor_security.py`** (new):
+  - 8 focused unit tests validating oversized payload refusal, deep nested JSON rejection, schema adherence, and security status endpoint responses. 12/12 test cases green.
+
 ## 2026-06-17 — MESH-SLM Modular Expert + Agentic Specialist Feedback (v0.22.307)
 
 - **`pipeline/src/quipu/mesh_slm.py`**: Added full modular expert support:

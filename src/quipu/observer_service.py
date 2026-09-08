@@ -52,7 +52,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import brain_kv, hideout_mesh, mesh_slm, world_model
+from . import brain_kv, hideout_mesh, mesh_slm, world_model, security
 from ._version import __version__
 from .local_store import db_path
 
@@ -275,6 +275,11 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
 
 
 def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    # Enforce gVisor security and payload bounding
+    valid, sec_err = security.validate_observe_payload(body)
+    if not valid:
+        return 400, {"ok": False, "error": f"Security boundary error: {sec_err}"}
+
     source = _canonical_source(body.get("source"))
     if source is None:
         return 400, {
@@ -344,6 +349,10 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
 def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """Ground-truth reinforcement: the app tells the Observer what was right."""
+    valid, sec_err = security.validate_feedback_payload(body)
+    if not valid:
+        return 400, {"ok": False, "error": f"Security boundary error: {sec_err}"}
+
     source = _canonical_source(body.get("source"))
     if source is None:
         return 400, {"ok": False, "error": "unknown source"}
@@ -477,6 +486,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/health":
                 summary = mesh_slm.state_summary()
+                sec_posture = security.get_security_posture()
                 self._send_json(200, {
                     "ok": True,
                     "service": "quipu-observer",
@@ -486,9 +496,15 @@ class ObserverHandler(BaseHTTPRequestHandler):
                     "edges": summary.get("quipu_edges"),
                     "pending": _pending_observations,
                     "hideout": hideout_mesh.hideout_identity(),
+                    "gvisor_sandboxed": sec_posture["gvisor_sandboxed"],
+                    "security_tier": sec_posture["isolation_tier"],
                 })
+            elif parsed.path == "/security":
+                self._send_json(200, security.get_security_posture())
             elif parsed.path == "/state":
-                self._send_json(200, mesh_slm.state_summary())
+                state_data = mesh_slm.state_summary()
+                state_data["gvisor_sandboxed"] = security.is_gvisor_sandboxed()
+                self._send_json(200, state_data)
             elif parsed.path == "/hideout":
                 self._send_json(200, hideout_mesh.hideout_status())
             elif parsed.path == "/guidance":
