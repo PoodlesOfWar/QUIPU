@@ -124,6 +124,9 @@ _ALIASES = {
 _STATS_KEY = "observer:{source}:stats"
 _FEEDBACK_KEY = "observer:{source}:feedback"
 _LAST_TRAIN_KEY = "observer:last_train"
+_LAST_OSCILLATION_KEY = "observer:last_oscillation"
+
+_last_oscillation: dict[str, Any] = {}
 
 _pending_lock = threading.Lock()
 _pending_observations = 0
@@ -240,6 +243,7 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
     profile = SOURCE_PROFILES[source]
     sibling = profile["sibling"]
     summary = mesh_slm.state_summary()
+    last_osc = _last_oscillation or brain_kv.kv_get_json(_LAST_OSCILLATION_KEY, {}) or {}
     return {
         "ok": True,
         "source": source,
@@ -262,6 +266,11 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "weyl_tensor": brain_kv.kv_get_json("learnings:weyl_tensor", None),
         },
         "last_train": brain_kv.kv_get_json(_LAST_TRAIN_KEY, None),
+        "oscillation": {
+            "phi": float(last_osc.get("phi", 0.0)),
+            "coherence": float(last_osc.get("coherence", 0.0)),
+            "temperature_bias": float(last_osc.get("temperature", 0.7)),
+        },
     }
 
 
@@ -290,6 +299,15 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     stats = _record_observation(source, len(tokens), confidence)
     _bump_pending()
 
+    osc = (body.get("meta") or {}).get("oscillation") or {}
+    if osc:
+        _last_oscillation.clear()
+        _last_oscillation.update(osc)
+        try:
+            brain_kv.kv_set_json(_LAST_OSCILLATION_KEY, osc)
+        except Exception:
+            pass
+
     world_model_result = world_model.assess_observation(
         source=source,
         tokens=tokens,
@@ -299,7 +317,7 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     )
 
     summary = mesh_slm.state_summary()
-    return 200, {
+    res_body = {
         "ok": True,
         "source": source,
         "kind": body.get("kind") or profile["kind"],
@@ -319,6 +337,9 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         "mesh": {"vocab": summary.get("vocab_size"), "edges": summary.get("quipu_edges")},
         "hideout": hideout_mesh.hideout_identity(),
     }
+    if osc:
+        res_body["oscillation"] = osc
+    return 200, res_body
 
 
 def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:

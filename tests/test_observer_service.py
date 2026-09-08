@@ -55,3 +55,37 @@ def test_slm_inference_route():
     assert code == 200
     assert res["ok"] is True
     assert "text" in res["result"]
+
+
+def test_observe_and_guidance_oscillation_coupling():
+    # Test observe with meta.oscillation
+    osc_input = {
+        "phi": 0.812345,
+        "theta": 0.123456,
+        "omega": 0.010472,
+        "kappa": 0.450000,
+        "coherence": 0.880000,
+        "gradient": 0.150000,
+        "emergence": 0.750000,
+        "temperature": 0.350000,
+    }
+    code, res = observer_service._observe({
+        "source": "supply-chain-brain",
+        "text": "analog wave phase lock check with Floquet resonance",
+        "meta": {
+            "oscillation": osc_input,
+        },
+    })
+    assert code == 200
+    assert res["ok"] is True
+    assert "oscillation" in res
+    assert res["oscillation"]["phi"] == 0.812345
+
+    # Test guidance reflects oscillation
+    guidance = observer_service._guidance("supply-chain-brain", limit=10)
+    assert guidance["ok"] is True
+    assert "oscillation" in guidance
+    assert guidance["oscillation"]["phi"] == 0.812345
+    assert guidance["oscillation"]["coherence"] == 0.88
+    assert guidance["oscillation"]["temperature_bias"] == 0.35
+
