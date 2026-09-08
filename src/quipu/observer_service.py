@@ -93,6 +93,12 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis_source": "hub-floor/wiki/hideout-mesh",
         "sibling": "hubcore",
     },
+    "jobhawk": {
+        "kind": "market_demand",
+        "axis": "touch",
+        "axis_source": "jobhawk/code/hideout-mesh",
+        "sibling": "supply-chain-brain",
+    },
 }
 
 _ALIASES = {
@@ -111,6 +117,8 @@ _ALIASES = {
     "hub_core": "hubcore",
     "floor": "hub-floor",
     "hub_floor": "hub-floor",
+    "job_hawk": "jobhawk",
+    "job-hawk": "jobhawk",
 }
 
 _STATS_KEY = "observer:{source}:stats"

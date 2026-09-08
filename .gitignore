@@ -12,6 +12,7 @@ bridge_state/
 *sqlite-shm
 *sqlite-wal
 *.db
+*.bak
 *.log
 logs/
 
