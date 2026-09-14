@@ -43,3 +43,15 @@ gui/GARD_Shard/decompression/*
 # data, produced at run time and never committed).
 gui/GARD_Shard/GARD_lite/compression/
 gui/GARD_Shard/GARD_lite/decompression/
+
+# DIVINE_BLESSING_SQRT(-1) attestation key material (V10-SEC-009: secrets stay in an
+# approved protected store, never in the repo).  QUIPU_ATTEST_KEY_FILE points here.
+*.key
+*.hmac
+attest.key
+attestation.key
+.quipu/
+
+# Session staging and FUSE mount artifacts
+_to_delete/
+.fuse_hidden*
