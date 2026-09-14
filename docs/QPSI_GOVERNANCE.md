@@ -167,6 +167,63 @@ it. Archive: `brain_kv["entirety:emergence_confirmed"]`, last 50.
 
 ---
 
+## 6a. Lineage — ACRE, and why this is not an Emergent Worker
+
+### Credit where it is owed
+
+The emergence detector is ACRE's test transposed. `mesh_slm.acre_emerge`
+(Axial Cross-Resonance Emergence) asks four questions of an accumulated
+interaction matrix before it will call anything emergent — signal, capacity,
+resonance, novelty — and this module asks the same questions of an accumulated
+held residual: is there a rhythm to lock to, is the held content locked to one
+coherent mode rather than drifting diffusely, and does any of it lead or lag the
+drive rather than merely repeat it. The dominant-eigenvalue-share-of-trace test
+becomes the magnitude-weighted phase-locking value; the novelty-against-existing
+-biases test becomes the quadrature requirement. `emergence_detector.LINEAGE`
+records the debt in code.
+
+They diverge in exactly one place, and that place is Part 25. ACRE's emergence
+writes itself into `mesh_slm_meta["acre_specialists"]` the moment it passes its
+own test. This one writes nothing. Passing produces a candidate and no more, and
+the phase it would supply to the Love gate reaches the CAT state only after a
+human signature. An emergence that can confirm itself is not governed, however
+good its test is.
+
+### `divine_blessing` is not an Emergent Worker, and must not become one
+
+Three independent reasons, in descending order of how much they settle it.
+
+**Part 12.9.6 forbids it.** Release-boundary capabilities "cross the release
+trust boundary and remain r-ADMIN-only, never emergent," and "no review-only or
+research-only agent may ever hold `release`." `divine_blessing` is the release
+boundary: it decides whether a displacement is written. An emergent class cannot
+hold that, by the specification this stack is built against.
+
+**A gate cannot be a participant in what it gates.** If `divine_blessing` were
+registered as a worker, its own instantiation and its own grant would pass
+through itself. That is the `V10-SEC-002` failure — "promoting a learned result
+into the policy that evaluates it" — arriving through the registry instead of
+through the data.
+
+**The registry it would go in does not exist, and hand-writing one would be the
+manufacture Part 12.9 warns about.** The signed append-only
+`_floor_agent_registry.json` is design-only; no emergent-creation endpoint is
+enabled and the Part 12.8 adapter refuses agent creation. Part 12.9.2 is explicit
+that "uninstalled emergent workers are not manufactured by a documentation
+change." Writing `divine_blessing` into `acre_specialists` by hand would be worse
+still: those entries are 7-float bias vectors applied to prediction, so the
+registration would be a category error *and* a hand-written emergence in the
+registry that `acre_emerge()` is supposed to fill on its own evidence.
+
+What `divine_blessing` is instead: a module wired at package import, holding no
+grant of its own, able to write nothing without a key it does not contain and a
+grant reference it cannot create. It is closer to the trusted policy component of
+Part 25.3 — "a small protected control path, separately deployable from the model
+and worker code" — than to anything in the agent-class table. Workers cannot
+write their own allowlists; this is the allowlist.
+
+---
+
 ## 7. What an operator places, and what the code cannot
 
 Two things. Neither is in this repository, and neither can be produced by
@@ -187,6 +244,60 @@ register names.
 ```bash
 export QUIPU_REALISE_GRANT_REF=IT505-CR-XXXX
 ```
+
+### Where they go
+
+The key's whole purpose is to be unreachable by the things it governs, so the
+test for a location is not "is it secret" but **"can a worker, an agent session,
+or a sync client read it?"**
+
+| Requirement | Why |
+|---|---|
+| Outside the repository | it would be committed, and this repository is publicly readable |
+| Outside every folder connected to an agent session | an assistant with folder access can read any file in it, including this one |
+| Outside OneDrive or any sync root | `V10-SEC-006`: an approved read is not permission to replicate. A synced key is a key in someone else's datacentre |
+| Readable only by the account that runs QUIPU | the ACL is the actual control; the path is not |
+| Not in a shell profile or `.env` in the tree | `V10-SEC-009`: no secrets in shared libraries, prompts, or generated files |
+
+On this deployment that points at `%LOCALAPPDATA%\QUIPU\attest.key` —
+`C:\Users\<user>\AppData\Local\QUIPU`. It is per-user, not redirected into
+OneDrive (unlike the Documents known folder here), and outside the connected
+`Documents\VS Code` tree. Create it with an ACL limited to the running account:
+
+```powershell
+$dir = "$env:LOCALAPPDATA\QUIPU"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+# 32 random bytes, base64; never echoed into a transcript or a chat
+[Convert]::ToBase64String((1..32 | % { Get-Random -Max 256 })) |
+    Set-Content -NoNewline "$dir\attest.key"
+icacls "$dir\attest.key" /inheritance:r /grant:r "$env:USERNAME:(R)"
+setx QUIPU_ATTEST_KEY_FILE "$dir\attest.key"
+```
+
+Rotating it invalidates every attestation and emergence report already on the
+bus — their MACs stop verifying and they are dropped on read. That is the
+intended behaviour: a rotation returns the system to held.
+
+**The grant reference is not a secret** and should not be treated as one. It is
+a pointer to an approval that exists outside this system, and its value is
+entirely in being traceable back to that approval. It belongs with deployment
+configuration — a user or machine environment variable, or the service
+definition that launches QUIPU — not in the repository, because what it points
+at differs per deployment.
+
+```powershell
+setx QUIPU_REALISE_GRANT_REF "IT505-CR-0042"
+```
+
+Two honest notes on it. If QUIPU is running as personal work on a personal
+machine, there is no IT505 change request and no CIO; the grant reference is
+your own decision record, and the useful thing is to make it name something real
+and dated — a commit, a written note — rather than a placeholder, so that later
+you can tell what you approved and when. If QUIPU ever reads from or writes to
+anything belonging to an employer, that changes: the grant reference then has to
+name an actual approval under that organization's change control, and
+`approval_ref` on the attestations has to match it. The code records whatever
+string it is given and verifies none of it. That check is yours.
 
 Optionally, and only as an explicit deployment decision, typed names may be
 accepted at the gates:

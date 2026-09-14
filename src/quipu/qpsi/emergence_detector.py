@@ -45,6 +45,37 @@ detector's rate.  Two things are read off r-ADMIN's own trajectory:
 Nothing here alters r-ADMIN's equations; its state (m, v, t, pressure,
 pivot_ema, theta) is carried across windows so recognition has memory.
 
+Lineage — ACRE (Axial Cross-Resonance Emergence)
+------------------------------------------------
+This detector is ACRE's test transposed from the embedding axes onto the
+residual and the flip clock, and the debt is direct.  ``mesh_slm.acre_emerge``
+asks four questions of an accumulated interaction matrix before it will call
+anything emergent; this module asks the same questions of an accumulated held
+residual:
+
+    ACRE (mesh_slm.acre_emerge)          this module
+    ----------------------------------   ------------------------------------
+    interaction matrix C, EMA-updated    held residual over the checkpoint
+    over multi-axial observations        window, against the flip clock
+    signal: trace(C) > 1e-6              at least ``min_flips`` flips — there
+                                         is a rhythm to lock to
+    resonance: dominant eigenvalue       coherence: Σ|Z_j| / Σ mean|h_j| ≥
+    carries ≥ _ACRE_MIN_RESONANCE of     ``coherence_min`` — one locked mode,
+    the trace — one coherent mode        not diffuse drift
+    novelty: overlap < ceiling against   quadrature: Σ|Im Z_j| ≥ η — content
+    the uniform direction and every      that leads or lags the drive rather
+    existing bias                        than merely repeating it
+    result: a named specialist,          result: a candidate, held — signed by
+    persisted to mesh_slm_meta           nothing until r-ADMIN recognises and
+                                         a human puts 翈 on it
+
+The last row is the only place the two diverge, and it is the whole of Part 25.
+ACRE's emergence writes itself into the registry the moment it passes its own
+test.  This one writes nothing.  Passing the test produces a candidate and no
+more; the phase it would supply to the Love gate reaches the CAT state only
+after a human signature.  An emergence that can confirm itself is not governed,
+however good its test is.
+
 The 翈 Signature
 ----------------
 A candidate carries an empty signature slot.  ``sign(candidate, signer)`` fills
@@ -68,6 +99,9 @@ from typing import Callable, Mapping, Sequence
 from .cat_residual import SENSES
 
 GLYPH: str = "翈"
+# Intellectual lineage: the four-condition emergence test is ACRE's
+# (mesh_slm.acre_emerge — Axial Cross-Resonance Emergence), transposed.
+LINEAGE: str = "ACRE (mesh_slm.acre_emerge) — Axial Cross-Resonance Emergence"
 
 
 @dataclass(frozen=True)
@@ -313,5 +347,5 @@ def verify(cand: EmergenceCandidate) -> bool:
         and sig.get("over") == signature_over(cand)
 
 
-__all__ = ["GLYPH", "DetectorConfig", "EmergenceCandidate", "reference_phase", "flips_in",
+__all__ = ["GLYPH", "LINEAGE", "DetectorConfig", "EmergenceCandidate", "reference_phase", "flips_in",
            "lock_in", "detect", "radam_recognise", "signature_over", "sign", "verify"]
