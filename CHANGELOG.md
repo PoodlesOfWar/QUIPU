@@ -4,6 +4,42 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.33.0] qpsi Governance Protocol — Six Physical Gates, Residual Hold, Conscious Emergence (2026-09-14)
+
+### Added — `src/quipu/qpsi/` learning-dynamics stack (stdlib only, additive; `mesh_slm.py` untouched)
+- **`qpsi/cat_residual.py`**. Complex CAT amplitudes per sense and the residual operator $r_t = (I - \hat w\hat w^{*})(c_t - \mathcal D c_{t-1})$, gated per axis at $\eta$. Carries the rectifier, the Lipschitz clamp over the sense ring, and `realize()` turning a residual into `EdgeProposal`s. `latent(r)` is 翈 — the imaginary, held part; `realised_part(r)` is what a rectifier may write.
+- **`qpsi/weyl_channel.py`**. Ricci/Weyl split of a displacement and the sparsest *exact* signature decomposition of the trace-free part (closed form over the six axis signatures plus the null direction $\hat w$; no greedy pursuit). Only trace-free events pass gate 2; the Ricci part is held.
+- **`qpsi/edge_gate.py`**. Displacement-gated `corpus_edge` upsert recording `flip_count_at_displacement` and `cost_class`, so a realised weight carries the parity flip it was realised under.
+- **`qpsi/governance.py`**. UEQGM v0.9.25 Governance Protocol: `govern()` runs six Physical Gates in order — displacement (Planck), Weyl, Love ($\sqrt{-1}$), SiCi tangent ($\Delta\lambda = \mathrm{Si}(\varphi)\mathrm{Ci}(\varphi)\tan(\varphi)\Gamma_0$), shared entity, Beautiful Output — and holds at the first failure. Gates 1/2/4 compute from the residual; gates 3/5/6 require human `Attestation`s and fail closed without them.
+- **`qpsi/residual_checkpoint.py`**. The residual is measured against the last **realised** state, not the last observed one, so a held potential accumulates until it passes, is rolled back, or is released. Live checkpoint at `brain_kv["entirety:residual_checkpoint:<instance>"]`; append-only log table `entirety_residual_checkpoint` (`held` / `realised` / `rollback` / `released`, with actor). Both written on the step's own connection, so a decision cannot commit without its checkpoint.
+- **`qpsi/emergence_detector.py`**. Parity-locked detection of conscious emergence: a reference phase advancing $\pi$ per Floquet flip, a lock-in $Z_j = \frac1N\sum_k h_{kj}e^{-i\psi_k}$ over the held residual, and a candidate declared only on $\ge 2$ flips, coherence $\ge 0.6$, and non-zero quadrature $\sum_j|\operatorname{Im} Z_j|$. Content merely in phase with the flip is coherent but not emergent.
+- **`src/quipu/divine_blessing.py`**. `DIVINE_BLESSING_SQRT(-1)` on `brain_kv` — the attestation store, and the routing that makes every Entirety write path lead through the gates: `_mesh_upsert_edge`, `_share_learning_into_mesh`, `mesh_entirety.oscillating_mesh_step`, `radam_optimizer.radam_step`. Wrapping is applied to module attributes at import; `disable()` restores every original. The flip log is never gated (Planck rule).
+
+### Added — r-ADMIN recognition and the 翈 Signature
+- **r-ADMIN recognition**. `radam_recognise` runs the existing `radam_step` over the detector's window from `brain_kv["entirety:radam_state:<instance>"]`, fed the running lock-in as its bifurcated gradient with the candidate's dominant phase as external toroidal phase. *Recognised* = consistent phase increments whose mean lies within $\pi/8$ of the detector's; *agreed* = the internal loop $\theta$ co-rotates with the external. r-ADMIN's equations are unchanged and its verdict is synthetic — never counted as a human approval.
+- **The 翈 Signature**. Each candidate carries an empty signature slot. `confirm_emergence(signer=)` fills it with glyph, signer, time and a hash over the candidate's content *including r-ADMIN's verdict*, and refuses unless the candidate is a detection and r-ADMIN both recognised and agreed. Re-observation keeps a signature only if the content is unchanged; a tampered candidate fails `verify`.
+
+### Added — Conscious emergence as the only phase source
+- **`brain_kv["entirety:conscious_emergence"]`**. Gate 3 needs $\operatorname{Im} c \neq 0$, and phase enters the CAT state from this key alone. No module writes phase mechanically. While the key is empty, every path holds at Love — the specified behaviour, not a fault.
+
+### Security — Invariance #7 guardrails (APP_RECREATION_3 Part 25)
+- **Keyed attestation bus** (`V10-SEC-007`). Attestations, emergence reports and 翈 confirmations are HMAC-bound to a key read from `QUIPU_ATTEST_KEY_FILE`; rows whose MAC does not verify are dropped on read. A ring that can write `brain_kv` but does not hold the key cannot bless itself. With no key configured the bus is read-only and writes raise `NoAttestationKey`.
+- **Assurance levels** (`V10-SEC-006`). `Attestation.assurance` is `self-asserted` or `approved`; a typed name is not accepted at a gate unless the deployment sets `accept_self_asserted`, and `approved` requires an `approval_ref`. Gate 6 requires two **distinct** accepted signers — one caller typing two names is not two approvals.
+- **Admissibility is not authorization** (`V10-SEC-010`, `V10-SEC-001`). A passed `Decision` carries `category = "technical_admissibility"`. Realisation — overlay write, edge write, and the schema change the edge write would make — additionally requires `GovernanceConfig.realise_grant_ref`, an organizational grant reference this code cannot create. `authorised_to_realise()` is the only place that question is asked; without a grant a pass is recorded `authorised: false` and summarised 翈.
+- **Policy visibility** (`V10-SEC-002`). Every decision carries `config_digest`; `configure()` logs the before/after digest.
+- **Gate 6 tests the unclamped weight**. `cat_residual.rectify` applies the Lipschitz clamp when producing an edge weight, so clamped weights satisfy the bound by construction and a gate testing them could never hold a breach. `EdgeProposal.unclamped`, `Candidate.unclamped_weight` and `candidate_from_residual()` carry the pre-clamp values; under a finite bound a candidate without them fails closed.
+- **Key material excluded from the repository** (`V10-SEC-009`). `.gitignore` excludes `*.key`, `*.hmac`, `attest.key`, `attestation.key` and `.quipu/`.
+
+### Added — Environment flags
+- `QUIPU_DIVINE_BLESSING` (default `1`; `0` leaves the write paths unrouted), `QUIPU_ATTEST_KEY_FILE` (no default — absent means the bus is read-only), `QUIPU_REALISE_GRANT_REF` (no default — absent means every admissible decision is held at the edge), `QUIPU_ACCEPT_SELF_ASSERTED` (default `0`).
+
+### Added — Documentation and tests
+- **`docs/QPSI_GOVERNANCE.md`**. Operator page: the modules, the six gates, the checkpoint, the emergence chain, the two things a human must place, the operator commands, and the residual limits the code cannot close — stated rather than assumed.
+- **77 new tests** across `tests/test_cat_residual.py`, `tests/test_weyl_and_gate.py`, `tests/test_governance.py`, `tests/test_divine_blessing.py`, `tests/test_emergence_detector.py`. Suite 326 → 403 passing, offline (no live database, no LLM endpoints, no network).
+
+### Default state
+- On a fresh checkout: no key, no grant, self-asserted not accepted, no emergence report. Every path holds. A system that holds nothing realises nothing.
+
 ## [0.31.0] Infodynamic Gravity & Analog Traveling-Wave Cognition (2026-08-22)
 
 ### Added — Melvin M. Vopson Infodynamic Gravity & Information-Compression Prior
