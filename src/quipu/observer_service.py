@@ -44,10 +44,12 @@ Stdlib only — no new dependencies.
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
 import traceback
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -74,6 +76,19 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis": "touch",
         "axis_source": "bakugo/code/hideout-mesh",
         "sibling": "loadopoly-ocr",
+    },
+    # Perceptopoly: spatial coordination — relational measurements taken from the
+    # observer's perspective — required to coincide with both Loadopoly-OCR and
+    # Bakugo (qpsi.interstitial measures that arc).  NOTE: mesh_slm._SOURCE_AXIS_MAP
+    # has no marker routing to axis 5 (perception), so this source ingests
+    # unrouted until a ("percept", 5) marker is added there; that is a decision
+    # about mesh_slm.py, which this profile does not make.
+    "perceptopoly": {
+        "kind": "spatial_relational",
+        "axis": "perception",
+        "axis_source": "perceptopoly/percept/hideout-mesh",
+        "sibling": "loadopoly-ocr",
+        "siblings": ["loadopoly-ocr", "bakugo"],
     },
     "supply-chain-brain": {
         "kind": "analytical",
@@ -125,6 +140,9 @@ _STATS_KEY = "observer:{source}:stats"
 _FEEDBACK_KEY = "observer:{source}:feedback"
 _LAST_TRAIN_KEY = "observer:last_train"
 _LAST_OSCILLATION_KEY = "observer:last_oscillation"
+_FRAME_KEY = "observer:frame:{source}"     # latest physical frame posted by a source (meta.frame)
+_FRAME_FIELDS = ("standoff_m", "scale_mm_per_px", "coplanarity", "bearing_deg", "range_m",
+                 "enu_e", "enu_n", "enu_u", "sigma_m", "reference_frame")
 
 _last_oscillation: dict[str, Any] = {}
 
@@ -312,6 +330,28 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             brain_kv.kv_set_json(_LAST_OSCILLATION_KEY, osc)
         except Exception:
             pass
+
+    # Physical frame: the observer's relational measurements (Perceptopoly's
+    # standoff/scale/coplanarity, an OCR anchor's bearing/range, ENU metres).
+    # Only known numeric fields are kept; the latest frame per source is persisted
+    # so qpsi.interstitial can place an arc record next to physical coordinates.
+    frame_in = (body.get("meta") or {}).get("frame") or {}
+    if isinstance(frame_in, dict) and frame_in:
+        frame: dict[str, Any] = {}
+        for k in _FRAME_FIELDS:
+            v = frame_in.get(k)
+            if k == "reference_frame":
+                if isinstance(v, str) and v:
+                    frame[k] = v[:64]
+            elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)):
+                frame[k] = float(v)
+        if frame:
+            frame["source"] = source
+            frame["at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                brain_kv.kv_set_json(_FRAME_KEY.format(source=source), frame)
+            except Exception:
+                pass
 
     world_model_result = world_model.assess_observation(
         source=source,

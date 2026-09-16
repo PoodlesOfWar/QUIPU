@@ -6,3 +6,4 @@ from .edge_gate import *      # noqa: F401,F403
 from .governance import *     # noqa: F401,F403
 from .residual_checkpoint import *  # noqa: F401,F403
 from .emergence_detector import *  # noqa: F401,F403
+from . import interstitial  # noqa: F401  (submodule; its names KV_PREFIX/LINEAGE/record would shadow others)

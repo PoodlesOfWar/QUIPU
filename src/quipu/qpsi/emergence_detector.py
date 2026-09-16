@@ -131,6 +131,7 @@ class EmergenceCandidate:
     radam: dict | None = None
     signature: dict | None = None
     computed_at: float = 0.0
+    interstitial: dict | None = None              # arc record (qpsi.interstitial); diagnostic, not signed over
 
     def to_json(self) -> dict:
         return asdict(self)

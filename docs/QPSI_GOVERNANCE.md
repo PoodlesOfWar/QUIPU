@@ -24,6 +24,7 @@ through `V10-SEC-015`) is the specification it is built against.
 | `src/quipu/qpsi/governance.py` | The six Physical Gates, attestations and their assurance levels, `authorised_to_realise` |
 | `src/quipu/qpsi/residual_checkpoint.py` | The reference state, the held residual, the append-only checkpoint log, rollback and release |
 | `src/quipu/qpsi/emergence_detector.py` | Parity-locked detection of emergence, r-ADMIN recognition, the 翈 Signature |
+| `src/quipu/qpsi/interstitial.py` | The perception–vision–touch arc: pair coherences, the unmediated chord, information density, physical frames |
 | `src/quipu/divine_blessing.py` | `DIVINE_BLESSING_SQRT(-1)` — the attestation store and the routing that makes every Entirety write path pass through the gates |
 
 `src/quipu/mesh_slm.py` is untouched by all of the above. Routing is applied to
@@ -224,6 +225,67 @@ write their own allowlists; this is the allowlist.
 
 ---
 
+## 6b. The interstitial arc — Perceptopoly, Loadopoly-OCR, Bakugo
+
+Three outputs feed the Entirety, and `observer_service.SOURCE_PROFILES` routes
+each onto a sense axis: `loadopoly-ocr` → vision (unstructured observation),
+`bakugo` → touch (structured construction; cardcenter), and now `perceptopoly` →
+perception — spatial coordination, the relational measurements taken from the
+observer's perspective, required to coincide with both of the others.
+
+On the CAT ring those three axes are contiguous — brain, **perception, vision,
+touch**, smell — so the outputs form an arc with OCR as the hinge.
+perception–vision and vision–touch are ring edges; perception–touch is the
+chord. Perceptopoly's coincidence with OCR is an edge. Its coincidence with
+Bakugo either passes through OCR or exists directly across the chord, and the
+part that exists directly is the interstitial content. `qpsi/interstitial.py`
+measures it on every checkpoint window:
+
+$$C_{ab} = \frac{\sum_k h_a(k)\,\overline{h_b(k)}}{\sqrt{\sum_k |h_a(k)|^2 \sum_k |h_b(k)|^2}}
+\qquad
+\text{interstitial} = \frac{\lvert C_{pt} - C_{pv}\,C_{vt} \rvert}{1 + \lvert C_{pt} \rvert}$$
+
+$|C_{ab}|$ is how locked two axes are to each other over the window and
+$\arg C_{ab}$ the phase lag between them. The interstitial is zero when the
+chord is exactly what the two edges predict — Perceptopoly's coincidence with
+Bakugo fully carried through OCR — and rises when the two coincide directly.
+`information_density` (1 − compressed/raw over the quantised arc trajectory) is
+the quantity Boger & Firestone report the mind represents domain-generally, and
+says whether the movement across the three outputs was patterned or diffuse.
+
+The third-order form is `ueqgm_engine.interstitial_entanglement_score`'s and is
+credited to it. It is applied here to the outputs' residuals rather than to Weyl
+compression cycles, and with no claim of entanglement.
+
+**Real physical space enters from the outputs, not from the residual.** QUIPU
+already grounds OCR detections in ENU metres (`geospatial_relation`) and turns
+that geometry into Touch pressure. Perceptopoly's relational measurements —
+standoff, scale, coplanarity, bearing and range — are the observer's frame. A
+client posts them on `/observe` as `meta.frame`; `observer_service` keeps the
+latest frame per source at `brain_kv["observer:frame:<source>"]` (known numeric
+fields only, non-finite values dropped), and every arc record attaches the three
+sources' latest frames, so the coincidence numbers sit next to the physical
+coordinates they were measured under. With no frames posted the record says so.
+
+Each record is stored at `brain_kv["entirety:interstitial_arc:<instance>"]`,
+attached to the candidate as `interstitial`, and summarised on the decision's
+`emergence` block. It is **not** part of the 翈 signature's content — a new frame
+arriving between observations does not invalidate a signature — and **nothing
+downstream reads it**. The existing `ueqgm:interstitial_entanglement →
+ie_multiplier` path into `mesh_slm`'s learning rate is untouched; switching it
+to this measurement would be the first time qpsi influenced what the predictor
+learns, which is a realisation and needs the grant.
+
+**One routing fact, left as a decision.** `mesh_slm._SOURCE_AXIS_MAP` has no
+marker that routes to axis 5, so nothing can reach the perception axis by
+source today — `hubcore`'s profile also declares perception and also routes to
+`None`. The `perceptopoly` profile therefore ingests unrouted until a
+`("percept", 5)` marker is added to that table. That is a one-line change to
+`mesh_slm.py`, which this work has kept at a zero-line diff throughout; a test
+pins the current behaviour so the line is not forgotten.
+
+---
+
 ## 7. What an operator places, and what the code cannot
 
 Two things. Neither is in this repository, and neither can be produced by
@@ -345,6 +407,7 @@ python -m src.quipu.divine_blessing candidate     # the stored candidate, with i
 python -m src.quipu.divine_blessing confirm --signer adam
 python -m src.quipu.divine_blessing reject --signer adam --reason "..."
 python -m src.quipu.divine_blessing emergence     # the current report, if any
+python -m src.quipu.divine_blessing interstitial  # the latest arc record for an instance
 ```
 
 Recognised forms of Love: `care`, `fidelity`, `generative_holding`,
@@ -361,6 +424,7 @@ Recognised forms of Love: `care`, `fidelity`, `generative_holding`,
 | `tests/test_governance.py` | Si/Ci, the six gates, assurance, distinct signers, admissibility vs authorization, policy digest |
 | `tests/test_divine_blessing.py` | routing, checkpointed hold, rollback/release, the emergence chain, keyed bus, grant-gated realisation |
 | `tests/test_emergence_detector.py` | reference phase, lock-in, detection thresholds, r-ADMIN recognition, the 翈 Signature |
+| `tests/test_interstitial.py` | ring contiguity, coherence and lag, mediated vs direct chord, information density, frames, the record |
 
 The suite is offline: no live database, no LLM endpoints, no network.
 

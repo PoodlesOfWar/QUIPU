@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
-> **Version**: 0.33.0  
-> **Annealed**: 2026-09-14T13:15:31.730012+00:00  
-> **Map revision**: v9 · fingerprint `3fd505756747eb4b`  
+> **Version**: 0.33.1  
+> **Annealed**: 2026-09-16T22:22:07.142086+00:00  
+> **Map revision**: v10 · fingerprint `de1d8a9b6df07687`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,7 +31,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-09-14T13:15:31.730012+00:00`
+> Snapshot at annealing time `2026-09-16T22:22:07.142086+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
@@ -109,6 +109,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 4. Structural Changelog
 
+- **2026-09-14T13:15:31.730012+00:00** map v9 (0.33.0) — hash `3fd505756747eb4b`
 - **2026-09-08T23:44:11.536872+00:00** map v8 (0.32.0) — hash `297c05b412e55203`
 - **2026-08-22T23:44:11.306446+00:00** map v7 (0.31.0) — hash `fc9b41886199c297`
 - **2026-08-22T19:44:10.294464+00:00** map v6 (0.30.0) — hash `8586f0037efc8213`

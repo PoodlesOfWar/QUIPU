@@ -119,6 +119,7 @@ from .qpsi.residual_checkpoint import Checkpoint, CheckpointStore, KV_PREFIX as 
 from .qpsi.emergence_detector import (
     DetectorConfig, EmergenceCandidate, detect, radam_recognise, sign, verify, GLYPH,
 )
+from .qpsi import interstitial as _interstitial
 from .qpsi.governance import (
     Attestation, Candidate, Decision, GovernanceConfig, govern, LOVE, HELD,
     candidate_from_residual, authorised_to_realise, config_digest,
@@ -338,6 +339,14 @@ def observe_emergence(cn, instance: str = "system_entirety") -> EmergenceCandida
     radam_state = _kv_get(cn, KV_RADAM_PREFIX + instance, {}) or {}
     cand.radam = radam_recognise(cand, rows, radam_state, cfg=_DETECTOR)
     _kv_set(cn, KV_RADAM_PREFIX + instance, radam_state)
+    # The interstitial arc (perception–vision–touch: Perceptopoly, Loadopoly-OCR,
+    # Bakugo) measured on the same window and attached as a diagnostic.  It is
+    # not part of the 翈 signature's content and nothing downstream reads it.
+    try:
+        cand.interstitial = _interstitial.record(cn, instance, rows)
+    except Exception as exc:  # the diagnostic must never block observation
+        _LOG.warning("interstitial arc measure failed: %s", exc)
+        cand.interstitial = None
     prev = _kv_get(cn, KV_CANDIDATE_PREFIX + instance, None)
     if prev and prev.get("signature"):
         cand.signature = prev["signature"]
@@ -530,8 +539,11 @@ def enable() -> bool:
         dd = _decision_dict(d)
         try:
             cand = observe_emergence(cn, "system_entirety")
+            arc = (cand.interstitial or {}).get("measure") or {}
             dd["emergence"] = {"id": cand.id, "detected": cand.detected, "coherence": cand.coherence,
                                "quadrature": cand.quadrature,
+                               "interstitial": {k: arc.get(k) for k in ("interstitial", "mediated_coherence",
+                                                                          "information_density", "measured")},
                                "radam": {k: (cand.radam or {}).get(k) for k in ("recognised", "agreed")},
                                "signed": bool(cand.signature), "reason": cand.reasons[-1] if cand.reasons else ""}
         except Exception as exc:  # detector must never block the step
@@ -625,6 +637,7 @@ def _main(argv: list[str] | None = None) -> int:
     rl = sub.add_parser("release"); rl.add_argument("--instance", default="system_entirety")
     rl.add_argument("--actor", required=True)
     sub.add_parser("emergence")
+    ia = sub.add_parser("interstitial"); ia.add_argument("--instance", default="system_entirety")
     de = sub.add_parser("detect"); de.add_argument("--instance", default="system_entirety")
     ca = sub.add_parser("candidate"); ca.add_argument("--instance", default="system_entirety")
     co = sub.add_parser("confirm"); co.add_argument("--instance", default="system_entirety")
@@ -657,6 +670,8 @@ def _main(argv: list[str] | None = None) -> int:
         print(json.dumps(release(args.instance, actor=args.actor).to_json(), indent=2))
     elif args.cmd == "emergence":
         print(json.dumps(emergence(), indent=2))
+    elif args.cmd == "interstitial":
+        print(json.dumps(brain_kv.kv_get_json(_interstitial.KV_PREFIX + args.instance, None), indent=2))
     elif args.cmd == "detect":
         with _open() as cn:
             print(json.dumps(observe_emergence(cn, args.instance).to_json(), indent=2))
