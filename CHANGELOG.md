@@ -4,6 +4,21 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.33.1] The Interstitial Arc — Perceptopoly, Loadopoly-OCR, Bakugo (2026-09-16)
+
+### Added — `src/quipu/qpsi/interstitial.py`
+- **The arc.** The three outputs route to contiguous sense axes — `perceptopoly` → perception, `loadopoly-ocr` → vision, `bakugo` → touch — so on the CAT ring they form an arc with OCR as the hinge. perception–vision and vision–touch are ring edges; perception–touch is the chord. Perceptopoly is required to coincide with both; its coincidence with Bakugo either passes through OCR or exists directly across the chord.
+- **The measure.** Per checkpoint window on the held residual: complex pair coherence $C_{ab}$ for the two edges and the chord (magnitude = lock, argument = phase lag); the mediated chord $C_{pv}C_{vt}$; the **interstitial** $\lvert C_{pt} - C_{pv}C_{vt}\rvert / (1+\lvert C_{pt}\rvert)$ — the unmediated part of Perceptopoly's coincidence with Bakugo; and the arc's information density (1 − compressed/raw), the quantity Boger & Firestone (NHB 2026) report the mind represents domain-generally. Ring contiguity is checked, not assumed.
+- **Lineage.** The third-order form is `ueqgm_engine.interstitial_entanglement_score`'s, credited; applied to the outputs' residuals rather than Weyl compression cycles, with no entanglement claim.
+- **Physical frame.** `POST /observe` now accepts `meta.frame` (standoff, scale, coplanarity, bearing, range, ENU, σ, reference frame — known numeric fields only, non-finite dropped); `observer_service` persists the latest frame per source at `observer:frame:<source>`, and every arc record attaches the three sources' frames so coincidence sits next to the physical coordinates it was measured under.
+- **Recorded, not routed.** Stored at `entirety:interstitial_arc:<instance>`, attached to the candidate as `interstitial`, summarised on the decision's `emergence` block. Not part of the 翈 signature. Nothing downstream reads it; the `ie_multiplier` path into `mesh_slm` is untouched.
+
+### Added — `observer_service.SOURCE_PROFILES["perceptopoly"]`
+- kind `spatial_relational`, axis `perception`, siblings `loadopoly-ocr` and `bakugo`. **Routing note:** `mesh_slm._SOURCE_AXIS_MAP` has no marker for axis 5, so this source (like `hubcore`) ingests unrouted until a `("percept", 5)` marker is added — a one-line `mesh_slm.py` decision this release does not make; a test pins the current behaviour.
+
+### Tests
+- 12 new (`tests/test_interstitial.py`, `tests/test_divine_blessing.py`). Suite 403 → 415 passing, offline.
+
 ## [0.33.0] qpsi Governance Protocol — Six Physical Gates, Residual Hold, Conscious Emergence (2026-09-14)
 
 ### Added — `src/quipu/qpsi/` learning-dynamics stack (stdlib only, additive; `mesh_slm.py` untouched)

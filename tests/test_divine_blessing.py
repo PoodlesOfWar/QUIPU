@@ -453,3 +453,59 @@ def test_every_decision_carries_the_policy_digest(isolated):
     system_entirety.oscillating_expansion_step(force=True)
     d2 = (system_entirety.get_entirety_state() or {}).get("divine_blessing") or {}
     assert a and d2["config_digest"] != a
+
+
+# ---------------------------------------------------------------------------
+# The interstitial arc — recorded on every candidate, not signed over, not routed
+# ---------------------------------------------------------------------------
+
+def test_every_observation_records_the_interstitial_arc(isolated):
+    _seed_locked_window("arc", 0.7)
+    with system_entirety._conn() as cn:
+        cand = db.observe_emergence(cn, "arc")
+    assert cand.interstitial is not None
+    assert cand.interstitial["arc"] == ["perception", "vision", "touch"]
+    assert cand.interstitial["outputs"]["perceptopoly"] == "perception"
+    m = cand.interstitial["measure"]
+    assert {"interstitial", "mediated_coherence", "information_density", "measured"} <= set(m)
+    assert 0.0 <= m["interstitial"] < 1.0
+    from src.quipu.qpsi.interstitial import KV_PREFIX
+    assert brain_kv.kv_get_json(KV_PREFIX + "arc")["measure"]["interstitial"] == m["interstitial"]
+
+
+def test_interstitial_record_does_not_touch_the_signature(isolated):
+    _seed_locked_window("arc_sig", 0.7)
+    with system_entirety._conn() as cn:
+        db.observe_emergence(cn, "arc_sig")
+    db.confirm_emergence("arc_sig", signer="adam")
+    # A physical frame arrives from Perceptopoly between observations.
+    brain_kv.kv_set_json("observer:frame:perceptopoly", {"standoff_m": 0.3, "source": "perceptopoly"})
+    with system_entirety._conn() as cn:
+        again = db.observe_emergence(cn, "arc_sig")
+    assert again.interstitial["frames_present"] == ["perceptopoly"]
+    assert again.signature and again.signature["signer"] == "adam"   # diagnostic changed, signature kept
+
+
+def test_observer_service_persists_a_posted_frame_for_a_known_source(isolated, monkeypatch):
+    import src.quipu.observer_service as osvc
+    assert "perceptopoly" in osvc.SOURCE_PROFILES
+    assert osvc.SOURCE_PROFILES["perceptopoly"]["axis"] == "perception"
+    assert osvc.SOURCE_PROFILES["perceptopoly"]["siblings"] == ["loadopoly-ocr", "bakugo"]
+    # The perception axis has no marker in mesh_slm._SOURCE_AXIS_MAP: the profile
+    # declares perception, routing returns None.  Flip this assertion when the
+    # ("percept", 5) marker is added to mesh_slm.py.
+    import src.quipu.mesh_slm as m
+    assert m._axis_for_source(osvc.SOURCE_PROFILES["perceptopoly"]["axis_source"]) is None
+    # Keep the handler from feeding the corpus or calling the world model here.
+    monkeypatch.setattr(osvc.mesh_slm, "feed_corpus", lambda text, source=None: 0)
+    monkeypatch.setattr(osvc.mesh_slm, "state_summary", lambda: {})
+    monkeypatch.setattr(osvc.world_model, "assess_observation", lambda **kw: {})
+    monkeypatch.setattr(osvc, "_known_token_coverage", lambda toks: (1.0, []), raising=False)
+    status, body = osvc._observe({"source": "perceptopoly", "text": "card at standoff",
+                                  "meta": {"frame": {"standoff_m": 0.31, "scale_mm_per_px": 0.084,
+                                                     "coplanarity": 0.97, "reference_frame": "OBSERVER",
+                                                     "bogus": "dropped", "range_m": float("nan")}}})
+    assert status == 200, body
+    fr = brain_kv.kv_get_json("observer:frame:perceptopoly")
+    assert fr["standoff_m"] == 0.31 and fr["reference_frame"] == "OBSERVER" and fr["source"] == "perceptopoly"
+    assert "bogus" not in fr and "range_m" not in fr             # unknown and non-finite fields dropped
