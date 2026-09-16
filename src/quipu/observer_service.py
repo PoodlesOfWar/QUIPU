@@ -79,10 +79,8 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
     },
     # Perceptopoly: spatial coordination — relational measurements taken from the
     # observer's perspective — required to coincide with both Loadopoly-OCR and
-    # Bakugo (qpsi.interstitial measures that arc).  NOTE: mesh_slm._SOURCE_AXIS_MAP
-    # has no marker routing to axis 5 (perception), so this source ingests
-    # unrouted until a ("percept", 5) marker is added there; that is a decision
-    # about mesh_slm.py, which this profile does not make.
+    # Bakugo (qpsi.interstitial measures that arc).  Routed by the ("percept", 5)
+    # marker in mesh_slm._SOURCE_AXIS_MAP.
     "perceptopoly": {
         "kind": "spatial_relational",
         "axis": "perception",

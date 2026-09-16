@@ -276,13 +276,13 @@ ie_multiplier` path into `mesh_slm`'s learning rate is untouched; switching it
 to this measurement would be the first time qpsi influenced what the predictor
 learns, which is a realisation and needs the grant.
 
-**One routing fact, left as a decision.** `mesh_slm._SOURCE_AXIS_MAP` has no
-marker that routes to axis 5, so nothing can reach the perception axis by
-source today — `hubcore`'s profile also declares perception and also routes to
-`None`. The `perceptopoly` profile therefore ingests unrouted until a
-`("percept", 5)` marker is added to that table. That is a one-line change to
-`mesh_slm.py`, which this work has kept at a zero-line diff throughout; a test
-pins the current behaviour so the line is not forgotten.
+**Routing.** `mesh_slm._SOURCE_AXIS_MAP` originally had no marker for axis 5,
+so nothing could reach the perception axis by source. With permission given on
+2026-09-16, a single line — `("percept", 5)` — was added to that table: the one
+change to `mesh_slm.py` in this work, and the whole of it. `perceptopoly` now
+routes to perception; no pre-existing source string contains `percept`, so
+nothing else was re-routed. `hubcore` still declares perception and routes to
+`None` — that inconsistency predates this work and is left as found.
 
 ---
 
