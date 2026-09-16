@@ -491,11 +491,13 @@ def test_observer_service_persists_a_posted_frame_for_a_known_source(isolated, m
     assert "perceptopoly" in osvc.SOURCE_PROFILES
     assert osvc.SOURCE_PROFILES["perceptopoly"]["axis"] == "perception"
     assert osvc.SOURCE_PROFILES["perceptopoly"]["siblings"] == ["loadopoly-ocr", "bakugo"]
-    # The perception axis has no marker in mesh_slm._SOURCE_AXIS_MAP: the profile
-    # declares perception, routing returns None.  Flip this assertion when the
-    # ("percept", 5) marker is added to mesh_slm.py.
+    # ("percept", 5) is in mesh_slm._SOURCE_AXIS_MAP (added 2026-09-16 with permission —
+    # the one line in mesh_slm.py this work has touched), so the profile's declared
+    # axis and the routed axis agree.
     import src.quipu.mesh_slm as m
-    assert m._axis_for_source(osvc.SOURCE_PROFILES["perceptopoly"]["axis_source"]) is None
+    assert m._axis_for_source(osvc.SOURCE_PROFILES["perceptopoly"]["axis_source"]) == 5
+    assert m._axis_for_source("perception") == 5             # the marker matches the sense name too
+    assert m._axis_for_source(osvc.SOURCE_PROFILES["hubcore"]["axis_source"]) is None   # untouched
     # Keep the handler from feeding the corpus or calling the world model here.
     monkeypatch.setattr(osvc.mesh_slm, "feed_corpus", lambda text, source=None: 0)
     monkeypatch.setattr(osvc.mesh_slm, "state_summary", lambda: {})

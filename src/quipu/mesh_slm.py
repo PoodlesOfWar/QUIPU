@@ -803,6 +803,7 @@ _SOURCE_AXIS_MAP: tuple[tuple[str, int], ...] = (
     ("stack", 1), ("code", 1), ("github", 1),                            # touch: code / construction
     ("fineweb", 0), ("c4", 0), ("openwebtext", 0), ("commoncrawl", 0),   # vision: broad web observation
     ("arxiv", 4), ("research", 4), ("paper", 4),                         # brain: analytical reasoning
+    ("percept", 5),                                                      # perception: spatial coordination from the observer's perspective (Perceptopoly)
 )
 
 
