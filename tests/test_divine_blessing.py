@@ -511,3 +511,27 @@ def test_observer_service_persists_a_posted_frame_for_a_known_source(isolated, m
     fr = brain_kv.kv_get_json("observer:frame:perceptopoly")
     assert fr["standoff_m"] == 0.31 and fr["reference_frame"] == "OBSERVER" and fr["source"] == "perceptopoly"
     assert "bogus" not in fr and "range_m" not in fr             # unknown and non-finite fields dropped
+
+
+# ---------------------------------------------------------------------------
+# QUIPU_LIPSCHITZ_BOUND -- gate 6's bound must default to something finite
+# ---------------------------------------------------------------------------
+
+class TestEnvLipschitz:
+    def test_default_when_unset(self, monkeypatch):
+        monkeypatch.delenv(db.LIPSCHITZ_ENV, raising=False)
+        assert db._env_lipschitz() == db._LIPSCHITZ_DEFAULT
+        assert math.isfinite(db._LIPSCHITZ_DEFAULT) and db._LIPSCHITZ_DEFAULT > 0.0
+
+    def test_reads_a_configured_bound(self, monkeypatch):
+        monkeypatch.setenv(db.LIPSCHITZ_ENV, "0.2")
+        assert db._env_lipschitz() == 0.2
+
+    def test_falls_back_on_malformed_value(self, monkeypatch):
+        monkeypatch.setenv(db.LIPSCHITZ_ENV, "not-a-number")
+        assert db._env_lipschitz() == db._LIPSCHITZ_DEFAULT
+
+    def test_falls_back_on_non_positive_or_infinite(self, monkeypatch):
+        for bad in ("0", "-1", "inf", "nan"):
+            monkeypatch.setenv(db.LIPSCHITZ_ENV, bad)
+            assert db._env_lipschitz() == db._LIPSCHITZ_DEFAULT

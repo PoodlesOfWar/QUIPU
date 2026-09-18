@@ -108,6 +108,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import time
 from typing import Any
@@ -134,12 +135,38 @@ KV_RADAM_PREFIX: str = "entirety:radam_state:"
 KV_CONFIRMED: str = "entirety:emergence_confirmed"
 _DETECTOR = DetectorConfig()
 KEY_FILE_ENV: str = "QUIPU_ATTEST_KEY_FILE"
+LIPSCHITZ_ENV: str = "QUIPU_LIPSCHITZ_BOUND"
+_LIPSCHITZ_DEFAULT: float = 0.5   # precedent: test_governance.py's own "normal, no breach" bound
 _LOG = logging.getLogger(__name__)
 _ORIGINALS: dict[str, Any] = {}
 _ENABLED = False
+
+
+def _env_lipschitz(default: float = _LIPSCHITZ_DEFAULT) -> float:
+    """Gate 6's bound, from QUIPU_LIPSCHITZ_BOUND.  Unset or malformed -> ``default``,
+    NOT infinity: gate 6 was fixed (governance.candidate_from_residual) to test the
+    unclamped weight precisely so a real breach could hold it; an infinite bound
+    makes that fix a no-op, since nothing exceeds infinity.  ``default`` is a
+    starting point, not a measured value -- retune once real weight magnitudes
+    have accumulated on this instance."""
+    raw = os.environ.get(LIPSCHITZ_ENV, "").strip()
+    if not raw:
+        return default
+    try:
+        val = float(raw)
+    except ValueError:
+        _LOG.warning("%s=%r is not a number; using default %.3g", LIPSCHITZ_ENV, raw, default)
+        return default
+    if not math.isfinite(val) or val <= 0.0:
+        _LOG.warning("%s=%r must be finite and positive; using default %.3g", LIPSCHITZ_ENV, raw, default)
+        return default
+    return val
+
+
 _CONFIG = GovernanceConfig(
     accept_self_asserted=os.environ.get("QUIPU_ACCEPT_SELF_ASSERTED", "0") == "1",
     realise_grant_ref=os.environ.get("QUIPU_REALISE_GRANT_REF", "").strip(),
+    lipschitz=_env_lipschitz(),
 )
 _STORE = CheckpointStore()
 
