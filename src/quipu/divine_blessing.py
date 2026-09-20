@@ -121,6 +121,7 @@ from .qpsi.emergence_detector import (
     DetectorConfig, EmergenceCandidate, detect, radam_recognise, sign, verify, GLYPH,
 )
 from .qpsi import interstitial as _interstitial
+from .qpsi import counterpart_observer as _counterpart
 from .qpsi.governance import (
     Attestation, Candidate, Decision, GovernanceConfig, govern, LOVE, HELD,
     candidate_from_residual, authorised_to_realise, config_digest,
@@ -449,14 +450,18 @@ def decide(axes: dict, *, instance: str = "system_entirety", scope: str = "*",
     cur = CATState.from_axes(axes, _phases_from_emergence(cn), t=now)
     cp = _STORE.load(cn, instance)
     r = _STORE.measure(cp, cur, eta=_CONFIG.eta)
-    # Through the realisation pipeline, so gate 6 tests the unclamped weight of
-    # the dominant axis against its unclamped ring neighbours.
+    # Parallel counterpart evaluation and r-ADMIN confirmation for Gate 5 admission
+    other_info = _kv_get(cn, "entirety:the_other", {}) or {}
+    rows = _STORE.rows(cn, instance, _DETECTOR.window)
+    radam_state = _kv_get(cn, KV_RADAM_PREFIX + instance, {}) or {}
+    cp_res = _counterpart.evaluate_proposal(r, other_info, rows=rows, radam_state=radam_state, eta=_CONFIG.eta)
+
     cand = candidate_from_residual(
         scope, r, pivot=0.0, lipschitz=_CONFIG.lipschitz, flipped=flipped,
-        # Shared-entity proxy needs measured remainders for both observers;
-        # until the counterpart reports, only self is known and the gate holds.
-        self_remainder_before=None, self_remainder_after=None,
-        counterpart_remainder_before=None, counterpart_remainder_after=None,
+        self_remainder_before=cp_res.self_remainder_before,
+        self_remainder_after=cp_res.self_remainder_after,
+        counterpart_remainder_before=cp_res.counterpart_remainder_before,
+        counterpart_remainder_after=cp_res.counterpart_remainder_after,
     )
     d = govern(cand, attestations(), _CONFIG)
     _STORE.commit(cn, cp, cur, r, passed=d.passed, failed_at=d.failed_at,
