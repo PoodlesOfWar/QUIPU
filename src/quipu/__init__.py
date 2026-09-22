@@ -46,3 +46,15 @@ if os.environ.get("QUIPU_DIVINE_BLESSING", "1") != "0":
     except Exception as _exc:  # pragma: no cover
         import logging as _logging
         _logging.getLogger(__name__).warning("DIVINE_BLESSING_SQRT(-1) not enabled: %s", _exc)
+
+# Self-organising loop (qpsi.self_organising): phase read from the ingest flux,
+# a lumped memristive model on the seven axes, the prior advanced only on
+# realisation.  Default OFF: set QUIPU_SELF_ORGANISING=1 to wire it for a
+# session.  The gates above are untouched either way.
+if os.environ.get("QUIPU_SELF_ORGANISING", "0") == "1":
+    try:
+        from .qpsi import self_organising as _self_organising
+        _self_organising.enable()
+    except Exception as _exc:  # pragma: no cover
+        import logging as _logging
+        _logging.getLogger(__name__).warning("self_organising not enabled: %s", _exc)
