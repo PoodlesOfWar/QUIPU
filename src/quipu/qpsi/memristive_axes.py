@@ -131,6 +131,7 @@ class SomnConfig:
     mobility_floor: float = 0.05   # a dead axis keeps this much mobility so it can wake
     mobility_scale: float = 0.02   # |Δaxis| per step that counts as fully mobile
     dt_max: float = 21600.0        # clamp on the integration step (s): 6 h
+    mirror_gain: float = 0.5       # κ: how much a hold's mirror image scales potentiation (qpsi.mirror_training)
 
     @classmethod
     def from_env(cls) -> "SomnConfig":
@@ -142,7 +143,7 @@ class SomnConfig:
             "alpha_low": "QUIPU_SOMN_ALPHA_LOW", "alpha_high": "QUIPU_SOMN_ALPHA_HIGH",
             "depression": "QUIPU_SOMN_DEPRESSION", "mobility_rho": "QUIPU_SOMN_MOBILITY_RHO",
             "mobility_floor": "QUIPU_SOMN_MOBILITY_FLOOR", "mobility_scale": "QUIPU_SOMN_MOBILITY_SCALE",
-            "dt_max": "QUIPU_SOMN_DT_MAX",
+            "dt_max": "QUIPU_SOMN_DT_MAX", "mirror_gain": "QUIPU_SOMN_MIRROR_GAIN",
         }
         kw = {}
         for attr, env in names.items():
@@ -272,13 +273,23 @@ def participation_ratio(I: Mapping[str, float]) -> float:
 # Junction dynamics
 # ---------------------------------------------------------------------------
 
-def potentiate(g: float, share: float, mobility: float, dv_mag: float, dt: float, cfg: SomnConfig) -> float:
+def potentiate(g: float, share: float, mobility: float, dv_mag: float, dt: float, cfg: SomnConfig,
+               mirror: float = 0.0) -> float:
     """Field on.  Saturating growth toward 1 at a rate set by the current share
-    (Kirchhoff feedback), the axis's mobility and the regime of the field."""
+    (Kirchhoff feedback), the axis's mobility and the regime of the field.
+
+    ``mirror`` in [−1, 1] is the axis's component of a held decision's mirror
+    image (qpsi.mirror_training): +u_k under a human hold (the held content is
+    latent potential, learn it), −u_k under a physical hold (the held shape is
+    wrong, learn away from it).  It scales the potentiation rate by
+    (1 + κ·mirror), never below zero.  It changes how fast a conductance grows
+    and nothing else: the decision, the checkpoint and the edges are untouched.
+    """
     if dt <= 0.0 or share <= 0.0:
         return g
     alpha = cfg.alpha_high if dv_mag >= cfg.v_c else cfg.alpha_low
     drive = _clip(mobility, 0.0, 1.0) * _clip(share, 0.0, 1.0) * alpha
+    drive *= max(0.0, 1.0 + cfg.mirror_gain * _clip(mirror, -1.0, 1.0))
     if drive <= 0.0:
         return g
     return _clip(g + (1.0 - g) * (1.0 - math.exp(-dt * drive / max(cfg.tau_p, 1e-9))), cfg.g_min, 1.0)
@@ -468,13 +479,16 @@ def new_rejections(cn: sqlite3.Connection, since: float) -> list[dict]:
 def step(cn: sqlite3.Connection, *, axes: Mapping[str, float], observer: float,
          flux_on: bool, flux_docs: int, now: float | None = None,
          the_other: Mapping | None = None, sources: Iterable[str] | None = None,
-         cfg: SomnConfig | None = None, rejections: Sequence[Mapping] | None = None) -> dict:
+         cfg: SomnConfig | None = None, rejections: Sequence[Mapping] | None = None,
+         mirror_drive: Mapping[str, float] | None = None) -> dict:
     """Advance the junctions one step and record everything.  Returns the summary.
 
     Inputs are explicit (no environment lookups here): the caller passes the
     live axes and observer, the flux reading, the counterpart, the enabled
     sources and the config.  ``the_other`` None → read entirety:the_other;
-    ``sources`` None → corpus_ingest.SOURCES; ``rejections`` None → the archive.
+    ``sources`` None → corpus_ingest.SOURCES; ``rejections`` None → the archive;
+    ``mirror_drive`` the per-axis mirror component of the last hold (see
+    ``potentiate``), None → no mirror.
     """
     cfg = cfg or SomnConfig()
     now = time.time() if now is None else float(now)
@@ -497,11 +511,14 @@ def step(cn: sqlite3.Connection, *, axes: Mapping[str, float], observer: float,
     I = currents(st.g, dv, cfg.budget_docs)
     B = cfg.budget_docs if sum(I.values()) > 0.0 else 0.0
 
+    mirror = {a: _clip(_f((mirror_drive or {}).get(a, 0.0)), -1.0, 1.0) for a in AXES}
     if flux_on:
         st.potentiation_steps += 1
         for a in AXES:
             share = (I[a] / B) if B > 0.0 else 0.0
-            st.g[a] = potentiate(st.g[a], share, st.m[a], abs(dv[a]), dt, cfg)
+            st.g[a] = potentiate(st.g[a], share, st.m[a], abs(dv[a]), dt, cfg, mirror=mirror[a])
+        if any(v != 0.0 for v in mirror.values()):
+            events.append({"kind": "mirror_drive", "mirror": {a: round(v, 6) for a, v in mirror.items() if v}})
     else:
         st.relaxation_steps += 1
         for a in AXES:

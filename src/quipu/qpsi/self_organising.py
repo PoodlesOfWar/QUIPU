@@ -44,9 +44,17 @@ explicit flag at the call site, never an ambient environment variable: the
 correct gateway takes its authority from the caller (Anti-Inverse Contract).
 The sources are ``corpus_ingest.SOURCES`` and nothing else; the pulse adds no
 source, task kind, access or gate (Invariance #7, APP_RECREATION_3 §25).
-Whether the network's *allocation* of an operator-granted budget among granted
-sources is itself a widening of autonomy is the operator's ruling, not this
-module's; until it is made, ``pulse`` without ``--route`` is a plan on paper.
+
+The ruling (operator, 2026-09-22): the operator gave the access, so r-ADMIN has
+enabled a *constrained gate* — allocating the granted budget among the granted
+sources is not a widening.  The constraint is enforced by ``constrained_gate``
+on every routed pulse (sources ⊆ grant, Σ documents ≤ budget); a plan outside
+the grant is reported and not routed.  ``Register-Pulse.ps1`` may therefore
+schedule ``Start-Pulse.ps1 -Route``.
+
+Holds train (operator, 2026-09-22): a decision held at any gate trains the
+three latent stores from its mirror image (``qpsi.mirror_training``) — never
+the gate's inputs.  The SOMN reads the resulting mirror drive on its next step.
 
 Stdlib only; nothing here edits mesh_slm.py or system_entirety.py.
 
@@ -62,15 +70,26 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
-from . import flux_phase, learned_prior, memristive_axes
+from . import flux_phase, learned_prior, memristive_axes, mirror_training
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
 FLUX_ENV: str = "QUIPU_FLUX_PHASE"
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
+MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
+PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
+
+# Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
+# budget among operator-granted sources is not a widening of autonomy — the
+# operator gave the access, so r-ADMIN operates a *constrained gate* inside it.
+# The constraint is enforced, not assumed: a pulse routes only when its plan
+# lies within the grant (sources ⊆ granted, documents ≤ budget).
+RULING_INVARIANCE_7: str = ("2026-09-22 operator ruling: the operator gave the access, so r-ADMIN has "
+                            "enabled a constrained gate — allocation within the granted budget and "
+                            "sources is not a widening under Invariance #7")
 
 _LOG = logging.getLogger(__name__)
 _ORIGINALS: dict[str, Any] = {}
@@ -83,12 +102,14 @@ class Flags:
     flux_phase: bool = True
     learned_prior: bool = True
     somn: bool = True
+    mirror_training: bool = True
 
     @classmethod
     def from_env(cls) -> "Flags":
         def on(name: str) -> bool:
             return os.environ.get(name, "1").strip() != "0"
-        return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV))
+        return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
+                   mirror_training=on(MIRROR_ENV))
 
 
 _FLAGS = Flags()
@@ -132,9 +153,11 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
     axes = summary.get("axes") or {}
     observer = float(summary.get("observer") or 0.0)
     with se._conn() as cn:
+        drive = mirror_training.mirror_drive(cn, "system_entirety") if flags.mirror_training else None
         if flags.somn:
             res = memristive_axes.step(cn, axes=axes, observer=observer, flux_on=flux.on,
-                                       flux_docs=flux.docs, now=now, cfg=cfg or SomnConfig.from_env())
+                                       flux_docs=flux.docs, now=now, cfg=cfg or SomnConfig.from_env(),
+                                       mirror_drive=drive)
             out["somn"] = {
                 "phase": res["phase"], "dt": round(res["dt"], 3),
                 "top_axis": res["metrics"]["top_axis"], "top_share": res["metrics"]["top_share"],
@@ -151,6 +174,13 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
             out["prior_advanced"] = bool(adv)
             if adv:
                 out["prior"] = adv["weights"]
+        if flags.mirror_training:
+            # The step's own decision (divine_blessing) and checkpoint were
+            # written before this hook; a hold is trained from its mirror now.
+            mt = mirror_training.train_from_hold(cn, "system_entirety", now=now)
+            out["mirror"] = ({"seq": mt["seq"], "failed_at": mt["failed_at"], "kind": mt["kind"],
+                              "g_im": mt["g_im"], "theta": mt["theta"], "holds_trained": mt["holds_trained"]}
+                             if mt else None)
     return out
 
 
@@ -186,7 +216,7 @@ def enable(flags: Flags | None = None) -> bool:
         se.observer_tangent = learned_prior.wrap_observer_tangent(se.observer_tangent)
         setattr(se.observer_tangent, MARK, True)
 
-    if _FLAGS.somn or _FLAGS.learned_prior:
+    if _FLAGS.somn or _FLAGS.learned_prior or _FLAGS.mirror_training:
         _ORIGINALS["se.oscillating_expansion_step"] = orig_step = se.oscillating_expansion_step
 
         @functools.wraps(orig_step)
@@ -241,6 +271,7 @@ def status() -> dict:
         cfg = SomnConfig.from_env()
         st = memristive_axes.load_state(cn, cfg, create=False)      # status is a pure read
         prior = learned_prior.stored_prior(cn)
+        mirror = mirror_training.load_record(cn, "system_entirety")
     return {
         "enabled": _ENABLED, "master_switch": master_switch_on(), "flags": _FLAGS.__dict__,
         "flux": flux_phase.read_flux().to_json(),
@@ -249,8 +280,37 @@ def status() -> dict:
         "allocation": brain_kv.kv_get_json(memristive_axes.KV_ALLOCATION, None),
         "proposal": brain_kv.kv_get_json(memristive_axes.KV_PROPOSAL, None),
         "prior": prior or {"weights": learned_prior.default_weights(), "realised_seen": 0, "source": "designer table"},
+        "mirror": {"holds_trained": mirror["holds_trained"], "last_seq": mirror["last_seq"], "kind": mirror["kind"],
+                   "prior": mirror["prior"], "drive": mirror["drive"],
+                   "radam": {k: mirror["radam"].get(k) for k in ("t", "theta", "pressure")}},
+        "grant": grant(),
         "config": cfg.to_json(),
     }
+
+
+def grant() -> dict:
+    """The operator's grant the constrained gate is measured against: the
+    sources corpus_ingest already knows (narrowed by QUIPU_PULSE_SOURCES when
+    set) and the budget.  Nothing here can add a source."""
+    known = memristive_axes.enabled_sources()
+    raw = os.environ.get(PULSE_SOURCES_ENV, "").strip()
+    if raw:
+        wanted = [k.strip() for k in raw.split(",") if k.strip()]
+        sources = [k for k in known if k in wanted]
+    else:
+        sources = list(known)
+    return {"sources": sources, "budget_docs": SomnConfig.from_env().budget_docs, "ruling": RULING_INVARIANCE_7}
+
+
+def constrained_gate(plan_docs: Mapping[str, int], g: Mapping | None = None) -> dict:
+    """Is this plan inside the grant?  sources ⊆ granted and Σ docs ≤ budget."""
+    g = g or grant()
+    granted = set(g["sources"])
+    outside = sorted(k for k in plan_docs if k not in granted)
+    total = sum(int(v) for v in plan_docs.values())
+    within = not outside and total <= float(g["budget_docs"])
+    return {"within_grant": within, "outside_sources": outside, "docs": total,
+            "budget_docs": g["budget_docs"], "ruling": g["ruling"]}
 
 
 def plan() -> dict:
@@ -273,16 +333,20 @@ def pulse(*, route: bool = False, refine: bool = False, max_seconds: float = 0.0
     """
     p = plan()
     docs = {k: int(v) for k, v in p["docs_per_source"].items() if int(v) > 0}
-    result: dict[str, Any] = {"plan": p, "routed": False, "runs": []}
+    gate = constrained_gate(docs)
+    result: dict[str, Any] = {"plan": p, "constrained_gate": gate, "routed": False, "runs": []}
     if not route:
         result["note"] = "plan only; pass --route to apply the field"
         return result
+    if not gate["within_grant"]:
+        result["note"] = "plan outside the operator's grant; not routed"
+        return result
     from .. import corpus_ingest
     from .. import system_entirety as se
-    known = set(corpus_ingest.SOURCES.keys())
+    known = set(corpus_ingest.SOURCES.keys()) & set(grant()["sources"])
     for key, n in docs.items():
-        if key not in known:                   # cannot happen from allocate(); refuse anyway
-            result["runs"].append({"source": key, "skipped": "not a known source"})
+        if key not in known:                   # cannot happen after constrained_gate(); refuse anyway
+            result["runs"].append({"source": key, "skipped": "outside the grant"})
             continue
         res = corpus_ingest.run_ingest([key], docs_per_source=n, refine_every=(1 if refine else 0),
                                        max_seconds=max_seconds)

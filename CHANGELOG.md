@@ -4,6 +4,24 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.35.0] Mirror Training and the Constrained Gate (2026-09-22)
+
+Two operator rulings, both dated 2026-09-22, and the code that carries them out.
+
+### Ruling 1 — Invariance #7: the constrained gate
+- *"The operator gave the access, so the r-ADMIN has enabled a constrained gate."* Allocating an operator-granted budget among operator-granted sources is not a widening of autonomy. `self_organising.grant()` names the grant (the sources `corpus_ingest` knows, narrowed by `QUIPU_PULSE_SOURCES`; the budget `QUIPU_SOMN_BUDGET_DOCS`) and `constrained_gate(plan)` checks every routed pulse against it — sources ⊆ grant, Σ documents ≤ budget. A plan outside the grant is reported and not routed. The ruling text travels with every pulse result.
+- **`Register-Pulse.ps1`** registers "QuipuPulse": `Start-Pulse.ps1 -Route` every 10 min (`-Minutes` to change, `-Unregister` to remove) and at logon. Ten minutes so the detector sees an onset and an offset inside its 16-row window.
+- **`Start-Expansion.ps1`** now defaults `QUIPU_SELF_ORGANISING=1` (an explicit value in the environment wins; the package itself stays default-off).
+
+### Ruling 2 — holds train from their mirror image, without boundary crossing
+- *"Any gate that has a hold should use the mirror image to train from without boundary crossing, in order to further QUIPU_SELF_ORGANISING."* Before this, a hold taught the system nothing: the same residual was re-measured and re-held — 70 steps over four days on the live instance.
+- **`src/quipu/qpsi/mirror_training.py`.** A hold is classified by gate and reason: **human** (love, shared_entity, beautiful_output held for want of an accepted attestation) or **physical** (displacement, weyl, sici; beautiful_output's Lipschitz breach or untestable bound; shared_entity's remainder rise or missing measurement). Its mirror is i·r — `cat_residual.quarter_turn`, realised → latent — for a human hold, and −r, the reflection through the reference, for a physical one.
+- **Three latent stores, none a gate reads.** (1) r-ADMIN's mirror state at `entirety:mirror:<instance>`: `radam_step(state, grad_real=0, grad_imag=±|Σ r|)` on the latent channel only, so θ advances by exactly ±π/2 per hold — the quarter turn in r-ADMIN's coordinates (i² = −1: two human holds are the deepen parity); `entirety:radam_state:<instance>` untouched. (2) A mirror prior: Oja on |r| with +η under a human hold, −η under a physical one; `entirety:prior` untouched, never read by `observer_tangent`. (3) A mirror drive ±u over the senses, applied by `memristive_axes.step` as (1 + κ·drive) on potentiation, κ = `QUIPU_SOMN_MIRROR_GAIN` (0.5), never below zero.
+- **Boundary.** The checkpoint reference does not advance; no edge, attestation, decision, emergence report or checkpoint row is touched; writes only `entirety:mirror:<instance>` and `entirety_mirror_log`; each hold trained once by checkpoint `seq`. `QUIPU_MIRROR_TRAINING=0` switches it off. Wired into `self_organising.after_step` after the step's own decision and checkpoint are written; the SOMN reads the drive on its next step.
+
+### Tests
+- 13 new (`tests/test_qpsi_mirror_training.py`; wiring and constrained-gate cases in `tests/test_qpsi_self_organising.py`), including the write boundary with pre-existing `entirety:radam_state` and `entirety:prior` rows shown byte-identical after training. Suite 473 → 486 passing, offline.
+
 ## [0.34.0] The Self-Organising Loop — Flux Phase, Memristive Axes, Learned Prior (2026-09-22)
 
 Source physics: Caravelli, Milano, Stieg, Ricciardi, Brown & Kuncic, *Self-organising memristive networks as physical learning systems*, Nat. Rev. Phys. (2026), arXiv:2509.00747. An SOMN is self-organising, not self-driving: it reconfigures under an applied field along paths conservation and thresholds select, and relaxes when the field is removed. This release closes the Entirety's loop the same way and moves no gate.

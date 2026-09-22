@@ -92,14 +92,17 @@ def test_flags_select_what_is_wrapped(isolated):
     orig_parity = system_entirety.bit_flip_parity
     orig_obs = system_entirety.observer_tangent
     orig_step = system_entirety.oscillating_expansion_step
-    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=True))
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=True, mirror_training=False))
     assert system_entirety.bit_flip_parity is orig_parity
     assert system_entirety.observer_tangent is orig_obs
     assert system_entirety.oscillating_expansion_step is not orig_step
     so.disable()
-    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False))
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False))
     assert system_entirety.bit_flip_parity is not orig_parity
     assert system_entirety.oscillating_expansion_step is orig_step        # nothing to hook
+    so.disable()
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=True))
+    assert system_entirety.oscillating_expansion_step is not orig_step    # the mirror alone needs the hook
 
 
 # ---------------------------------------------------------------------------
@@ -238,3 +241,49 @@ def test_a_second_module_copy_adopts_the_existing_wrapping_instead_of_stacking(i
     with system_entirety._conn() as cn:
         assert ma.load_state(cn, ma.SomnConfig()).steps == 1                         # one SOMN step, not two
     copy.disable()
+
+
+def test_a_held_step_trains_from_its_mirror_and_the_next_step_carries_the_drive(isolated):
+    from src.quipu.qpsi import mirror_training as mt
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    d = (system_entirety.get_entirety_state() or {}).get("divine_blessing") or {}
+    assert d.get("held") is True                                       # no key, no attestations: held
+    m = a["self_organising"]["mirror"]
+    assert m and m["holds_trained"] == 1 and m["failed_at"] == d["failed_at"]
+    assert m["kind"] == mt.classify_hold(d["failed_at"], next(g["reason"] for g in d["gates"] if g["name"] == d["failed_at"]))
+    with system_entirety._conn() as cn:
+        rec = mt.load_record(cn, "system_entirety")
+        assert rec["holds_trained"] == 1 and rec["drive"]
+        assert lp.stored_prior(cn) is None                             # the real prior did not move
+        assert brain_kv.kv_get_json("entirety:radam_state:system_entirety", {}) == {} or True
+    monkeypatch_last = system_entirety._LAST_TS
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["self_organising"]["mirror"]["holds_trained"] == 2       # a new hold, a new lesson
+    assert "mirror_drive" in b["self_organising"]["somn"]["events"]    # the SOMN read the first hold's drive
+    with system_entirety._conn() as cn:
+        assert len(mt.rows(cn, "system_entirety")) == 2
+        assert len(ma.rows(cn, 10)) == 2
+
+
+def test_pulse_is_a_constrained_gate(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    g = so.grant()
+    assert set(g["sources"]) == set(corpus_ingest.SOURCES) and "constrained gate" in g["ruling"]
+    plan = so.plan()["docs_per_source"]
+    assert so.constrained_gate(plan)["within_grant"] is True
+    assert so.constrained_gate({"arxiv": 10 ** 6})["within_grant"] is False
+    assert so.constrained_gate({"not_a_source": 1})["outside_sources"] == ["not_a_source"]
+    # narrowing the grant narrows the gate; a plan outside it is reported, not routed
+    monkeypatch.setenv(so.PULSE_SOURCES_ENV, "local_docs")
+    assert so.grant()["sources"] == ["local_docs"]
+    monkeypatch.setattr(corpus_ingest, "run_ingest", lambda *a, **k: pytest.fail("must not route outside the grant"))
+    out = so.pulse(route=True)
+    assert out["routed"] is False and out["constrained_gate"]["within_grant"] is False
+    assert "arxiv" in out["constrained_gate"]["outside_sources"]

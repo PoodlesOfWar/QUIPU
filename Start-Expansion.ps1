@@ -10,6 +10,11 @@
 # (src/quipu/divine_blessing.py) -- held at the six gates unless
 # QUIPU_REALISE_GRANT_REF is set. Research-only scope by default.
 #
+# With QUIPU_SELF_ORGANISING=1 (the default here since 2026-09-22) each step
+# also runs the self-organising loop: phase from the ingest flux, the
+# memristive axes, the prior's realisation check, and mirror training on a
+# held decision (docs/QPSI_SELF_ORGANISING.md).  The gates are unchanged.
+#
 # This replaces the QuipuExpansion scheduled task's prior target,
 # SCB-Cleanup\Expansion-Watchdog.ps1, which no longer exists on disk (it
 # looks like it was left behind when QUIPU was extracted from the parent
@@ -47,6 +52,13 @@ $py = Get-Python
 if (-not $py) { Write-Host "No Python interpreter found." -ForegroundColor Red; exit 1 }
 
 Set-Location $Repo
+
+# Self-organising loop (docs/QPSI_SELF_ORGANISING.md).  The operator turned it
+# on 2026-09-22 ("QUIPU_SELF_ORGANISING=1").  An explicit value already in the
+# environment wins (set QUIPU_SELF_ORGANISING=0 to step without the loop);
+# unset defaults to on here.  The package itself stays default-off.
+if (-not $env:QUIPU_SELF_ORGANISING) { $env:QUIPU_SELF_ORGANISING = "1" }
+
 $stepCode = "import sys; sys.path.insert(0, '.'); from src.quipu import system_entirety as se; " +
             "import json; print(json.dumps(se.oscillating_expansion_step()))"
 
