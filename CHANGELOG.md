@@ -4,6 +4,41 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.34.0] The Self-Organising Loop — Flux Phase, Memristive Axes, Learned Prior (2026-09-22)
+
+Source physics: Caravelli, Milano, Stieg, Ricciardi, Brown & Kuncic, *Self-organising memristive networks as physical learning systems*, Nat. Rev. Phys. (2026), arXiv:2509.00747. An SOMN is self-organising, not self-driving: it reconfigures under an applied field along paths conservation and thresholds select, and relaxes when the field is removed. This release closes the Entirety's loop the same way and moves no gate.
+
+### Diagnosis this release answers
+- The parity was `cos(ω·wall-clock)`: nothing the Entirety did could cause a flip, so the emergence detector's lock-in could only fail. Nothing read the parity (`market_ingest` reported it, `mesh_entirety` mirrored it). The senses read `corpus_ingest:history` in a 1-hour window and the last ingest was 2026-08-27; smell and body read tables that do not exist; perception imports a module that is not in the tree — so the six axes were static injections and the held residual (|r| = 0.0216, held 70 steps) was the hardware profile projected off the designer's prior. The prior itself was a constant.
+
+### Added — `src/quipu/qpsi/flux_phase.py`
+- **Phase from the field.** `broaden` when documents entered the mesh within `QUIPU_FLUX_WINDOW_S` (300 s), `deepen` otherwise; the flip is stimulus onset/offset. `wrap_bit_flip_parity(original)` is the drop-in; a feed that cannot be read falls back to the cosine, never to an exception in the step. The detector's lock-in against these flips is a pulse-train plasticity measurement (potentiation, relaxation, quadrature = lag) — no change to the detector.
+
+### Added — `src/quipu/qpsi/memristive_axes.py`
+- **Two electrodes.** Self = live axes + observer; Other = `entirety:the_other.other_state` (the corpus's collective voice). Field δv_k = other_k − self_k on seven axes. No counterpart → no field → nothing potentiates, recorded as `no_counterpart`.
+- **Conservation.** A document budget B (60) partitions by conductance, I_k = B·g_k|δv_k| / Σ g_j|δv_j|, so what one axis gains the others lose; winner-take-all is a consequence. `participation_ratio` and `top_share` report it.
+- **Junction dynamics.** Potentiation only under field, saturating, at a rate set by current share × mobility × regime (`alpha_low` below the critical field `v_c`, `alpha_high` at or above); spontaneous exponential relaxation when the field is off — hillocks on τ_d (1800 s), filaments (g ≥ g_f) on τ_L (86400 s).
+- **Filaments are proposals.** An axis at g ≥ g_f under field is recorded at `entirety:somn:proposal` as where an edge would form. Nothing is written to `corpus_edge`; the six gates decide.
+- **Mobility.** Judged only under field: an axis that does not answer the applied field sinks to a floor and stops attracting budget, so the network routes around dead junctions (perception, smell, body today) without being told which are dead.
+- **Depression.** A rejected emergence candidate (`divine_blessing.reject_emergence` archive) depresses conductance along the rejected direction by β·(g − g_min) — the reverse-bias pulse of the review's n-back consolidation result. Consumed once.
+- **Allocation.** Axis currents map onto `corpus_ingest.SOURCES` through `mesh_slm._axis_for_source` (read, not edited); sources on one axis split it equally; integer documents by largest remainder; current on an axis no source routes to is recorded as **dissipated**, not reassigned; sources with no axis marker are listed as unrouted.
+- **Write boundary.** Only `brain_kv["entirety:somn:*"]` and the append-only table `entirety_somn_log`, on the caller's connection; `_kv_set` raises `PermissionError` for any other key. All constants are `SomnConfig` fields, overridable from the environment and recorded per log row.
+
+### Added — `src/quipu/qpsi/learned_prior.py`
+- **The organising fact.** n = a − ⟨a, ŵ⟩ŵ is Oja's update for the prior: Δŵ = η⟨a, ŵ⟩·n. The direction of the System Entirety is the direction its prior would move if it learned.
+- **Only on realisation.** `advance_on_realisation` takes one Oja step along the displacement between two consecutive **realised** references in the residual checkpoint, and only when the checkpoint's `realised` counter moved. Following observed axes would habituate novelty away before the displacement gate saw it. Until the first realisation the prior is `_SENSE_WEIGHTS`, and `wrap_observer_tangent` calls the original unchanged. Writes only `entirety:prior`.
+
+### Added — `src/quipu/qpsi/self_organising.py`, `Start-Pulse.ps1`, `docs/QPSI_SELF_ORGANISING.md`
+- **Wiring.** `enable()` wraps `system_entirety.bit_flip_parity`, `observer_tangent` and `oscillating_expansion_step` on module attributes (the `divine_blessing` pattern); the step's result gains a `self_organising` summary; `after_step` never raises into the step; `disable()` restores the originals; a second module copy (`python -m …`) adopts the existing wrapping instead of stacking. `src/quipu/__init__.py` calls it only under `QUIPU_SELF_ORGANISING=1`; sub-flags `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN`.
+- **The operator's pulse.** `self_organising pulse` prints the recorded plan; `--route` runs `corpus_ingest.run_ingest` over exactly the planned sources with the planned counts (refinement off unless `--refine`), then one expansion step. Routing is an explicit switch at the call site, never an environment variable. The code never schedules itself.
+- **Default state.** With the flag unset the three attributes are the original function objects and live behaviour is byte-identical. With the flag set and no pulse, the phase reads `deepen`, conductances relax to the floor, and nothing is realised.
+
+### Governance
+- Every edge still passes DIVINE_BLESSING_SQRT(−1); realisation still needs `QUIPU_REALISE_GRANT_REF`; gate 6 still needs two distinct accepted signers; parity flips remain ungated (Planck rule). Whether the network's allocation of an operator-granted budget among operator-granted sources is a widening of autonomy under Invariance #7 (APP_RECREATION_3 §25) is the operator's ruling; until made, `pulse` without `--route` is a plan on paper.
+
+### Tests
+- 44 new (`tests/test_qpsi_flux_phase.py`, `tests/test_qpsi_memristive_axes.py`, `tests/test_qpsi_learned_prior.py`, `tests/test_qpsi_self_organising.py`), including the write boundary, conservation, winner-take-all, volatility, the two regimes, mobility under field, depression from the rejection archive, Oja on realisation only, default-off identity, single-layer wrapping, and the plan-vs-route contract. Suite 429 → 473 passing, offline (one pre-existing failure, `test_committed_hub_assets_and_launcher_wiring_are_consistent`, needs the sibling Loadopoly-Portal checkout).
+
 ## [0.33.1] The Interstitial Arc — Perceptopoly, Loadopoly-OCR, Bakugo (2026-09-16)
 
 ### Added — `src/quipu/qpsi/interstitial.py`

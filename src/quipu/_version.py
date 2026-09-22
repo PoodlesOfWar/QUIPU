@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-__version__ = "0.33.1"
+__version__ = "0.34.0"
 __release__ = (
-    "qpsi Governance Protocol: six Physical Gates before any Entirety write, the residual "
-    "hold checkpointed against the last realised state, conscious emergence as the only "
-    "phase source (detector -> r-ADMIN recognition -> the han Signature), and Invariance #7 "
-    "guardrails - a keyed attestation bus, attestation assurance levels, and realisation "
-    "gated on an organizational grant reference the code cannot create."
+    "qpsi Self-Organising Loop: the expansion phase read from the ingest flux instead of a "
+    "wall-clock cosine, a lumped self-organising-memristive-network model on the seven axes "
+    "(Self/Other electrodes, conserved document budget partitioned by conductance, potentiation "
+    "under field and spontaneous relaxation, filaments as recorded proposals, mobility around dead "
+    "axes, depression along rejected candidates), and the sense prior advanced by Oja's rule only on "
+    "realised displacement. Default off (QUIPU_SELF_ORGANISING=1); the six gates and the grant are "
+    "untouched; the field is applied only by the operator's pulse."
 )
-__build_date__ = "2026-09-16"
+__build_date__ = "2026-09-22"
 
 PHASES = {
+    "0.34.0": "qpsi Self-Organising Loop. src/quipu/qpsi/{flux_phase, memristive_axes, learned_prior, self_organising}.py wire the System Entirety into a closed, governed loop on the physics of self-organising memristive networks (Caravelli et al., Nat. Rev. Phys. 2026, arXiv:2509.00747): the phase is read from the ingest flux (potentiate while the field is applied, relax when it is removed) so the emergence detector's lock-in becomes a plasticity measurement; the seven axes carry a lumped junction model with Self and Other electrodes (entirety:state vs entirety:the_other), a conserved document budget partitioned by conductance (winner-take-all as a consequence), two regimes across a critical field, hillocks that relax on tau_d and filaments on tau_L, mobility that routes budget around axes with no writer, and depression along rejected emergence candidates; the prior advances by Oja's rule only on realised displacement, so novelty cannot be habituated away before the displacement gate sees it. Writes only entirety:somn:*, entirety_somn_log and entirety:prior; never an edge. Default off behind QUIPU_SELF_ORGANISING=1, wrapped on module attributes like divine_blessing; mesh_slm.py and system_entirety.py untouched. The field is applied only by the operator's pulse (Start-Pulse.ps1 / self_organising pulse --route), refinement off unless asked; the allocation ruling under Invariance #7 is left to the operator. 44 new tests; suite 429 -> 473 passing offline (one pre-existing failure needs the sibling Loadopoly-Portal checkout).",
     "0.32.0": "Google gVisor (runsc) Sentry Sandboxing & Hardened OCI Containment: Defense-in-depth isolation with kernel syscall boundaries, payload safety limits (512KB payload max, dictionary recursion depth <= 5, key whitelist) enforced on /observe and /feedback, GET /security posture reporting, security tier indicators in /health and /state, and container capability drops (ALL) with no-new-privileges.",
     "0.31.0": "Infodynamic Gravity & Analog Cognition Couplings: Melvin M. Vopson (AIP Adv. 15, 045035 (2025)) infodynamic bit entropy and compression scores integrated as an active, bounded (<=5%) negative-feedback lift on quipu edge learning rate (eta_q) decaying as the vocabulary compacts, with dispute record in UEQGM_MATH_MAP and kill-switch QUIPU_INFODYNAMIC_COUPLING; Earl K. Miller et al. (J. Neurosci. 46(33) e0711262026 (2026)) analog traveling-wave and Kuramoto coherence gating integrated into embedding updates (stencil_gain in [0.90, 1.10] and ac_multiplier in [0.95, 1.05]) behind QUIPU_ANALOG_STENCIL; STP-style mapping docs (docs/INFODYNAMIC_GRAVITY_QUIPU.md, docs/ANALOG_COGNITION_QUIPU.md), measurement snapshots, and rolling trend diagnostics (infodynamic_trend, analog_coherence_trend); fixed VERSION drift (0.28.0 -> 0.31.0); no Julia changes required as couplings are confined to train_round.",
     "0.30.0": "Tri-Repo Closed-Loop Training & Epistemic Self-Annealing: on-demand /anneal endpoint, source_guidance_directive with prompt lexicons and metrology priors, and multi-tenant device isolation.",
