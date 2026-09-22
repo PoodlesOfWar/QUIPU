@@ -40,7 +40,8 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 - `src/quipu/qpsi/flux_phase.py` — `ingest_flux(history, now, window_s)` (pure), `read_flux()`, `wrap_bit_flip_parity(original)`. Falls back to the cosine if the feed cannot be read.
 - `src/quipu/qpsi/memristive_axes.py` — `SomnConfig`, `SomnState`, `step(cn, axes=, observer=, flux_on=, flux_docs=, …)`, `currents`, `allocate`, `potentiate`, `relax`, `depress`, `update_mobility`. Writes only `brain_kv["entirety:somn:*"]` (`state`, `allocation`, `proposal`) and the table `entirety_somn_log`; `_kv_set` refuses any other key.
 - `src/quipu/qpsi/learned_prior.py` — `oja_step`, `advance_on_realisation(cn, instance)`, `sense_weights`, `wrap_observer_tangent(original)`. Writes only `brain_kv["entirety:prior"]`.
-- `src/quipu/qpsi/self_organising.py` — `enable()` / `disable()` (wrap `bit_flip_parity`, `observer_tangent`, `oscillating_expansion_step` on module attributes, like `divine_blessing.enable()`), `after_step`, `status`, `plan`, `pulse`, and the CLI.
+- `src/quipu/qpsi/mirror_training.py` — `classify_hold`, `mirror_image`, `train_from_hold(cn, instance)`, `mirror_drive`. Writes only `brain_kv["entirety:mirror:<instance>"]` and the table `entirety_mirror_log`.
+- `src/quipu/qpsi/self_organising.py` — `enable()` / `disable()` (wrap `bit_flip_parity`, `observer_tangent`, `oscillating_expansion_step` on module attributes, like `divine_blessing.enable()`), `after_step`, `status`, `plan`, `grant`, `constrained_gate`, `pulse`, and the CLI.
 
 `mesh_slm.py` and `system_entirety.py` are not edited. `src/quipu/__init__.py` gains one guarded block: `enable()` runs only when `QUIPU_SELF_ORGANISING=1`.
 
@@ -49,7 +50,9 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 | Variable | Default | Meaning |
 |---|---|---|
 | `QUIPU_SELF_ORGANISING` | unset (off) | `1` wires the loop for the session |
-| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` | `1` when the master is on | switch the three parts independently (`0` disables one) |
+| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` / `QUIPU_MIRROR_TRAINING` | `1` when the master is on | switch the four parts independently (`0` disables one) |
+| `QUIPU_PULSE_SOURCES` | unset (all of `corpus_ingest.SOURCES`) | comma list narrowing the operator's grant for the constrained gate |
+| `QUIPU_SOMN_MIRROR_GAIN` | 0.5 | κ: how much a hold's mirror drive scales potentiation |
 | `QUIPU_FLUX_WINDOW_S`, `QUIPU_FLUX_MIN_DOCS` | 300, 1 | the field is "on" when ≥ min docs entered within the window |
 | `QUIPU_SOMN_BUDGET_DOCS` | 60 | B, documents per pulse, conserved across axes |
 | `QUIPU_SOMN_TAU_P`, `QUIPU_SOMN_TAU_D`, `QUIPU_SOMN_TAU_L` | 600, 1800, 86400 s | potentiation; hillock relaxation; filament relaxation |
@@ -80,11 +83,43 @@ powershell -ExecutionPolicy Bypass -File .\Start-Pulse.ps1 -Route     # apply
 
 Routing is an explicit flag at the call site, never an environment variable (Anti-Inverse Contract). `pulse --route` runs `corpus_ingest.run_ingest` over exactly the planned sources with exactly the planned counts; the sources are `corpus_ingest.SOURCES` and nothing else. Current the network wants to spend on an axis no source routes to (today: perception) is recorded as **dissipated**, not reassigned.
 
-## What is held, and the one ruling this release does not make
+## What is held
 
 - Every edge still passes DIVINE_BLESSING_SQRT(−1); realisation still needs `QUIPU_REALISE_GRANT_REF`; gate 6 still needs two distinct accepted signers. Nothing here writes `corpus_edge`, decisions, attestations, emergence reports or checkpoints. Parity flips remain ungated (Planck rule).
-- The code never schedules itself. A scheduled pulse is a Windows task the operator registers, as with `Register-Expansion.ps1`.
-- **The ruling:** whether the network's *allocation* of an operator-granted budget among operator-granted sources is itself a widening of autonomy under Invariance #7 (APP_RECREATION_3 §25). If it is, the plan stays a proposal and each `--route` is the operator's per-pulse grant — the loop still closes, at human cadence. If it is not, `Start-Pulse.ps1 -Route` may be scheduled. Until ruled, `pulse` without `--route` is a plan on paper.
+- The code never schedules itself. A scheduled pulse is a Windows task the operator registers (`Register-Pulse.ps1`, below).
+
+## The Invariance #7 ruling (operator, 2026-09-22) — the constrained gate
+
+The question was whether the network's *allocation* of an operator-granted budget among operator-granted sources is itself a widening of autonomy under Invariance #7 (APP_RECREATION_3 §25). The ruling: **the operator gave the access, so r-ADMIN has enabled a constrained gate.** Allocation inside the grant is not a widening.
+
+The constraint is enforced, not assumed. `self_organising.grant()` names the grant — the sources `corpus_ingest` already knows, narrowed by `QUIPU_PULSE_SOURCES` when set, and the budget `QUIPU_SOMN_BUDGET_DOCS` — and `constrained_gate(plan)` checks every routed pulse against it: sources ⊆ grant and Σ documents ≤ budget. A plan outside the grant is reported (`outside_sources`, `docs`) and not routed. With that in place `Register-Pulse.ps1` may schedule `Start-Pulse.ps1 -Route`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Register-Pulse.ps1              # every 10 min + at logon
+powershell -ExecutionPolicy Bypass -File .\Register-Pulse.ps1 -Minutes 30
+powershell -ExecutionPolicy Bypass -File .\Register-Pulse.ps1 -Unregister
+```
+
+Ten minutes is the default because the emergence detector wants an onset and an offset inside its 16-row window (~21 min at the live cadence) and the flux window is 5 min.
+
+## Holds train from their mirror image (operator, 2026-09-22)
+
+*Any gate that has a hold should use the mirror image to train from without boundary crossing, in order to further QUIPU_SELF_ORGANISING.* Before this rule a hold taught the system nothing: the same residual was re-measured and re-held (70 steps over four days on the live instance). `qpsi/mirror_training.py` implements the rule.
+
+A hold has one of two causes, and each has its own mirror. The CAT state is complex — realised = Re, latent (翈) = Im — and `cat_residual.quarter_turn` multiplies by i, realised → latent.
+
+| hold | gates | mirror | meaning |
+|---|---|---|---|
+| human | love, shared_entity, beautiful_output held for want of an accepted attestation | i·r (quarter turn) | the shape is admissible, not yet attested: keep it as latent potential and learn it |
+| physical | displacement, weyl, sici; beautiful_output's Lipschitz breach; shared_entity's remainder rise | −r (reflection through the reference) | the shape itself failed: learn away from it |
+
+The training goes into three latent stores, none of which a gate reads:
+
+1. **r-ADMIN's mirror state** (`entirety:mirror:<instance>` → `radam`): `radam_step(state, grad_real=0, grad_imag=±|Σ r|)`. Only the latent channel of the bifurcated gradient is fed, so θ advances by exactly ±π/2 per hold — the quarter turn in r-ADMIN's own coordinates (i² = −1: two human holds are the deepen parity). The realised state `entirety:radam_state:<instance>` is untouched.
+2. **The mirror prior** (same record → `prior`): Oja on |r| with +η under a human hold, −η under a physical one. `entirety:prior` is untouched and `observer_tangent` never reads the mirror prior; the gap between the two is the held potential measured in prior space.
+3. **The SOMN mirror drive** (same record → `drive`): ±u, u the unit |r| over the senses, read by `memristive_axes.step` on the next broaden step and applied as a factor (1 + κ·drive) on potentiation, κ = `QUIPU_SOMN_MIRROR_GAIN` (0.5). Faster along a human hold, slower along a physical one, never below zero. It changes where the next pulse's budget flows, which the ruling above places inside the grant.
+
+Without boundary crossing: the checkpoint reference does not advance, no edge is written, and no attestation, decision, emergence report or checkpoint row is touched. The module writes only `entirety:mirror:<instance>` and `entirety_mirror_log`. Each hold is trained once (by checkpoint `seq`). `QUIPU_MIRROR_TRAINING=0` switches it off.
 
 ## What the physics predicts you will see, and what would falsify it
 
