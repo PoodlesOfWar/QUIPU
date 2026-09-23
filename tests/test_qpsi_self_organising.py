@@ -317,3 +317,26 @@ def test_coherency_depth_flag_alone_wraps_the_scorer_only(isolated):
     so.disable()
     so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False, coherency_depth=False))
     assert mesh_slm._score_candidates is orig_scorer
+
+
+def test_a_failed_accretion_is_rolled_back_whole_and_the_step_still_commits(isolated, monkeypatch):
+    from src.quipu.qpsi import coherency_depth as cd
+    so.enable()
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    _flux_on()
+
+    def _half_then_fail(cn, **kw):
+        cd.ensure_tables(cn)
+        cn.execute(f"INSERT INTO {cd.TABLE_DEPTH}(token_id, depth, halted_by, kl, planes, updated_at) "
+                   "VALUES(1, 1, 'no_plane', NULL, '[0, 1]', 'x')")
+        raise RuntimeError("lattice mid-rebuild")
+
+    monkeypatch.setattr(cd, "accrete", _half_then_fail)
+    out = system_entirety.oscillating_expansion_step(force=True)
+    so_out = out["self_organising"]
+    assert "error" not in so_out and so_out["planes"] == {"error": "lattice mid-rebuild"}
+    with system_entirety._conn() as cn:                                                  # rolled back whole:
+        assert cn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name=?",             # not even the table
+                          (cd.TABLE_DEPTH,)).fetchone()[0] == 0
+    assert brain_kv.kv_get_json(ma.KV_STATE) is not None                                 # the SOMN step committed
+    assert brain_kv.kv_get_json(cd.KV_SUMMARY) is None                                    # still fresh: retried next step

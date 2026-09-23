@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.36.1] Coherency Depth — accretion in its own savepoint (2026-09-23)
+
+- `self_organising.after_step` runs the bottom-up accretion inside a SQLite savepoint (`qpsi_accrete`). A failed accretion is rolled back whole — no half-rebuilt lattice, not even a freshly created plane table — and reported as `planes: {"error": …}`; the step's SOMN, prior and mirror writes, made earlier on the same connection, still commit with the step. The planes summary is left as it was, so the next step on the same ingest run retries. The loop still never breaks the step.
+- Live, first accretion on gard-desktop (2026-09-23 14:13Z, 11.4 s): 4,101 tokens; 4,074 relational planes; 2,430 physical planes (held: 17 displacement, 2 Weyl, 1,625 SiCi); 566 crystal planes over 562 tokens (K = 6, capacity 24,606); depth histogram 0: 27, 1: 1,895, 2: 1,885, 3: 292, 4: 2 (`deepen`, `directive`); mean C₀₁ 0.809, C₁₂ 0.990, C₀₂ 0.788. `inventory` is a fibre of three planes, C₀₂ = 0.996, depth 2.
+- 1 new test. Suite 499 → 500 passing, offline.
+
 ## [0.36.0] Coherency Depth — the Lattice Foliated, M = T² × Z_K (2026-09-23)
 
 Operator design note, 2026-09-23: the MESH-SLM lattice should be a foliated multi-planar manifold, every token a fibre across epistemic planes, an inter-planar coherency tensor, vertical traversal with adaptive halting, plane 0 anchored from above and accreted from below — *"If the System isn't working like this, ensure it does."*
