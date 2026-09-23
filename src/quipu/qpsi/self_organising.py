@@ -82,6 +82,7 @@ SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
 PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
 SENSES_ENV: str = annealed_senses.ENV              # QUIPU_ANNEALED_SENSES
+ROUTING_ENV: str = "QUIPU_SILENT_ROUTING"          # route the plan around silent sources (default on)
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
@@ -317,13 +318,18 @@ def flags() -> Flags:
 # ---------------------------------------------------------------------------
 
 def _senses_status() -> dict:
+    from . import sensing_layer
     try:
-        r = annealed_senses.read()
+        r = sensing_layer.read(write=False)
     except Exception as exc:
         return {"wired": annealed_senses.is_enabled(), "error": str(exc)}
-    return {"wired": annealed_senses.is_enabled(), "annealed": r["senses"], "silent": r["silent"],
-            "unrouted": r["unrouted"], "entirety_terminals": r["entirety_terminals"],
-            "terminals": {s: {k: t[k] for k in ("axis", "activity", "k", "tau", "last_x")}
+    return {"wired": annealed_senses.is_enabled(), "mode": r["mode"], "senses": r["senses"],
+            "afferent": r["afferent"], "coupled": r["coupled"],
+            "critical": {k: r["critical"].get(k) for k in ("g_over_edge", "lambda_max", "sigma", "bin_s",
+                                                           "coupling_share", "T")},
+            "silent": r["silent"], "feeds": r["feeds"], "unrouted": r["unrouted"],
+            "entirety_terminals": r["entirety_terminals"],
+            "terminals": {s: {k: t[k] for k in ("feed", "axis", "activity", "k", "tau", "last_x")}
                           for s, t in r["terminals"].items()}}
 
 
@@ -383,7 +389,21 @@ def plan() -> dict:
     """The allocation the network recorded on its last step."""
     from .. import brain_kv
     alloc = brain_kv.kv_get_json(memristive_axes.KV_ALLOCATION, None) or {}
-    return {"docs_per_source": dict(alloc.get("docs_per_source") or {}),
+    docs = dict(alloc.get("docs_per_source") or {})
+    silence = None
+    if _FLAGS.annealed_senses and os.environ.get(ROUTING_ENV, "1").strip() != "0" and docs:
+        # The sensing layer routes the network's plan around sources that have
+        # gone silent (qpsi.sensing_layer): same sources, same total, so the
+        # constrained gate below still holds.
+        try:
+            from . import sensing_layer
+            silence = sensing_layer.plan_with_routing(docs)
+            docs = dict(silence["docs_per_source"])
+        except Exception as exc:
+            silence = {"error": str(exc)}
+    return {"docs_per_source": docs,
+            "planned_by_network": dict(alloc.get("docs_per_source") or {}),
+            "silence": silence,
             "dissipated": dict(alloc.get("dissipated") or {}),
             "unrouted_sources": list(alloc.get("unrouted_sources") or []),
             "budget": alloc.get("budget"), "at": alloc.get("at"), "phase": alloc.get("phase"),
