@@ -72,7 +72,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from . import coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training
+from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
@@ -81,6 +81,7 @@ PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
 PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
+SENSES_ENV: str = annealed_senses.ENV              # QUIPU_ANNEALED_SENSES
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
@@ -105,13 +106,15 @@ class Flags:
     somn: bool = True
     mirror_training: bool = True
     coherency_depth: bool = True
+    annealed_senses: bool = True
 
     @classmethod
     def from_env(cls) -> "Flags":
         def on(name: str) -> bool:
             return os.environ.get(name, "1").strip() != "0"
         return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
-                   mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV))
+                   mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV),
+                   annealed_senses=on(SENSES_ENV))
 
 
 _FLAGS = Flags()
@@ -247,6 +250,11 @@ def enable(flags: Flags | None = None) -> bool:
         se.observer_tangent = learned_prior.wrap_observer_tangent(se.observer_tangent)
         setattr(se.observer_tangent, MARK, True)
 
+    if _FLAGS.annealed_senses:
+        # The six senses read by self-annealing terminals (qpsi.annealed_senses):
+        # temporal_spatiality._sense_signals is wrapped, restored by disable().
+        annealed_senses.enable()
+
     if _FLAGS.coherency_depth:
         # Top-down anchoring: candidates are re-scored by their deep planes.
         # mesh_slm.py is not edited; the module attribute is wrapped, as above.
@@ -292,6 +300,7 @@ def disable() -> None:
     if "mesh_slm._score_candidates" in _ORIGINALS:
         from .. import mesh_slm
         mesh_slm._score_candidates = _ORIGINALS.pop("mesh_slm._score_candidates")
+    annealed_senses.disable()
     _ENABLED = False
 
 
@@ -306,6 +315,17 @@ def flags() -> Flags:
 # ---------------------------------------------------------------------------
 # Status and the operator's pulse
 # ---------------------------------------------------------------------------
+
+def _senses_status() -> dict:
+    try:
+        r = annealed_senses.read()
+    except Exception as exc:
+        return {"wired": annealed_senses.is_enabled(), "error": str(exc)}
+    return {"wired": annealed_senses.is_enabled(), "annealed": r["senses"], "silent": r["silent"],
+            "unrouted": r["unrouted"], "entirety_terminals": r["entirety_terminals"],
+            "terminals": {s: {k: t[k] for k in ("axis", "activity", "k", "tau", "last_x")}
+                          for s, t in r["terminals"].items()}}
+
 
 def status() -> dict:
     from .. import brain_kv
@@ -329,6 +349,7 @@ def status() -> dict:
                    "radam": {k: mirror["radam"].get(k) for k in ("t", "theta", "pressure")}},
         "grant": grant(),
         "planes": planes,
+        "senses": _senses_status(),
         "config": cfg.to_json(),
     }
 

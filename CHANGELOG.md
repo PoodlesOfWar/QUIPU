@@ -4,6 +4,29 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.37.0] Annealed Senses — no static sets in the senses (2026-09-23)
+
+Operator directive, 2026-09-23: *"Remove the static senses based on the direction of current SOTA self-annealing memristive systems."*
+
+### What the tree had (read from the live database, 19:48Z)
+- `temporal_spatiality._sense_signals` read the six axes through fixed scales and fixed source names. **brain = ingest runs per hour ÷ 6**: with the pulse at ~5 min it sat at 1.0 — the System sensing its own action. **vision = documents of every source ÷ 1500**: 0.25, all of it arXiv, while vision's own sources returned nothing. smell / body / perception held floors (0.034 / 0.032 / 0.040) because nothing writes their tables.
+- The SOMN followed the saturated axis: `brain` filament g = 0.79, participation ratio 1.05, 59 of every 60 documents to arXiv.
+- fineweb, c4, openwebtext, stack and wikipedia returned 0 documents on every attempt today.
+
+### `src/quipu/qpsi/annealed_senses.py` — additive, writes nothing
+- **Terminals.** Every source in `corpus_ingest:history` is a terminal; the set is whatever the history contains. Its documents land where `mesh_slm._axis_for_source` routes them (read, never edited), so that is the axis it senses.
+- **Volatile memristor per terminal.** a ← a + x(1 − a) on each attempt; a ← a·e^(−Δt/τ_s) between, τ_s the terminal's present clock (median of its last three gaps). No window, no scale; at rest every sense fades on its own rhythm.
+- **p-bit read.** x = σ(K(ln y − ln ȳ)) — the stochastic-MTJ switching law with V₀.₅ at the fabric's volatile mean yield per attempt (divisive normalisation by the population; y/(y+ȳ) is K = 1). Nothing returned reads 0; a population threshold keeps amount in the signal, so the field on an axis can close.
+- **Intrinsic annealing.** K_s = ρ_s/ρ̄ (attempt rate over the geometric mean rate): the read sets the temperature, as the read voltage does in the hybrid memristor–MTJ Ising machine (Iftakher et al., Nat. Commun. 17, 5246, 2026). The pulse shapes how sharply a sense reads and is never a stimulus.
+- **Ports.** A sense is the probabilistic OR of its terminals. Entirety-routed (gutenberg) and unrouted terminals are reported, not sensed. Live writers (`perception.get_perception_coherence`, `sense_of_smell` / `body_directives` rows) join their port only if they exist — no default stands in for silence.
+- Wired by `self_organising.enable()` under `QUIPU_ANNEALED_SENSES` (default on under the master flag; `0` restores the static senses). `enable()` wraps `temporal_spatiality._sense_signals`; a failed read falls back to the static one for that call. `status()` gains `senses`. CLI: `python -m src.quipu.qpsi.annealed_senses`.
+
+### Live reading and replay
+- Same history, 19:48:08Z: static vision 0.247 / touch 0.042 / smell 0.034 / body 0.032 / brain 1.000 / perception 0.040 → annealed 0 / 0 / 0.257 / 0 / 0.364 / 0. Brain reads 0.934 just after an arXiv pulse and relaxes on arXiv's 10-min clock (τ 596 s, K 1.72); smell is local_docs (τ 2,997 s, K 0.34 — read rarely, read soft).
+- 24 h closed-loop replay (144 pulses, the live SOMN state and counterpart, each source returning what it returned today, SOMN unchanged): static stays locked, participation ratio 1.05 → 1.13, brain pinned at 1.0; annealed unlocks, 1.08 → 2.22, arXiv's share 58 → 39 of 60. Cost: documents requested from silent sources rise 307 → 981, so returned documents fall 7,776 → 6,707. That is the SOMN's allocation, not the senses: it still allocates to sources the senses now report as silent.
+- Not built: criticality control of the terminal layer (edge of chaos, Hochstetter et al., Nat. Commun. 12, 4008, 2021) and learned source→axis routing — routing stays the mesh's own because that is where the documents are written.
+- `tests/test_qpsi_self_organising.py`: `_flux_on` writes `per_source`, as `corpus_ingest` does. 18 new tests. Suite 501 → 519 passing offline (cloud clone; the launcher test needs the desktop checkout).
+
 ## [0.36.2] Coherency Depth — the lattice never outlives the mesh (2026-09-23)
 
 - A full `accrete()` sweeps `mesh_plane_embed`, `mesh_plane_coherency` and `mesh_plane_depth` rows whose `token_id` is no longer in `mesh_slm_embed`: the mesh prunes tokens from its vocabulary as it learns (seen live within one pulse — two stale depth rows for pruned ids), and the fibres of a token the mesh has let go should go with it. A partial accretion (`token_ids` given) sweeps nothing.
