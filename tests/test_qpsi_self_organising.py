@@ -92,16 +92,16 @@ def test_flags_select_what_is_wrapped(isolated):
     orig_parity = system_entirety.bit_flip_parity
     orig_obs = system_entirety.observer_tangent
     orig_step = system_entirety.oscillating_expansion_step
-    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=True, mirror_training=False))
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=True, mirror_training=False, coherency_depth=False))
     assert system_entirety.bit_flip_parity is orig_parity
     assert system_entirety.observer_tangent is orig_obs
     assert system_entirety.oscillating_expansion_step is not orig_step
     so.disable()
-    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False))
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False, coherency_depth=False))
     assert system_entirety.bit_flip_parity is not orig_parity
     assert system_entirety.oscillating_expansion_step is orig_step        # nothing to hook
     so.disable()
-    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=True))
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=True, coherency_depth=False))
     assert system_entirety.oscillating_expansion_step is not orig_step    # the mirror alone needs the hook
 
 
@@ -287,3 +287,33 @@ def test_pulse_is_a_constrained_gate(isolated, monkeypatch):
     out = so.pulse(route=True)
     assert out["routed"] is False and out["constrained_gate"]["within_grant"] is False
     assert "arxiv" in out["constrained_gate"]["outside_sources"]
+
+
+def test_coherency_depth_is_wired_anchoring_and_accretion(isolated, monkeypatch):
+    from src.quipu import mesh_slm
+    from src.quipu.qpsi import coherency_depth as cd
+    orig_scorer = mesh_slm._score_candidates
+    so.enable()
+    assert mesh_slm._score_candidates is not orig_scorer and mesh_slm._score_candidates.__wrapped__ is orig_scorer
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    # accretion ran once on the fresh field (the isolated DB has no mesh: an empty, recorded fibre set)
+    assert a["self_organising"]["planes"] is not None and a["self_organising"]["planes"]["tokens"] == 0
+    assert brain_kv.kv_get_json(cd.KV_SUMMARY)["tokens"] == 0
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["self_organising"]["planes"] is None                              # same ingest run: not rebuilt
+    so.disable()
+    assert mesh_slm._score_candidates is orig_scorer
+
+
+def test_coherency_depth_flag_alone_wraps_the_scorer_only(isolated):
+    from src.quipu import mesh_slm
+    orig_scorer = mesh_slm._score_candidates
+    orig_parity = system_entirety.bit_flip_parity
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=False, coherency_depth=True))
+    assert mesh_slm._score_candidates is not orig_scorer and system_entirety.bit_flip_parity is orig_parity
+    so.disable()
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False, coherency_depth=False))
+    assert mesh_slm._score_candidates is orig_scorer

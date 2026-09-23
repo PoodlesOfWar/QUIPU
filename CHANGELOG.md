@@ -4,6 +4,31 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.36.0] Coherency Depth — the Lattice Foliated, M = T² × Z_K (2026-09-23)
+
+Operator design note, 2026-09-23: the MESH-SLM lattice should be a foliated multi-planar manifold, every token a fibre across epistemic planes, an inter-planar coherency tensor, vertical traversal with adaptive halting, plane 0 anchored from above and accreted from below — *"If the System isn't working like this, ensure it does."*
+
+### What the tree had (verified on the live database)
+- One cell (i, j) and one 7-D representation per token: 4,101 tokens, 4,096 cells occupied, 1,022,861 quipu edges, three ACRE emergent specialists. Planes existed only in `mesh_slm._mcd_multiplanar_score`, as transient planes over the *mesh state* used to score the next token; `recurrent_depth.py` is an ensemble-vote aggregator with KL halting, not a lattice traversal; `coherence_depth` in the Julia models and the UEQGM runtime is one scalar for the whole mesh. No token had a representation per plane, no coherency between planes was measured, nothing descended. A flat lookup table.
+
+### `src/quipu/qpsi/coherency_depth.py` — the foliation, additive
+- **Fibres.** T(t) = [t⁽⁰⁾, t⁽¹⁾, t⁽²⁾, t⁽³⁺ˢ⁾] ∈ T² × Z_K. Plane 0 is `mesh_slm_embed` as it is (read, never written). Plane 1 is the token's image in its own graph, the quipu-weight-weighted mean of its out-neighbours' surface representations. Plane 2 is the physical invariant: δ = t⁽¹⁾ − t⁽⁰⁾ on the six senses, carried at the Entirety's emergence phase, through the three physical gates of the Governance Protocol — displacement, Weyl, SiCi — as a test of admissibility (no attestation, nothing realised); admissible → t⁽²⁾ = t⁽⁰⁾ + the trace-free (Weyl) part of δ, the Ricci part held as gate 2 holds it for the Entirety; held → no plane 2. Planes 3+s are ACRE crystals, t⁽⁰⁾ + bias_s, present only when the token phase-locks under the Floquet drive: J₀(A/ω) · fidelity(t⁽⁰⁾, bias_s) ≥ `lock_min`.
+- **Coherency tensor.** C_{k₁,k₂}(t) = |⟨ψ(t⁽ᵏ¹⁾)|ψ(t⁽ᵏ²⁾)⟩|², the Born fidelity `ueqgm_engine.wavefunction_overlap`, stored for every pair of planes a token has.
+- **Vertical traversal.** (i, j, k) → (i, j, k+1) down the fibre; halts when the next plane is absent (`no_plane`) or KL(plane k+1 ‖ plane k) over the seven axes falls below ε (`converged`) — `recurrent_depth`'s adaptive halting applied to the corridor. The depth reached is the token's coherency depth, stored per token.
+- **Bottom-up accretion.** `accrete(cn)` rebuilds every fibre from the current graph; `self_organising.after_step` runs it once per new ingest run, so new learning lands on plane 0 and climbs as far as the physical gates let it.
+- **Top-down anchoring.** `wrap_score_candidates` is installed on `mesh_slm._score_candidates` by `self_organising.enable()` (the `divine_blessing` pattern): a token with plane 2 has its surface alignment ⟨t⁽⁰⁾, mesh⟩ corrected toward ⟨t⁽²⁾, mesh⟩ by λ·C₀₂(t); its best-locked crystal adds λ·C₀ₖ·(⟨t⁽ᵏ⁾, mesh⟩ − ⟨t⁽⁰⁾, mesh⟩); candidates re-sorted; ungrounded tokens untouched; any failure returns the original candidates.
+- **Capacity.** 4,101 × K epistemic states, K = 3 + number of emergent specialists, in place of 4,101 points.
+- **Boundary.** Writes only `mesh_plane_embed`, `mesh_plane_coherency`, `mesh_plane_depth` and `brain_kv["entirety:planes:*"]`; `_kv_set` refuses any other key; `mesh_slm_vocab`, `mesh_slm_embed`, `mesh_slm_quipu`, `mesh_slm_meta` are never written (held byte-identical in the tests). No edge, no checkpoint, no attestation. Generation is not a gated write path; edges still are. `mesh_slm.py` at a 0-line diff.
+- **Flags.** `QUIPU_COHERENCY_DEPTH` (default `1` under `QUIPU_SELF_ORGANISING=1`; `0` leaves the scorer and the step untouched), `QUIPU_PLANES_ANCHOR_LAMBDA` (0.5), `QUIPU_PLANES_LOCK_MIN` (0.6), `QUIPU_PLANES_KL_EPSILON` (1e-3), `QUIPU_PLANES_MAX_CRYSTALS` (8), `QUIPU_PLANES_MIN_SUPPORT` (1e-9), `QUIPU_PLANES_PHASE_WEIGHT` (1.0).
+- **CLI.** `python -m src.quipu.qpsi.self_organising planes | accrete [--limit N] | fibre TOKEN`; `status` gains a `planes` block.
+- **Docs.** `docs/MESH_COHERENCY_DEPTH.md`.
+
+### What is still flat
+- The cell (i, j) is one per token: the foliation adds depth over the cell, it does not give a token several cells. `_mcd_multiplanar_score` scores against planes of the mesh state as before (it now sees anchored candidates). A plane-2 candidate whose leading Weyl axis moved *down* holds at SiCi (φ = 0.4 − π), as the Entirety's own does; whether SiCi should read |φ| mod π for token fibres is a decision this release does not make.
+
+### Tests
+- 13 new (`tests/test_qpsi_coherency_depth.py`; wiring cases in `tests/test_qpsi_self_organising.py`): fidelity/KL/Floquet, the relational weighted mean, physical-plane admissibility and holds, crystal lock, descent halting, accretion rebuilding and replacing fibres, the write boundary, empty-database accretion, anchoring identity at λ = 0 and on ungrounded tokens, the wrapped scorer's fallback, config from the environment, the scorer wrapped/restored by `enable()`/`disable()`, accretion once per fresh ingest. Suite 486 → 499 passing, offline.
+
 ## [0.35.0] Mirror Training and the Constrained Gate (2026-09-22)
 
 Two operator rulings, both dated 2026-09-22, and the code that carries them out.
