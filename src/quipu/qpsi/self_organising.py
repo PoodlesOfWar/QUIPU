@@ -72,7 +72,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from . import flux_phase, learned_prior, memristive_axes, mirror_training
+from . import coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
@@ -80,6 +80,7 @@ FLUX_ENV: str = "QUIPU_FLUX_PHASE"
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
+PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
@@ -103,13 +104,14 @@ class Flags:
     learned_prior: bool = True
     somn: bool = True
     mirror_training: bool = True
+    coherency_depth: bool = True
 
     @classmethod
     def from_env(cls) -> "Flags":
         def on(name: str) -> bool:
             return os.environ.get(name, "1").strip() != "0"
         return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
-                   mirror_training=on(MIRROR_ENV))
+                   mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV))
 
 
 _FLAGS = Flags()
@@ -181,6 +183,17 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
             out["mirror"] = ({"seq": mt["seq"], "failed_at": mt["failed_at"], "kind": mt["kind"],
                               "g_im": mt["g_im"], "theta": mt["theta"], "holds_trained": mt["holds_trained"]}
                              if mt else None)
+        if flags.coherency_depth:
+            # Bottom-up accretion: once per new ingest run — the fibres are
+            # rebuilt from the graph the field just changed (planes 1, 2, 3+).
+            prev = coherency_depth.summary(cn) or {}
+            fresh = flux.last_ts is not None and float(prev.get("at") or 0.0) < float(flux.last_ts)
+            if flux.on and fresh:
+                acc = coherency_depth.accrete(cn, cfg=coherency_depth.CoherencyConfig.from_env(), now=now)
+                out["planes"] = {k: acc[k] for k in ("tokens", "plane1", "plane2", "crystals", "K",
+                                                     "mean_c01", "mean_c12", "mean_c02", "depth_histogram")}
+            else:
+                out["planes"] = None
     return out
 
 
@@ -202,6 +215,12 @@ def enable(flags: Flags | None = None) -> bool:
             fn = getattr(se, n)
             if getattr(fn, MARK, False):
                 _ORIGINALS[f"se.{n}"] = fn.__wrapped__
+        try:
+            from .. import mesh_slm
+            if getattr(mesh_slm._score_candidates, MARK, False):
+                _ORIGINALS["mesh_slm._score_candidates"] = mesh_slm._score_candidates.__wrapped__
+        except Exception:
+            pass
         _ENABLED = True
         return True
     _FLAGS = Flags.from_env() if flags is None else flags
@@ -216,7 +235,16 @@ def enable(flags: Flags | None = None) -> bool:
         se.observer_tangent = learned_prior.wrap_observer_tangent(se.observer_tangent)
         setattr(se.observer_tangent, MARK, True)
 
-    if _FLAGS.somn or _FLAGS.learned_prior or _FLAGS.mirror_training:
+    if _FLAGS.coherency_depth:
+        # Top-down anchoring: candidates are re-scored by their deep planes.
+        # mesh_slm.py is not edited; the module attribute is wrapped, as above.
+        from .. import mesh_slm
+        if not getattr(mesh_slm._score_candidates, MARK, False):
+            _ORIGINALS["mesh_slm._score_candidates"] = mesh_slm._score_candidates
+            mesh_slm._score_candidates = coherency_depth.wrap_score_candidates(mesh_slm._score_candidates)
+            setattr(mesh_slm._score_candidates, MARK, True)
+
+    if _FLAGS.somn or _FLAGS.learned_prior or _FLAGS.mirror_training or _FLAGS.coherency_depth:
         _ORIGINALS["se.oscillating_expansion_step"] = orig_step = se.oscillating_expansion_step
 
         @functools.wraps(orig_step)
@@ -249,6 +277,9 @@ def disable() -> None:
         se.observer_tangent = _ORIGINALS.pop("se.observer_tangent")
     if "se.oscillating_expansion_step" in _ORIGINALS:
         se.oscillating_expansion_step = _ORIGINALS.pop("se.oscillating_expansion_step")
+    if "mesh_slm._score_candidates" in _ORIGINALS:
+        from .. import mesh_slm
+        mesh_slm._score_candidates = _ORIGINALS.pop("mesh_slm._score_candidates")
     _ENABLED = False
 
 
@@ -272,6 +303,7 @@ def status() -> dict:
         st = memristive_axes.load_state(cn, cfg, create=False)      # status is a pure read
         prior = learned_prior.stored_prior(cn)
         mirror = mirror_training.load_record(cn, "system_entirety")
+        planes = coherency_depth.summary(cn)
     return {
         "enabled": _ENABLED, "master_switch": master_switch_on(), "flags": _FLAGS.__dict__,
         "flux": flux_phase.read_flux().to_json(),
@@ -284,6 +316,7 @@ def status() -> dict:
                    "prior": mirror["prior"], "drive": mirror["drive"],
                    "radam": {k: mirror["radam"].get(k) for k in ("t", "theta", "pressure")}},
         "grant": grant(),
+        "planes": planes,
         "config": cfg.to_json(),
     }
 
@@ -363,6 +396,11 @@ def _main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status", help="flags, flux, conductances, allocation, proposals, prior")
     sub.add_parser("step", help="one forced expansion step with the loop enabled")
+    sub.add_parser("planes", help="the foliated lattice: per-plane counts, coherencies, depth histogram")
+    ac = sub.add_parser("accrete", help="rebuild every token's fibre from the current graph now")
+    ac.add_argument("--limit", type=int, default=0, help="only the first N token ids (0 = all)")
+    fb = sub.add_parser("fibre", help="one token's planes, coherencies and depth")
+    fb.add_argument("token")
     pl = sub.add_parser("pulse", help="print the plan; --route applies it")
     pl.add_argument("--route", action="store_true", help="run corpus_ingest along the plan (operator's act)")
     pl.add_argument("--refine", action="store_true", help="also run Ring-5 refinement per Weyl cycle")
@@ -374,6 +412,32 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.cmd == "step":
         from .. import system_entirety as se
         print(json.dumps(se.oscillating_expansion_step(force=True), indent=2, default=str))
+    elif args.cmd == "planes":
+        from .. import system_entirety as se
+        with se._conn() as cn:
+            print(json.dumps(coherency_depth.summary(cn), indent=2, default=str))
+    elif args.cmd == "accrete":
+        from .. import system_entirety as se
+        with se._conn() as cn:
+            ids = None
+            if args.limit > 0:
+                ids = [int(r[0]) for r in cn.execute("SELECT token_id FROM mesh_slm_embed ORDER BY token_id LIMIT ?",
+                                                     (args.limit,)).fetchall()]
+            print(json.dumps(coherency_depth.accrete(cn, cfg=coherency_depth.CoherencyConfig.from_env(), token_ids=ids),
+                             indent=2, default=str))
+    elif args.cmd == "fibre":
+        from .. import system_entirety as se
+        with se._conn() as cn:
+            tid = coherency_depth.token_id_of(cn, args.token)
+            if tid is None:
+                print(json.dumps({"token": args.token, "error": "not in mesh_slm_vocab"}))
+            else:
+                fib = coherency_depth.fibre(cn, tid)
+                ks = sorted(fib)
+                cohs = {f"{a}-{b}": coherency_depth.coherency(cn, tid, a, b) for i, a in enumerate(ks) for b in ks[i + 1:]}
+                print(json.dumps({"token": args.token, "token_id": tid,
+                                  "planes": {str(k): [round(v, 6) for v in vec] for k, vec in fib.items()},
+                                  "coherency": cohs, "depth": coherency_depth.depth(cn, tid)}, indent=2, default=str))
     elif args.cmd == "pulse":
         print(json.dumps(pulse(route=args.route, refine=args.refine, max_seconds=args.max_seconds),
                          indent=2, default=str))

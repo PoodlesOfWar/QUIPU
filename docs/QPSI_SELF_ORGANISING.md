@@ -41,7 +41,8 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 - `src/quipu/qpsi/memristive_axes.py` — `SomnConfig`, `SomnState`, `step(cn, axes=, observer=, flux_on=, flux_docs=, …)`, `currents`, `allocate`, `potentiate`, `relax`, `depress`, `update_mobility`. Writes only `brain_kv["entirety:somn:*"]` (`state`, `allocation`, `proposal`) and the table `entirety_somn_log`; `_kv_set` refuses any other key.
 - `src/quipu/qpsi/learned_prior.py` — `oja_step`, `advance_on_realisation(cn, instance)`, `sense_weights`, `wrap_observer_tangent(original)`. Writes only `brain_kv["entirety:prior"]`.
 - `src/quipu/qpsi/mirror_training.py` — `classify_hold`, `mirror_image`, `train_from_hold(cn, instance)`, `mirror_drive`. Writes only `brain_kv["entirety:mirror:<instance>"]` and the table `entirety_mirror_log`.
-- `src/quipu/qpsi/self_organising.py` — `enable()` / `disable()` (wrap `bit_flip_parity`, `observer_tangent`, `oscillating_expansion_step` on module attributes, like `divine_blessing.enable()`), `after_step`, `status`, `plan`, `grant`, `constrained_gate`, `pulse`, and the CLI.
+- `src/quipu/qpsi/coherency_depth.py` (v0.36.0) — the lattice foliated, M = T² × Z_K: `accrete(cn)` (fibres, coherency tensor, depth per token), `wrap_score_candidates(original)` (top-down anchoring of `mesh_slm._score_candidates`), `fibre`, `descend`, `summary`. Writes only `mesh_plane_embed`, `mesh_plane_coherency`, `mesh_plane_depth` and `brain_kv["entirety:planes:*"]`. See `docs/MESH_COHERENCY_DEPTH.md`.
+- `src/quipu/qpsi/self_organising.py` — `enable()` / `disable()` (wrap `bit_flip_parity`, `observer_tangent`, `oscillating_expansion_step` and `mesh_slm._score_candidates` on module attributes, like `divine_blessing.enable()`), `after_step`, `status`, `plan`, `grant`, `constrained_gate`, `pulse`, and the CLI.
 
 `mesh_slm.py` and `system_entirety.py` are not edited. `src/quipu/__init__.py` gains one guarded block: `enable()` runs only when `QUIPU_SELF_ORGANISING=1`.
 
@@ -50,7 +51,8 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 | Variable | Default | Meaning |
 |---|---|---|
 | `QUIPU_SELF_ORGANISING` | unset (off) | `1` wires the loop for the session |
-| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` / `QUIPU_MIRROR_TRAINING` | `1` when the master is on | switch the four parts independently (`0` disables one) |
+| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` / `QUIPU_MIRROR_TRAINING` / `QUIPU_COHERENCY_DEPTH` | `1` when the master is on | switch the five parts independently (`0` disables one) |
+| `QUIPU_PLANES_ANCHOR_LAMBDA`, `QUIPU_PLANES_LOCK_MIN`, `QUIPU_PLANES_KL_EPSILON`, … | 0.5, 0.6, 1e-3, … | the coherency-depth constants (full table in `docs/MESH_COHERENCY_DEPTH.md`) |
 | `QUIPU_PULSE_SOURCES` | unset (all of `corpus_ingest.SOURCES`) | comma list narrowing the operator's grant for the constrained gate |
 | `QUIPU_SOMN_MIRROR_GAIN` | 0.5 | κ: how much a hold's mirror drive scales potentiation |
 | `QUIPU_FLUX_WINDOW_S`, `QUIPU_FLUX_MIN_DOCS` | 300, 1 | the field is "on" when ≥ min docs entered within the window |
