@@ -4,6 +4,37 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.38.0] Sensing Layer — more feeds, a critical coupled layer, routing around silence (2026-09-23)
+
+Operator directive, 2026-09-23: *"Build the sensing layer"* — criticality control, silent-source routing and new input terminals, all three.
+
+### `src/quipu/qpsi/sensing_layer.py` — additive
+- **Feeds.** Besides `corpus_ingest:history`: **mesh proprioception** — every token's latest touch (`mesh_slm_vocab.last_seen`) with its seven-axis profile, binned by minute; an attempt of `mesh:<axis>` is the mass written *above the whole mesh's mean* on that axis, so the mesh reports where it actually moved (read only; lossy by construction, a re-touched token keeps only its latest touch). **Observer** — deltas of `observer:<source>:stats` token counters, routed to the observer profile's axis; counters and a capped event list are kept at `entirety:senses:observer`, written only when a counter moved (first sight is a baseline). Each feed is thresholded against its own population. The host's material state is not a feed: `system_entirety` already injects it.
+- **Critical coupled layer.** Terminals are units of dA/dt = (−diag(1/τ) + g·W)A, W the torus kernel max(0, cos Δθ) over their axes, saturating at 1. The gain is measured, not set: the edge g_edge puts λ_max at −1/T (T the record's span); below it g* maximises the response entropy of the layer over the record (geometric grid, golden-section refinement). Stdlib Jacobi eigensolver. Variance was tried first and rejected — it rewards a layer that swings between empty and saturated.
+- **Silent-source routing.** A source is silent from its first zero attempt after its last yield. It is re-probed with one document when now − last ≥ K·(last − silence_start) — backoff that doubles per failed probe, no constant — and otherwise its planned documents go to the live planned sources in proportion to their plan (or are reported dissipated). `self_organising.plan()` applies it, so every routed pulse carries it; same sources, same total, so the constrained gate holds. `QUIPU_SILENT_ROUTING=0` turns it off.
+- `QUIPU_SENSE_LAYER` = `afferent` (default) | `critical` chooses which reading the Entirety gets; `status()` and `python -m src.quipu.qpsi.sensing_layer` show both, the critical metrics, every terminal and the routed plan.
+
+### Fixed in `annealed_senses` (v0.37.0 was wrong here)
+- Attempts at one instant are now one batch read against the level before it. Before, the second and later attempts at a timestamp never moved the level (r = e⁰ = 1), and the first-ever reading depended on sort order.
+- A one-attempt terminal takes its feed's *present* clock (c4 and fineweb carried a 767,946 s clock from the month-long gap before their only attempt).
+- **Correction to 0.37.0's replay claim.** Its "unlock" (participation ratio 1.08 → 2.22) was mostly budget sent to sources that return nothing (981 documents). With these fixes the afferent senses leave the allocation on arXiv (1.14 → 1.17), because arXiv, local_docs and gutenberg are the only sources that yield. The lock was the supply, read correctly; brain no longer reads the pulse.
+
+### Measured
+- Live record, 20:29Z: afferent vision 0.002 / touch 0.005 / smell 0.351 / body 0.001 / brain 0.883 / perception 0.006. Critical layer: g* = 0.93·g_edge, λ_max = −4.9×10⁻⁵ s⁻¹ (≈ 5.7 h memory), σ = 0.996 per 76 s ingest bin, response entropy 2.83 bits (1.37 uncoupled), 71 % of its activity arrived by coupling — coupled smell 1.0 and body 0.98 while their own sources are silent: reach, not input.
+- 24 h closed-loop replay (144 pulses, live SOMN state and counterpart, each source returning what it returned today; mesh and observer feeds not simulated):
+
+| senses | routing | asked | returned | asked of silent sources |
+|---|---|---|---|---|
+| static (0.36.2) | — | 8,640 | 7,973 | 197 |
+| afferent | off | 8,639 | 8,043 | 129 |
+| **afferent (default)** | **on** | **8,639** | **8,061** | **10** |
+| critical | off | 8,639 | 7,313 | 978 |
+| critical | on | 8,639 | 7,971 | 37 |
+
+- The coupled reading fed to the SOMN spends on silent sources; routing recovers most of it but the afferent reading with routing returns the most. Hence the default.
+- Found, not changed: `observer:last_oscillation` holds phi 0.812345, theta 0.123456, kappa 0.45, coherence 0.88, emergence 0.75, temperature 0.35 — the same values on every observation, posted by a client as `meta.oscillation`. It reads as a test fixture feeding the observer path. Five ingest sources (fineweb, c4, openwebtext, stack, wikipedia) still return 0 documents.
+- 17 new tests; `_flux_on`'s top-axis assertion now accepts either axis the pulse wrote to (the first-ever batch reads both at 1). Suite 520 → 537 passing on gard-desktop.
+
 ## [0.37.0] Annealed Senses — no static sets in the senses (2026-09-23)
 
 Operator directive, 2026-09-23: *"Remove the static senses based on the direction of current SOTA self-annealing memristive systems."*

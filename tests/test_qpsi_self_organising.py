@@ -121,7 +121,8 @@ def test_phase_follows_the_field_and_the_somn_records_each_step(isolated):
     assert a["expansion_phase"] == "broaden" and a["bit_state"] == 1
     s = a["self_organising"]
     assert s["flux"]["on"] and s["step_phase"] == "broaden"
-    assert s["somn"]["phase"] == "broaden" and s["somn"]["top_axis"] == "brain"
+    # the pulse wrote to vision (fineweb) and brain (arxiv); the path forms on one of them
+    assert s["somn"]["phase"] == "broaden" and s["somn"]["top_axis"] in ("vision", "brain")
     assert s["somn"]["docs_per_source"] and s["prior_advanced"] is False
 
     _flux_off()

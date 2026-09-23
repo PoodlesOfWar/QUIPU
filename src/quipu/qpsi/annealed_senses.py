@@ -72,7 +72,9 @@ Wiring
 failure inside the annealed read falls back to the original for that call and
 logs it.  ``qpsi.self_organising.enable()`` calls ``enable()`` when
 ``QUIPU_ANNEALED_SENSES`` is not "0" (default on under the master flag).
-This module writes nothing: it is a pure read of ``corpus_ingest:history``.
+This module writes nothing.  Since v0.38.0 ``sense_signals`` delegates to
+``qpsi.sensing_layer``, which adds the mesh and observer feeds (and writes one
+key, ``entirety:senses:observer``, only when an observer counter moves).
 
 CLI:  python -m src.quipu.qpsi.annealed_senses [--json]
       static and annealed readings side by side, and every terminal.
@@ -192,20 +194,28 @@ class Terminal:
     source: str
     axis: str | None          # sense / "entirety" / None (unrouted)
     attempts: int
-    yielded: float            # documents over the window
-    level: float              # fabric ȳ at the end of the replay (the next attempt's V₀.₅)
+    yielded: float            # documents (or the feed's unit) over the window
+    level: float              # its feed's ȳ at the end of the replay (the next attempt's V₀.₅)
     tau: float                # own clock (s): median of its last three gaps
-    tau_own: bool             # False → only one attempt; the fabric's clock stands in
-    k: float                  # read sharpness (inverse temperature) = ρ_s / ρ̄
+    tau_own: bool             # False → only one attempt; the feed's clock stands in
+    k: float                  # read sharpness (inverse temperature) = ρ_s / ρ̄ within its feed
     last_x: float
     last_t: float
     activity: float           # a_s at `now`
+    feed: str = "ingest"      # which record it was read from (ingest / mesh / observer)
+    last_y: float = 0.0       # what its last attempt returned
+    first_t: float = 0.0      # its first attempt in the window
+    silence_start: float | None = None   # first zero attempt after its last yield; None → not silent
 
     def to_json(self) -> dict:
         d = asdict(self)
-        for key in ("yielded", "level", "tau", "k", "last_x", "activity"):
+        for key in ("yielded", "level", "tau", "k", "last_x", "activity", "last_y"):
             d[key] = round(float(d[key]), 6)
         return d
+
+    @property
+    def silent(self) -> bool:
+        return self.silence_start is not None
 
 
 def _axis_name(source: str, route: Callable[[str], int | None]) -> str | None:
@@ -219,67 +229,123 @@ def _axis_name(source: str, route: Callable[[str], int | None]) -> str | None:
 
 
 def _default_route(source: str) -> int | None:
+    """Where a terminal's input lands.  ``mesh:<axis>`` is that axis;
+    ``observer:<source>`` is the observer profile's axis; any other source goes
+    through mesh_slm._axis_for_source (read, never edited)."""
+    if source.startswith("mesh:"):
+        name = source.split(":", 1)[1]
+        return AXES.index(name) if name in AXES else None
+    if source.startswith("observer:"):
+        try:
+            from ..observer_service import SOURCE_PROFILES
+            ax = (SOURCE_PROFILES.get(source.split(":", 1)[1]) or {}).get("axis")
+            return AXES.index(ax) if ax in AXES else None
+        except Exception:
+            return None
     from .memristive_axes import axis_for_source
     return axis_for_source(source)
 
 
-def terminals(events: Sequence[tuple[float, str, float]], now: float,
-              route: Callable[[str], int | None] | None = None) -> dict[str, Terminal]:
+def _norm_event(e: Sequence) -> tuple[float, str, float, str]:
+    return (float(e[0]), str(e[1]), float(e[2]), str(e[3]) if len(e) > 3 else "ingest")
+
+
+def terminals(events: Sequence[Sequence], now: float,
+              route: Callable[[str], int | None] | None = None,
+              trace: list | None = None) -> dict[str, Terminal]:
     """Replay every terminal's volatile state from the attempts up to ``now``.
 
-    One time-ordered pass.  Each attempt is read against the *fabric* level
-    V₀.₅ = ȳ, the volatile mean yield per attempt over every terminal, at the
-    sharpness K_s = ρ_s/ρ̄ that the reading rhythm sets at that moment.  Then
-    the fabric level and the terminal's own state advance.
+    One time-ordered pass.  Each attempt is read against its *feed's* level
+    V₀.₅ = ȳ, the volatile mean yield per attempt over every terminal of that
+    feed (documents are compared with documents, embedding mass with embedding
+    mass), at the sharpness K_s = ρ_s/ρ̄ that the reading rhythm within the feed
+    sets at that moment.  Then the feed level and the terminal's state advance.
+    Events are (t, source, y) or (t, source, y, feed).  ``trace``, if given,
+    receives (t, source, x) for every attempt, in order.
     """
     route = route or _default_route
-    ev = [e for e in events if e[0] <= now]
+    ev = sorted((_norm_event(e) for e in events if float(e[0]) <= now), key=lambda r: (r[0], r[3], r[1]))
     if not ev:
         return {}
 
     seen: dict[str, list[float]] = {}
+    feed_of: dict[str, str] = {}
     state: dict[str, dict] = {}
-    fabric_ts: list[float] = []
-    level: float | None = None
-    t_f: float | None = None
+    fabric_ts: dict[str, list[float]] = {}
+    level: dict[str, float | None] = {}
+    t_f: dict[str, float | None] = {}
 
-    for t, s, y in ev:
+    pending: dict[str, dict] = {}
+
+    def _flush(feed: str) -> None:
+        # Attempts at one instant are one batch: all are read against the level
+        # before it, then the level takes the batch mean.  The feed threshold is
+        # volatile on the feed's own clock: it forgets what the sources used to
+        # return as fast as the feed is read.
+        p = pending.pop(feed, None)
+        if not p or not p["ys"]:
+            return
+        y_bar = sum(p["ys"]) / len(p["ys"])
+        lv, prev = level.get(feed), t_f.get(feed)
+        if lv is None:
+            level[feed] = y_bar
+        else:
+            r = math.exp(-(p["t"] - prev) / p["tau"]) if (p.get("tau") and prev is not None) else 0.0
+            level[feed] = lv * r + y_bar * (1.0 - r)
+        t_f[feed] = p["t"]
+
+    for t, s, y, feed in ev:
+        if feed in pending and pending[feed]["t"] != t:
+            _flush(feed)
         seen.setdefault(s, []).append(t)
-        if not fabric_ts or fabric_ts[-1] != t:
-            fabric_ts.append(t)
-        fabric_tau = _local_clock(fabric_ts)
+        feed_of.setdefault(s, feed)
+        fts = fabric_ts.setdefault(feed, [])
+        if not fts or fts[-1] != t:
+            fts.append(t)
+        fabric_tau = _local_clock(fts)
 
-        clocks = {src: _local_clock(ts) for src, ts in seen.items()}
+        peers = [src for src, f in feed_of.items() if f == feed]
+        clocks = {src: _local_clock(seen[src]) for src in peers}
         rates = {src: 1.0 / c for src, c in clocks.items() if c}
         rho_bar = math.exp(sum(math.log(r) for r in rates.values()) / len(rates)) if rates else None
         k = (rates[s] / rho_bar) if (s in rates and rho_bar) else 1.0
         tau = clocks[s] or fabric_tau
 
-        st = state.setdefault(s, {"a": 0.0, "t": None, "n": 0, "total": 0.0, "x": 0.0, "k": 1.0, "tau": 0.0})
+        st = state.setdefault(s, {"a": 0.0, "t": None, "n": 0, "total": 0.0, "x": 0.0, "k": 1.0, "tau": 0.0,
+                                  "y": 0.0, "first": t, "silence": None})
         if st["t"] is not None and tau:
             st["a"] *= math.exp(-(t - st["t"]) / tau)
-        x = stimulus(y, level, k)
+        lv = level.get(feed)
+        x = stimulus(y, lv, k)
         st["a"] = st["a"] + x * (1.0 - st["a"])
-        st.update(t=t, n=st["n"] + 1, total=st["total"] + y, x=x, k=k, tau=float(tau or 0.0))
+        if y > 0.0:
+            st["silence"] = None
+        elif st["silence"] is None:
+            st["silence"] = t
+        st.update(t=t, n=st["n"] + 1, total=st["total"] + y, x=x, k=k, tau=float(tau or 0.0), y=y)
+        if trace is not None:
+            trace.append((t, s, x))
+        pend = pending.setdefault(feed, {"t": t, "ys": []})
+        pend["ys"].append(y)
+        pend["tau"] = fabric_tau
 
-        # The fabric threshold is volatile on the fabric's own clock: it forgets
-        # what the sources used to return as fast as the fabric is read.
-        if level is None:
-            level = y
-        else:
-            r = math.exp(-(t - t_f) / fabric_tau) if (fabric_tau and t_f is not None) else 0.0
-            level = level * r + y * (1.0 - r)
-        t_f = t
+    for feed in list(pending):
+        _flush(feed)
 
     out: dict[str, Terminal] = {}
     for s, st in state.items():
+        if not _local_clock(seen[s]):
+            # one attempt: no rhythm of its own, so its feed's *present* clock
+            # stands in (not the clock at the moment of that attempt)
+            st["tau"] = float(_local_clock(fabric_ts[feed_of[s]]) or st["tau"] or 0.0)
         a = st["a"]
         if st["tau"] > 0.0:
             a *= math.exp(-max(0.0, now - st["t"]) / st["tau"])
         out[s] = Terminal(source=s, axis=_axis_name(s, route), attempts=st["n"], yielded=st["total"],
-                          level=float(level or 0.0), tau=st["tau"], tau_own=bool(_local_clock(seen[s])),
-                          k=st["k"], last_x=st["x"], last_t=float(st["t"]),
-                          activity=min(1.0, max(0.0, a)))
+                          level=float(level.get(feed_of[s]) or 0.0), tau=st["tau"],
+                          tau_own=bool(_local_clock(seen[s])), k=st["k"], last_x=st["x"],
+                          last_t=float(st["t"]), activity=min(1.0, max(0.0, a)), feed=feed_of[s],
+                          last_y=st["y"], first_t=st["first"], silence_start=st["silence"])
     return out
 
 
@@ -368,8 +434,14 @@ def read(*, history: list | None = None, now: float | None = None,
 
 
 def sense_signals() -> dict:
-    """Drop-in for ``temporal_spatiality._sense_signals``: the six senses in [0, 1]."""
-    return {s: float(v) for s, v in read()["senses"].items()}
+    """Drop-in for ``temporal_spatiality._sense_signals``: the six senses in [0, 1].
+
+    Since v0.38.0 the full sensing layer answers (qpsi.sensing_layer): every feed
+    (ingest, mesh proprioception, observer), and ``QUIPU_SENSE_LAYER`` selects the
+    afferent reading (default) or the coupled critical one.
+    """
+    from . import sensing_layer
+    return sensing_layer.sense_signals()
 
 
 # ---------------------------------------------------------------------------
