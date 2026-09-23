@@ -47,7 +47,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv(db.KEY_FILE_ENV, str(key_file))
     monkeypatch.setattr(db, "_CONFIG", GovernanceConfig())
     monkeypatch.delenv(so.ENV, raising=False)
-    for name in (so.FLUX_ENV, so.PRIOR_ENV, so.SOMN_ENV):
+    for name in (so.FLUX_ENV, so.PRIOR_ENV, so.SOMN_ENV, so.SENSES_ENV):
         monkeypatch.delenv(name, raising=False)
     db.enable()
     so.disable()
@@ -58,7 +58,10 @@ def isolated(tmp_path, monkeypatch):
 
 def _flux_on(age_s: float = 10.0, docs: int = 12):
     ts = datetime.fromtimestamp(time.time() - age_s, tz=timezone.utc).isoformat()
-    brain_kv.kv_set_json(flux_phase.HISTORY_KEY, [{"ts": ts, "total_condensed": docs}])
+    # per_source as corpus_ingest writes it: the annealed senses read terminals from it
+    brain_kv.kv_set_json(flux_phase.HISTORY_KEY, [{"ts": ts, "total_condensed": docs,
+                                                   "per_source": {"arxiv": docs - docs // 2,
+                                                                  "fineweb": docs // 2}}])
 
 
 def _flux_off():
@@ -139,7 +142,7 @@ def test_phase_follows_the_field_and_the_somn_records_each_step(isolated):
         assert brain_kv.kv_get_json(ma.KV_ALLOCATION)["phase"] == "deepen"
         assert lp.stored_prior(cn) is None                            # held → the prior did not move
     # the loop closed through the senses: the ingest history moved vision and brain
-    # while the field was on (docs/1500 and runs/6 in temporal_spatiality._sense_signals)
+    # while the field was on (fineweb → vision, arxiv → brain, qpsi.annealed_senses)
     assert a["axes"]["brain"] > b["axes"]["brain"] and a["axes"]["vision"] > b["axes"]["vision"]
 
 

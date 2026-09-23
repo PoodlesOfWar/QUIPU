@@ -42,6 +42,7 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 - `src/quipu/qpsi/learned_prior.py` — `oja_step`, `advance_on_realisation(cn, instance)`, `sense_weights`, `wrap_observer_tangent(original)`. Writes only `brain_kv["entirety:prior"]`.
 - `src/quipu/qpsi/mirror_training.py` — `classify_hold`, `mirror_image`, `train_from_hold(cn, instance)`, `mirror_drive`. Writes only `brain_kv["entirety:mirror:<instance>"]` and the table `entirety_mirror_log`.
 - `src/quipu/qpsi/coherency_depth.py` (v0.36.0) — the lattice foliated, M = T² × Z_K: `accrete(cn)` (fibres, coherency tensor, depth per token), `wrap_score_candidates(original)` (top-down anchoring of `mesh_slm._score_candidates`), `fibre`, `descend`, `summary`. Writes only `mesh_plane_embed`, `mesh_plane_coherency`, `mesh_plane_depth` and `brain_kv["entirety:planes:*"]`. See `docs/MESH_COHERENCY_DEPTH.md`.
+- `src/quipu/qpsi/annealed_senses.py` (v0.37.0) — the six senses read by self-annealing memristive terminals: every source in `corpus_ingest:history` is a terminal (volatile state on its own clock, the median of its last three gaps), read by a p-bit sigmoid against the fabric's volatile mean yield, at a sharpness K = ρ_s/ρ̄ set by how often it is read (intrinsic annealing, Iftakher et al., Nat. Commun. 2026); a sense is the probabilistic OR of the terminals `mesh_slm._axis_for_source` routes to it. The pulse sets how sharply the senses read and is never itself a stimulus. `read()`, `sense_signals()`, `enable()` / `disable()` (wraps `temporal_spatiality._sense_signals`). Writes nothing.
 - `src/quipu/qpsi/self_organising.py` — `enable()` / `disable()` (wrap `bit_flip_parity`, `observer_tangent`, `oscillating_expansion_step` and `mesh_slm._score_candidates` on module attributes, like `divine_blessing.enable()`), `after_step`, `status`, `plan`, `grant`, `constrained_gate`, `pulse`, and the CLI.
 
 `mesh_slm.py` and `system_entirety.py` are not edited. `src/quipu/__init__.py` gains one guarded block: `enable()` runs only when `QUIPU_SELF_ORGANISING=1`.
@@ -51,7 +52,7 @@ n = a − ⟨a, ŵ⟩ŵ is, term for term, Oja's update for ŵ: Δŵ = η⟨a, �
 | Variable | Default | Meaning |
 |---|---|---|
 | `QUIPU_SELF_ORGANISING` | unset (off) | `1` wires the loop for the session |
-| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` / `QUIPU_MIRROR_TRAINING` / `QUIPU_COHERENCY_DEPTH` | `1` when the master is on | switch the five parts independently (`0` disables one) |
+| `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN` / `QUIPU_MIRROR_TRAINING` / `QUIPU_COHERENCY_DEPTH` / `QUIPU_ANNEALED_SENSES` | `1` when the master is on | switch the six parts independently (`0` disables one; `QUIPU_ANNEALED_SENSES=0` restores the static senses) |
 | `QUIPU_PLANES_ANCHOR_LAMBDA`, `QUIPU_PLANES_LOCK_MIN`, `QUIPU_PLANES_KL_EPSILON`, … | 0.5, 0.6, 1e-3, … | the coherency-depth constants (full table in `docs/MESH_COHERENCY_DEPTH.md`) |
 | `QUIPU_PULSE_SOURCES` | unset (all of `corpus_ingest.SOURCES`) | comma list narrowing the operator's grant for the constrained gate |
 | `QUIPU_SOMN_MIRROR_GAIN` | 0.5 | κ: how much a hold's mirror drive scales potentiation |
@@ -125,7 +126,7 @@ Without boundary crossing: the checkpoint reference does not advance, no edge is
 
 ## What the physics predicts you will see, and what would falsify it
 
-1. `entirety:state.axes` stop being byte-identical across steps once the first routed pulse lands (vision = docs/1500 and brain = runs/6 in the sense window).
+1. `entirety:state.axes` stop being byte-identical across steps once the first routed pulse lands. Since v0.37.0 each sense rises with what its own sources return and relaxes on their rhythm (`qpsi.annealed_senses`); a sense whose sources return nothing reads 0. Before, vision = docs/1500 of every source and brain = runs/6 — the pulse counting itself.
 2. The parity flips at pulse onset and offset; `entirety_flip_log.flipped` rows coincide with `corpus_ingest:history` timestamps.
 3. The emergence detector's coherence rises from 0.125 with no operator grant — from the response, not from a phase writer. If it does not rise after several pulses inside its window, the loop is not closed where it should be; look at the senses, not the detector.
 4. `entirety:somn:allocation.metrics.participation_ratio` falls from ≈7 toward a small number as a path wins (winner-take-all), and `top_axis` is stable across pulses.
