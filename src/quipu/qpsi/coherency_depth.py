@@ -510,6 +510,12 @@ def accrete(cn: sqlite3.Connection, *, cfg: CoherencyConfig | None = None,
         cn.execute(f"INSERT OR REPLACE INTO {TABLE_DEPTH}(token_id, depth, halted_by, kl, planes, updated_at) VALUES(?,?,?,?,?,?)",
                    (tid, d["depth"], d["halted_by"], d["kl"], json.dumps(sorted(planes)), stamp))
 
+    if token_ids is None and ids:
+        # A full accretion also sweeps fibres of tokens the mesh has since
+        # pruned from its vocabulary, so the lattice never outlives the mesh.
+        for table in (TABLE_EMBED, TABLE_COHERENCY, TABLE_DEPTH):
+            cn.execute(f"DELETE FROM {table} WHERE token_id NOT IN (SELECT token_id FROM mesh_slm_embed)")
+
     mean = lambda xs: (sum(xs) / len(xs)) if xs else None
     summary = {
         "at": now, "tokens": counts["tokens"], "plane1": counts["plane1"], "plane2": counts["plane2"],

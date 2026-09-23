@@ -162,6 +162,24 @@ def test_accretion_writes_only_its_own_tables_and_keys(mesh):
         cd._kv_set(mesh, "entirety:state", {})
 
 
+def test_accretion_sweeps_fibres_of_tokens_the_mesh_has_pruned(mesh):
+    cfg = cd.CoherencyConfig(lock_min=0.3)
+    cd.accrete(mesh, cfg=cfg, gov=GovernanceConfig(), now=100.0)
+    assert cd.depth(mesh, 4) is not None and cd.fibre(mesh, 4).get(1) is not None
+    # the mesh prunes "flow" from its vocabulary (its own business; not this module's)
+    mesh.execute("DELETE FROM mesh_slm_quipu WHERE src=4 OR dst=4")
+    mesh.execute("DELETE FROM mesh_slm_embed WHERE token_id=4")
+    mesh.execute("DELETE FROM mesh_slm_vocab WHERE token_id=4")
+    s = cd.accrete(mesh, cfg=cfg, gov=GovernanceConfig(), now=200.0)
+    assert s["tokens"] == 4
+    for table in (cd.TABLE_EMBED, cd.TABLE_COHERENCY, cd.TABLE_DEPTH):
+        assert mesh.execute(f"SELECT COUNT(*) FROM {table} WHERE token_id=4").fetchone()[0] == 0
+    assert mesh.execute(f"SELECT COUNT(*) FROM {cd.TABLE_DEPTH}").fetchone()[0] == 4
+    # a partial accretion (token_ids given) rebuilds only those fibres and sweeps nothing
+    cd.accrete(mesh, cfg=cfg, gov=GovernanceConfig(), token_ids=[1], now=300.0)
+    assert mesh.execute(f"SELECT COUNT(*) FROM {cd.TABLE_DEPTH}").fetchone()[0] == 4
+
+
 def test_accretion_on_a_database_without_a_mesh_is_empty_not_an_error():
     cn = sqlite3.connect(":memory:")
     s = cd.accrete(cn)

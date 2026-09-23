@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.36.2] Coherency Depth — the lattice never outlives the mesh (2026-09-23)
+
+- A full `accrete()` sweeps `mesh_plane_embed`, `mesh_plane_coherency` and `mesh_plane_depth` rows whose `token_id` is no longer in `mesh_slm_embed`: the mesh prunes tokens from its vocabulary as it learns (seen live within one pulse — two stale depth rows for pruned ids), and the fibres of a token the mesh has let go should go with it. A partial accretion (`token_ids` given) sweeps nothing.
+- Second live accretion, this one run by the loop itself: 2026-09-23 14:18:52Z the pulse ingested 54 arXiv documents, the flagged step ran (broaden, flux 54) and `after_step` accreted without a hand on it. The lattice moved with the learning: 4,102 tokens, 4,075 relational planes, 2,459 physical planes (from 2,430; SiCi holds 1,625 → 1,597), 562 crystals, depth 2 tokens 1,885 → 1,917.
+- 1 new test. Suite 500 → 501 passing, offline.
+
 ## [0.36.1] Coherency Depth — accretion in its own savepoint (2026-09-23)
 
 - `self_organising.after_step` runs the bottom-up accretion inside a SQLite savepoint (`qpsi_accrete`). A failed accretion is rolled back whole — no half-rebuilt lattice, not even a freshly created plane table — and reported as `planes: {"error": …}`; the step's SOMN, prior and mirror writes, made earlier on the same connection, still commit with the step. The planes summary is left as it was, so the next step on the same ingest run retries. The loop still never breaks the step.
