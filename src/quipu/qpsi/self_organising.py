@@ -189,9 +189,21 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
             prev = coherency_depth.summary(cn) or {}
             fresh = flux.last_ts is not None and float(prev.get("at") or 0.0) < float(flux.last_ts)
             if flux.on and fresh:
-                acc = coherency_depth.accrete(cn, cfg=coherency_depth.CoherencyConfig.from_env(), now=now)
-                out["planes"] = {k: acc[k] for k in ("tokens", "plane1", "plane2", "crystals", "K",
-                                                     "mean_c01", "mean_c12", "mean_c02", "depth_histogram")}
+                # Inside its own savepoint: a failed accretion is rolled back
+                # whole (no half-rebuilt lattice) and the step's SOMN, prior
+                # and mirror writes above still commit with the step.
+                cn.execute("SAVEPOINT qpsi_accrete")
+                try:
+                    acc = coherency_depth.accrete(cn, cfg=coherency_depth.CoherencyConfig.from_env(), now=now)
+                except Exception as exc:
+                    cn.execute("ROLLBACK TO SAVEPOINT qpsi_accrete")
+                    cn.execute("RELEASE SAVEPOINT qpsi_accrete")
+                    _LOG.warning("[self_organising] accretion failed and was rolled back: %s", exc)
+                    out["planes"] = {"error": str(exc)}
+                else:
+                    cn.execute("RELEASE SAVEPOINT qpsi_accrete")
+                    out["planes"] = {k: acc[k] for k in ("tokens", "plane1", "plane2", "crystals", "K",
+                                                         "mean_c01", "mean_c12", "mean_c02", "depth_histogram")}
             else:
                 out["planes"] = None
     return out
