@@ -63,5 +63,6 @@ from . import quipu_game_mesh
 from . import video_gameplay_pipeline
 from . import game_pipeline_service
 from . import human_fidelity_assessor
+from . import video_trainer_daemon
 
 

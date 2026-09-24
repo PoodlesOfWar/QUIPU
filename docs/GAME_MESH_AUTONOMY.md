@@ -121,3 +121,33 @@ curl http://127.0.0.1:7200/assessments
 curl -X POST http://127.0.0.1:7200/tick -H "Content-Type: application/json" -d '{"agent_core": {"hp_pct": 0.18, "is_in_combat": true}, "entities": [{"guid": "m1", "name": "Defias Rogue", "level": 17, "health_pct": 0.9, "is_hostile": true, "is_combatant": true}]}'
 ```
 
+---
+
+## 6. Continuous Video & Stream Recording Trainer Container
+
+The **QUIPU Video Trainer Daemon** runs as an active, continuous background worker (`quipu-video-trainer:dev`) exposing port `7250`:
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/status` | Active training round, current game, total frames processed, last loss, top-1 accuracy, and human fidelity score |
+| `GET` | `/metrics` | Prometheus-formatted metrics (`quipu_training_round`, `quipu_total_samples`, `quipu_top1_accuracy`, `quipu_fidelity_score`) |
+| `POST` | `/queue` | Manually queues or flags an uploaded video recording for priority processing |
+
+### 6.1 Recording Ingestion & Replay Synthesis
+- **Directory Watcher**: Continuously monitors `/app/recordings` for `.mp4`, `.mkv`, `.webm`, and `.avi` files alongside paired `.txt` transcripts.
+- **Vision & Speech Processing**: Samples frames at 2 FPS, passes images to `HUDVisionExtractor` for HP/MP and minimap radar blip extraction, and maps speech cues into tactical action intents.
+- **Continuous Multi-Game Replay**: If no offline video files are present, automatically generates synthetic stream replay batches rotating across World of Warcraft, Old School RuneScape, and Guild Wars.
+- **Tension Optimization & Fidelity Benchmarking**: Runs quasi-Newton L-BFGS-B IGTL optimization, benchmarks each round via `PeriodicFidelityAssessor`, and persists learned parameters to `/app/quipu_learned_artifacts/quipu_learned_parameters.json`.
+
+### 6.2 Running the Trainer Container
+```powershell
+# Build and run the video trainer container
+docker compose up -d quipu-video-trainer
+
+# Check live trainer status
+curl http://127.0.0.1:7250/status
+
+# Check Prometheus metrics
+curl http://127.0.0.1:7250/metrics
+```
+

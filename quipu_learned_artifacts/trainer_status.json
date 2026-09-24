@@ -1,0 +1,30 @@
+{
+  "status": "training",
+  "current_game": "gw",
+  "training_round": 12,
+  "uptime_seconds": 57.2,
+  "total_samples_processed": 612,
+  "real_video_files_processed": 24,
+  "last_loss": 5.119652,
+  "last_top1_accuracy": 0.6863,
+  "last_fidelity_score": 0.9841,
+  "last_verdict": "PASS",
+  "active_recordings": [
+    "twitch_gw_mission_03.mp4",
+    "twitch_wow_dungeon_01.mp4",
+    "youtube_osrs_bossing_02.mp4"
+  ],
+  "learned_parameters": {
+    "w_figure_eight": 3.0,
+    "w_threat_base": 1.0,
+    "w_dist_decay": 0.05,
+    "w_runner_urgency": 2.5,
+    "w_escape_urgency": 3.0,
+    "w_rest_reward": 80.0,
+    "w_los_pull_reward": 70.0,
+    "w_resource_cost_hp": 20.0,
+    "w_resource_cost_mp": 15.0,
+    "temperature": 1.0
+  },
+  "last_updated_s": 1790252975.7069461
+}

@@ -36,6 +36,26 @@ services:
       - ./quipu_learned_artifacts:/app/quipu_learned_artifacts
     restart: unless-stopped
 
+  quipu-video-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile.trainer
+    image: quipu-video-trainer:dev
+    container_name: quipu-video-trainer
+    ports:
+      - "127.0.0.1:7250:7250"
+    environment:
+      SCB_DB_PATH: /data/local_brain.sqlite
+      TRAINER_PORT: "7250"
+      TRAINER_HOST: "0.0.0.0"
+      RECORDINGS_DIR: "/app/recordings"
+      QUIPU_ARTIFACT_DIR: "/app/quipu_learned_artifacts"
+    volumes:
+      - quipu_brain:/data
+      - ./recordings:/app/recordings
+      - ./quipu_learned_artifacts:/app/quipu_learned_artifacts
+    restart: unless-stopped
+
 volumes:
   quipu_brain:
 

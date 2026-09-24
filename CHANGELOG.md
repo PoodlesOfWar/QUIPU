@@ -4,6 +4,13 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.42.0] Continuous Video & Stream Recording Trainer Daemon Container (2026-09-24)
+
+- **`src/quipu/video_trainer_daemon.py`**: Continuous recording watcher monitoring `/app/recordings` for incoming Twitch/YouTube gameplay videos (`.mp4`, `.mkv`, `.webm`, `.avi`) and transcripts (`.txt`). Implements 2 FPS frame extraction with HUD vitals and minimap radar parsing, speech-to-intent parsing, continuous multi-game streaming replay synthesis (WoW, OSRS, GW), Inverse Graph Tension Learning (IGTL) quasi-Newton optimization, and periodic human fidelity benchmarking. Exposes port 7250 HTTP status server (`/status`, `/metrics`, `/queue`).
+- **`Dockerfile.trainer` & `docker-compose.yml`**: Dedicated standalone container `quipu-video-trainer:dev` with health check and host volume mounts for `./recordings` and `./quipu_learned_artifacts`.
+- **`recordings/`**: Watcher directory initialized with sample Twitch/YouTube gameplay clips and speech transcripts across WoW, OSRS, and GW.
+- **`tests/test_video_trainer_daemon.py`**: Added 3 unit and integration tests for state serialization, synthetic video clip processing, and HTTP endpoint monitoring. Total test suite expanded to 20 tests.
+
 ## [0.41.0] Human Behavioral Fidelity & Social Indistinguishability Assessor (2026-09-24)
 
 - **`src/quipu/human_fidelity_assessor.py`**: Periodic empirical assessment suite evaluating agent interaction telemetry against human distributions for WoW, OSRS, and GW across 4 dimensions: reaction latency variance & right-skew tail ratio, spatial wander & curvature entropy, social etiquette & personal space buffers, and downtime hesitation pacing.

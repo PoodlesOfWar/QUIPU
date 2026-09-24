@@ -1,0 +1,12 @@
+{"round": 1, "game": "wow", "timestamp": 1790252919.1452885, "samples": 51, "accuracy": 0.6863, "fidelity": 0.93, "verdict": "PASS"}
+{"round": 2, "game": "osrs", "timestamp": 1790252924.2846029, "samples": 51, "accuracy": 0.6863, "fidelity": 0.8962371986501789, "verdict": "PASS"}
+{"round": 3, "game": "gw", "timestamp": 1790252929.40998, "samples": 51, "accuracy": 0.6863, "fidelity": 0.9222460615673986, "verdict": "PASS"}
+{"round": 4, "game": "wow", "timestamp": 1790252934.566693, "samples": 51, "accuracy": 0.6863, "fidelity": 0.93, "verdict": "PASS"}
+{"round": 5, "game": "osrs", "timestamp": 1790252939.6922126, "samples": 51, "accuracy": 0.6863, "fidelity": 0.8932614845362636, "verdict": "PASS"}
+{"round": 6, "game": "gw", "timestamp": 1790252944.818778, "samples": 51, "accuracy": 0.6863, "fidelity": 0.9121127746506927, "verdict": "PASS"}
+{"round": 7, "game": "wow", "timestamp": 1790252949.9513452, "samples": 51, "accuracy": 0.6863, "fidelity": 1.0, "verdict": "PASS"}
+{"round": 8, "game": "osrs", "timestamp": 1790252955.0831413, "samples": 51, "accuracy": 0.6863, "fidelity": 0.8920622374759252, "verdict": "PASS"}
+{"round": 9, "game": "gw", "timestamp": 1790252960.2722926, "samples": 51, "accuracy": 0.6863, "fidelity": 0.9098363230302847, "verdict": "PASS"}
+{"round": 10, "game": "wow", "timestamp": 1790252965.4190693, "samples": 51, "accuracy": 0.6863, "fidelity": 1.0, "verdict": "PASS"}
+{"round": 11, "game": "osrs", "timestamp": 1790252970.5563326, "samples": 51, "accuracy": 0.6863, "fidelity": 0.8968273072863653, "verdict": "PASS"}
+{"round": 12, "game": "gw", "timestamp": 1790252975.7138839, "samples": 51, "accuracy": 0.6863, "fidelity": 0.9841378557580309, "verdict": "PASS"}
