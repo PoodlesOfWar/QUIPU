@@ -1,0 +1,114 @@
+{
+  "osrs_quipubot_main": {
+    "account_id": "osrs_quipubot_main",
+    "game": "osrs",
+    "username": "quipu_explorer@osrs.local",
+    "character_name": "QuipuBot",
+    "secret_enc": "kTK4jq99VFrlJaplU/gHnPhUD6ryzF63eOM3yPCMlMnI6d/YqdBwhzOFdOUPvg06",
+    "realm_or_world": "World 301 (Free)",
+    "pin": "1984",
+    "assigned_vpn_node": "quipu-osrs-node1",
+    "status": "authenticated",
+    "last_login": 1790258910.2176635,
+    "tags": [
+      "main",
+      "skilling",
+      "combat75"
+    ],
+    "metadata": {}
+  },
+  "osrs_pure_alt": {
+    "account_id": "osrs_pure_alt",
+    "game": "osrs",
+    "username": "quipu_pure@osrs.local",
+    "character_name": "QuipuPure",
+    "secret_enc": "xzE5FkEX0vUVyk21osPnKsAPh8p9nCX1OfaBa2ixu41WVdvkR1GIxz6f0uyW1HNb",
+    "realm_or_world": "World 302 (Trade)",
+    "pin": "2048",
+    "assigned_vpn_node": "quipu-osrs-node2",
+    "status": "authenticated",
+    "last_login": null,
+    "tags": [
+      "alt",
+      "pvp_pure",
+      "combat50"
+    ],
+    "metadata": {}
+  },
+  "wow_warrior_main": {
+    "account_id": "wow_warrior_main",
+    "game": "wow",
+    "username": "quipu_warrior",
+    "character_name": "QuipuWarrior",
+    "secret_enc": "3tOA9v71fNYVtnf17MergFmxvbE+eDqZIsd6QQ2QQg0OjzCec9Wl7FNh25Tp0exvFHqqZg==",
+    "realm_or_world": "logon.turtle-wow.org",
+    "pin": "",
+    "assigned_vpn_node": "quipu-wow-node1",
+    "status": "authenticated",
+    "last_login": 1790258920.6968622,
+    "tags": [
+      "main",
+      "tank",
+      "level15",
+      "westfall"
+    ],
+    "metadata": {}
+  },
+  "wow_mage_alt": {
+    "account_id": "wow_mage_alt",
+    "game": "wow",
+    "username": "quipu_mage",
+    "character_name": "QuipuMage",
+    "secret_enc": "MKWm2rLdJ5S4QA12fCcN1WKz6HTqXQG95wOyM9u361JNpyzwErS7dmKP0305NmiXoXQ=",
+    "realm_or_world": "logon.turtle-wow.org",
+    "pin": "",
+    "assigned_vpn_node": "quipu-wow-node2",
+    "status": "idle",
+    "last_login": null,
+    "tags": [
+      "alt",
+      "dps",
+      "aoe_frost",
+      "level20"
+    ],
+    "metadata": {}
+  },
+  "gw_ele_main": {
+    "account_id": "gw_ele_main",
+    "game": "gw",
+    "username": "quipu_elementalist@guildwars.local",
+    "character_name": "Quipu Elementalist",
+    "secret_enc": "qfndgfEJmglYSF/x84kg3m5HbexW0avwIsdd9G9NXqY1lwRVcFUa6ZQuYekYOmwjMBTN67k=",
+    "realm_or_world": "America-1 (Droknar's Forge)",
+    "pin": "",
+    "assigned_vpn_node": "quipu-gw-node1",
+    "status": "authenticated",
+    "last_login": 1790258920.7228947,
+    "tags": [
+      "main",
+      "fire_magic",
+      "level20",
+      "droknars"
+    ],
+    "metadata": {}
+  },
+  "gw_monk_alt": {
+    "account_id": "gw_monk_alt",
+    "game": "gw",
+    "username": "quipu_monk@guildwars.local",
+    "character_name": "Quipu Monk",
+    "secret_enc": "d5HGIgn4tdvztsi0AhTmwlTBR+nCMPVHYmuB+g89O54fFS2hja5dbiNehdAfI5ZlAG7W",
+    "realm_or_world": "America-1 (Kaineng)",
+    "pin": "",
+    "assigned_vpn_node": "quipu-gw-node2",
+    "status": "idle",
+    "last_login": null,
+    "tags": [
+      "alt",
+      "healer",
+      "level20",
+      "factions"
+    ],
+    "metadata": {}
+  }
+}

@@ -1,5 +1,34 @@
 # Release Notes
 
+## v0.45.0 - 2026-09-24
+
+**Mass Session Handler, Tailscale Mesh VPN & Physical Gate 6 User Integration**
+
+Centralized multi-container login orchestrator, encrypted Tailscale mesh overlay, multi-account credential management with AES-256-GCM, and human-in-the-loop Physical Gate 6 User Integration across game sessions and systemic refinement:
+
+### Added & Enhanced
+- **Mass Session Handler (`src/quipu/games/mass_session_handler.py`)**
+  - Multi-container mass authentication across Old School RuneScape (port 7310), World of Warcraft (port 7320), and Guild Wars (port 7330).
+  - Bridges directly with r-ADMIN (rADAM toroidal pressure & complex gradient optimizer): monitors complex session stability tensor $z = \text{stability} + i \cdot \text{friction}$, coordinates account rotation pressure, and enforces Gate 6 write holds.
+  - Interactive and scriptable CLI interface (`--login`, `--logout`, `--status`, `--vpn`, `--accounts`, `--gate6-list`, `--gate6-confirm`, `--r-admin`).
+- **Tailscale Mesh VPN Integration (`src/quipu/games/vpn_mesh_integration.py`)**
+  - Encrypted WireGuard overlay assigning CGNAT addresses (`100.64.0.0/10`) to containers and controllers (`quipu-r-admin: 100.64.0.5`, `quipu-game-osrs: 100.64.0.10`, `quipu-game-wow: 100.64.0.20`, `quipu-game-gw: 100.64.0.30`, `quipu-video-trainer: 100.64.0.40`).
+  - Peer ping latency monitoring, DERP relay fallback, exit node configuration (`exit-us-east`, `exit-eu-west`, `exit-us-central`), and Docker Compose environment variable injection (`TAILSCALE_AUTHKEY`, `TAILSCALE_OVERLAY_IP`).
+- **Multi-Account Profile Store (`src/quipu/games/account_store.py`)**
+  - Secure credential storage using AES-256-GCM authenticated encryption (`QUIPU_ACCOUNT_STORE_KEY`).
+  - Supports account creation, round-robin rotation for idle accounts, cooldown tracking, and tag/realm metadata.
+  - Pre-seeded with production profiles for OSRS (`osrs_quipubot_main`, `osrs_pure_alt`), WoW (`wow_warrior_main`, `wow_mage_alt`), and Guild Wars (`gw_ele_main`, `gw_monk_alt`).
+- **Physical Gate (Gate 6) Level of User Integration (`src/quipu/games/gate6_user_interlock.py`)**
+  - Universal human confirmation protocol bound to UEQGM v0.9.25 Gate 6 (Beautiful Output / Two-Party Attestation).
+  - When an autonomous game action breaks (captcha, disconnect, path obstacle) or when systemic refinement encounters uncertainty/anomalies, execution halts in band `翈`.
+  - The User/Operator reviews the breakage and confirms the right path or inputs. Generates a signed two-party `Attestation(signer=operator_id, love_form="repair", beautiful_output=True, assurance=ASSURANCE_APPROVED)`, clearing the hold and automatically resuming container execution and r-ADMIN optimization.
+- **Common Refinement Integration (`src/quipu/systemic_refinement_agent.py`)**
+  - Linked Ring 5 refinement and tool forging directly to Gate 6: any divergence creates a Gate 6 challenge and halts autonomous mutation until the user confirms the trajectory.
+- **Unit & Integration Test Suite (`tests/test_mass_session_handler.py`)**
+  - 5 comprehensive tests validating AES-256-GCM account encryption/rotation, VPN overlay status/ping, Gate 6 hold/attestation resolution, mass login orchestration, and refinement agent interlocks. 34 game-related tests passing.
+
+---
+
 ## v0.44.0 - 2026-09-24
 
 **Dedicated Multi-Game Client Containers & Automated Asset Downloaders**

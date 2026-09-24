@@ -38,7 +38,19 @@ class WoWEnvironmentState:
         self.download_status = "pending"
         self.installed_files: dict[str, int] = {}
         self.manifest: dict[str, Any] = {}
-        self.client_process_status = "idle"
+        self.client_process_status: str = "idle"
+        self.session_id: Optional[str] = None
+        self.account_id: Optional[str] = None
+        self.login_status: str = "logged_out"
+        self.logged_in_at: Optional[float] = None
+        self.active_challenge: Optional[dict[str, Any]] = None
+        self.vpn_attachment: dict[str, Any] = {
+            "status": "connected",
+            "overlay_ip": "100.64.0.20",
+            "tailnet": "quipu.mesh",
+            "connection_type": "direct_wireguard",
+            "latency_ms": 28.7,
+        }
         self.active_player_state: dict[str, Any] = {
             "player_name": "QuipuWarrior",
             "level": 15,
@@ -81,6 +93,12 @@ class WoWEnvironmentState:
             "uptime_seconds": round(time.time() - _START_TIME, 1),
             "download_status": self.download_status,
             "client_process_status": self.client_process_status,
+            "session_id": self.session_id,
+            "account_id": self.account_id,
+            "login_status": self.login_status,
+            "logged_in_at": self.logged_in_at,
+            "active_challenge": self.active_challenge,
+            "vpn_attachment": self.vpn_attachment,
             "installed_files": self.installed_files,
             "manifest": self.manifest,
             "player_state": self.active_player_state,
@@ -98,12 +116,77 @@ class WoWHTTPHandler(BaseHTTPRequestHandler):
             _STATE.scan_installed()
             self._respond_json(200, _STATE.to_dict())
         elif self.path == "/health":
-            self._respond_json(200, {"status": "healthy", "game": "wow", "client": "WoW 1.12.1"})
+            self._respond_json(200, {"status": "healthy", "game": "wow", "client": "WoW 1.12.1", "login_status": _STATE.login_status})
+        elif self.path == "/session":
+            self._respond_json(200, {
+                "game": "wow",
+                "session_id": _STATE.session_id,
+                "account_id": _STATE.account_id,
+                "login_status": _STATE.login_status,
+                "logged_in_at": _STATE.logged_in_at,
+                "vpn_attachment": _STATE.vpn_attachment,
+                "player_state": _STATE.active_player_state,
+                "active_challenge": _STATE.active_challenge,
+            })
         else:
-            self._respond_json(404, {"error": "Not Found", "valid_endpoints": ["/status", "/health", "/download", "/launch"]})
+            self._respond_json(404, {"error": "Not Found", "valid_endpoints": ["/status", "/health", "/session", "/login", "/logout", "/challenge", "/resolve_challenge", "/download", "/launch"]})
 
     def do_POST(self) -> None:
-        if self.path == "/download":
+        content_length = int(self.headers.get("Content-Length", 0))
+        post_data = {}
+        if content_length > 0:
+            try:
+                post_data = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            except Exception:
+                post_data = {}
+
+        if self.path == "/login":
+            account_id = post_data.get("account_id", "wow_warrior_main")
+            username = post_data.get("username", "quipu_warrior")
+            char_name = post_data.get("character_name", "QuipuWarrior")
+            realm = post_data.get("realm_or_world", "logon.turtle-wow.org")
+
+            _STATE.session_id = f"sess_wow_{int(time.time())}"
+            _STATE.account_id = account_id
+            _STATE.login_status = "authenticated"
+            _STATE.logged_in_at = time.time()
+            _STATE.client_process_status = "running"
+            _STATE.active_player_state["player_name"] = char_name
+            _STATE.active_player_state["current_realm"] = realm
+
+            logger.info("WoW Login successful: account=%s, session=%s", account_id, _STATE.session_id)
+            self._respond_json(200, {
+                "status": "authenticated",
+                "game": "wow",
+                "session_id": _STATE.session_id,
+                "account_id": _STATE.account_id,
+                "player_state": _STATE.active_player_state,
+                "vpn_attachment": _STATE.vpn_attachment,
+            })
+        elif self.path == "/logout":
+            old_session = _STATE.session_id
+            _STATE.session_id = None
+            _STATE.account_id = None
+            _STATE.login_status = "logged_out"
+            _STATE.logged_in_at = None
+            logger.info("WoW Logout successful for session=%s", old_session)
+            self._respond_json(200, {"status": "logged_out", "game": "wow", "previous_session": old_session})
+        elif self.path == "/challenge":
+            _STATE.login_status = "challenge_required"
+            _STATE.active_challenge = post_data or {
+                "breakage_type": "disconnection",
+                "reason": "Realm disconnected: Account re-authentication or route confirmation required",
+                "timestamp": time.time(),
+            }
+            logger.warning("WoW Challenge raised: %s", _STATE.active_challenge)
+            self._respond_json(200, {"status": "challenge_required", "game": "wow", "challenge": _STATE.active_challenge})
+        elif self.path == "/resolve_challenge":
+            _STATE.login_status = "authenticated"
+            res = _STATE.active_challenge
+            _STATE.active_challenge = None
+            logger.info("WoW Challenge resolved via Gate 6!")
+            self._respond_json(200, {"status": "resolved", "game": "wow", "resolved_challenge": res})
+        elif self.path == "/download":
             logger.info("Triggered WoW client download...")
             res = download_wow_client(_GAME_DIR)
             _STATE.scan_installed()
