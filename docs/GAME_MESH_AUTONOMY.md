@@ -176,3 +176,58 @@ Session concept-dense tokens and tactical action tuples are projected directly i
 3. **Directed Hebbian GNN Quipu Edges**: Bigram transitions update message-passing channel weights in `mesh_slm_quipu` ($w \leftarrow w + \eta_q \cdot (1 - w)$).
 4. **Co-Potentiation**: The containerized `video_trainer_daemon` automatically decompresses GARD Shard containers and executes online `train_round()` cycles, keeping the video agent and the vector graph co-potentiating in real time.
 
+---
+
+## 8. Dedicated Game Client Containers & Automated Asset Downloaders
+
+Each of the three games runs within an isolated container environment equipped with virtual framebuffers, compatibility layers (Wine / OpenJDK), and dedicated HTTP daemons that automatically fetch official game assets and manage execution state.
+
+### 8.1 Multi-Game Asset Architecture
+
+```
+                    +------------------------------------+
+                    |  QUIPU Multi-Game Asset Downloader |
+                    | (src/quipu/game_asset_downloader)  |
+                    +-----------------+------------------+
+                                      |
+         +----------------------------+----------------------------+
+         |                                                         |
+         v                                                         v
++-----------------------+     +-----------------------+     +-----------------------+
+|  quipu-game-osrs      |     |  quipu-game-wow       |     |  quipu-game-gw        |
+|  (Port 7310)          |     |  (Port 7320)          |     |  (Port 7330)          |
+|  Debian + OpenJDK 21  |     |  Debian + Wine + Xvfb |     |  Debian + Wine + Xvfb |
+|  RuneLite.jar (2.5MB) |     |  WoW 1.12.1 + MPQs    |     |  GwSetup.exe (5.66MB) |
+|  Volume: osrs_game_data|    |  Volume: wow_game_data|    |  Volume: gw_game_data |
++-----------------------+     +-----------------------+     +-----------------------+
+```
+
+### 8.2 Client Specifications & Asset Provenance
+1. **Old School RuneScape (`quipu-game-osrs`, Port 7310)**:
+   - **Engine**: Headless OpenJDK 21 with Xvfb virtual display (`:99`).
+   - **Binary Source**: Official GitHub Releases `https://github.com/runelite/launcher/releases/download/2.7.3/RuneLite.jar` (2,499,996 bytes).
+   - **Verification**: SHA-256 integrity hash verification (`d22a33eaa43b2f859a76824f3352cf3051bf1ff60b4fc405455ecbe8717bb827`).
+   - **Configuration**: Standard `runelite.properties` and `/games/osrs/launch_osrs.sh` wrapper.
+   - **Volume Mount**: Named volume `osrs_game_data` mounted at `/games/osrs`.
+
+2. **World of Warcraft 1.12.1 Classic (`quipu-game-wow`, Port 7320)**:
+   - **Engine**: Wine x86_64 environment with Xvfb display (`:99`).
+   - **Client Layout**: Standardized 1.12.1 Classic client directory tree with `WoW.exe`, `realmlist.wtf` pointing to private community realm (`logon.turtle-wow.org`), and `WTF/Config.wtf`.
+   - **Data Archives**: Initialized standard MPQ archives (`patch.mpq`, `dbc.mpq`, `terrain.mpq`, `wmo.mpq`).
+   - **Volume Mount**: Named volume `wow_game_data` mounted at `/games/wow`.
+
+3. **Guild Wars 1 (`quipu-game-gw`, Port 7330)**:
+   - **Engine**: Wine x86_64 environment with Xvfb display (`:99`).
+   - **Binary Source**: Official ArenaNet CloudFront CDN `https://cloudfront.guildwars2.com/client/GwSetup.exe` (5,660,840 bytes).
+   - **Verification**: SHA-256 integrity verification (`9152740c834eef57db881b51b46149e0bedebc65deef0900050abd0c41ce1c4b`).
+   - **Execution**: Installs `Gw.exe` and generates Wine launch script `/games/gw/launch_gw.sh`.
+   - **Volume Mount**: Named volume `gw_game_data` mounted at `/games/gw`.
+
+### 8.3 Container HTTP Endpoints
+Each container daemon exposes standardized HTTP management routes:
+- `GET /status`: Inspects directory manifest, asset file sizes, client status (`idle` or `running`), and active player state telemetry.
+- `GET /health`: Healthcheck probe for Docker Compose orchestrator.
+- `POST /download`: Explicitly triggers fresh asset download with hash verification.
+- `POST /launch`: Initiates headless client execution on display `:99`.
+
+

@@ -56,6 +56,57 @@ services:
       - ./quipu_learned_artifacts:/app/quipu_learned_artifacts
     restart: unless-stopped
 
+  quipu-game-osrs:
+    build:
+      context: .
+      dockerfile: Dockerfile.osrs
+    image: quipu-game-osrs:dev
+    container_name: quipu-game-osrs
+    ports:
+      - "127.0.0.1:7310:7310"
+    environment:
+      OSRS_PORT: "7310"
+      OSRS_HOST: "0.0.0.0"
+      OSRS_DIR: "/games/osrs"
+    volumes:
+      - osrs_game_data:/games/osrs
+    restart: unless-stopped
+
+  quipu-game-wow:
+    build:
+      context: .
+      dockerfile: Dockerfile.wow
+    image: quipu-game-wow:dev
+    container_name: quipu-game-wow
+    ports:
+      - "127.0.0.1:7320:7320"
+    environment:
+      WOW_PORT: "7320"
+      WOW_HOST: "0.0.0.0"
+      WOW_DIR: "/games/wow"
+    volumes:
+      - wow_game_data:/games/wow
+    restart: unless-stopped
+
+  quipu-game-gw:
+    build:
+      context: .
+      dockerfile: Dockerfile.gw
+    image: quipu-game-gw:dev
+    container_name: quipu-game-gw
+    ports:
+      - "127.0.0.1:7330:7330"
+    environment:
+      GW_PORT: "7330"
+      GW_HOST: "0.0.0.0"
+      GW_DIR: "/games/gw"
+    volumes:
+      - gw_game_data:/games/gw
+    restart: unless-stopped
+
 volumes:
   quipu_brain:
+  osrs_game_data:
+  wow_game_data:
+  gw_game_data:
 

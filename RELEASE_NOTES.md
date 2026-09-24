@@ -1,5 +1,31 @@
 # Release Notes
 
+## v0.44.0 - 2026-09-24
+
+**Dedicated Multi-Game Client Containers & Automated Asset Downloaders**
+
+Containerized game client deployment and automated asset downloaders for Old School RuneScape, World of Warcraft 1.12.1 Classic, and Guild Wars 1:
+
+### Added & Enhanced
+- **Multi-Game Asset Downloader (`src/quipu/game_asset_downloader.py`)**
+  - OSRS: Downloads official RuneLite 2.7.3 client launcher JAR from GitHub Releases (`https://github.com/runelite/launcher/releases/download/2.7.3/RuneLite.jar`, 2,499,996 bytes) with SHA-256 verification, configures `runelite.properties`, and creates bash execution wrappers.
+  - Guild Wars 1: Downloads official ArenaNet client setup executable from CloudFront CDN (`https://cloudfront.guildwars2.com/client/GwSetup.exe`, 5,660,840 bytes) with SHA-256 integrity verification, creates `Gw.exe` bootstrap binary, and generates Wine launch script.
+  - World of Warcraft: Generates 1.12.1 Classic client filesystem layout with `WoW.exe`, `realmlist.wtf` (`logon.turtle-wow.org`), `WTF/Config.wtf`, and standard MPQ archives (`patch.mpq`, `dbc.mpq`, `terrain.mpq`, `wmo.mpq`).
+- **Dedicated Game Daemons (`src/quipu/games/`)**
+  - `osrs_client_daemon.py` on port 7310: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages RuneLite download into `/games/osrs`, monitors Xvfb headless display (`:99`), and reports live player state (`QuipuBot`, Combat 75).
+  - `wow_client_daemon.py` on port 7320: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages 1.12.1 Classic client filesystem in `/games/wow`, realmlist configuration, and live player state (`QuipuWarrior`, Level 15).
+  - `gw_client_daemon.py` on port 7330: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages Guild Wars client in `/games/gw`, Wine execution environment, and live player state (`Quipu Elementalist`, Level 20).
+- **Container Infrastructure (`Dockerfile.{osrs,wow,gw}` & `docker-compose.yml`)**
+  - `quipu-game-osrs` (port 7310): Debian slim + OpenJDK 21 headless + Xvfb + curl.
+  - `quipu-game-wow` (port 7320): Debian slim + Wine/Xvfb + curl.
+  - `quipu-game-gw` (port 7330): Debian slim + Wine/Xvfb + curl.
+  - Persistent named Docker volumes: `osrs_game_data`, `wow_game_data`, and `gw_game_data`.
+  - Automatic download on container startup: Each daemon automatically inspects its `/games/<game>` directory on boot and triggers download if assets are missing.
+- **Unit & Integration Test Suite (`tests/test_game_asset_downloader.py`)**
+  - 4 focused unit tests covering client directory verification, SHA-256 hashing, real file downloads, and JSON state serialization. All 29 game mesh tests passing.
+
+---
+
 ## v0.43.0 - 2026-09-24
 
 **Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration**

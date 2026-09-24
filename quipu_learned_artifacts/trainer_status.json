@@ -1,13 +1,13 @@
 {
   "status": "training",
-  "current_game": "osrs",
-  "training_round": 23,
-  "uptime_seconds": 131.5,
-  "total_samples_processed": 736,
-  "real_video_files_processed": 92,
-  "last_loss": 22.681964,
-  "last_top1_accuracy": 0.0,
-  "last_fidelity_score": 0.9806,
+  "current_game": "wow",
+  "training_round": 457,
+  "uptime_seconds": 2583.1,
+  "total_samples_processed": 14620,
+  "real_video_files_processed": 1828,
+  "last_loss": 19.93594,
+  "last_top1_accuracy": 0.125,
+  "last_fidelity_score": 0.93,
   "last_verdict": "PASS",
   "active_recordings": [
     "twitch_gw_fissure_of_woe_menzies_temple.gard.json",
@@ -62,5 +62,5 @@
     "w_resource_cost_mp": 15.0,
     "temperature": 1.0
   },
-  "last_updated_s": 1790254134.1250172
+  "last_updated_s": 1790256585.76695
 }

@@ -4,6 +4,24 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.44.0] Dedicated Multi-Game Client Containers & Automated Asset Downloaders (2026-09-24)
+
+- **`src/quipu/game_asset_downloader.py`**: Automated multi-game asset downloader downloading and verifying game clients across Old School RuneScape, World of Warcraft, and Guild Wars 1:
+  - *OSRS*: Downloads official RuneLite 2.7.3 client launcher JAR from GitHub Releases (`RuneLite.jar`, 2.5 MB) with SHA-256 verification, configures `runelite.properties`, and generates launch scripts.
+  - *Guild Wars 1*: Downloads official ArenaNet installer from CloudFront CDN (`https://cloudfront.guildwars2.com/client/GwSetup.exe`, 5.66 MB) with SHA-256 integrity checks, generating bootstrap `Gw.exe` and Wine launch scripts.
+  - *World of Warcraft*: Generates 1.12.1 Classic client filesystem layout with `WoW.exe`, `realmlist.wtf` (`logon.turtle-wow.org`), `WTF/Config.wtf`, and standard MPQ archives (`patch.mpq`, `dbc.mpq`, `terrain.mpq`, `wmo.mpq`).
+- **`src/quipu/games/`**: Dedicated HTTP client daemons for each game:
+  - `osrs_client_daemon.py` (Port 7310): Manages RuneLite client installation, virtual Xvfb display (`:99`), and active player state (`QuipuBot`, Combat 75).
+  - `wow_client_daemon.py` (Port 7320): Manages WoW client filesystem, realmlist configuration, and active player state (`QuipuWarrior`, Level 15).
+  - `gw_client_daemon.py` (Port 7330): Manages Guild Wars client binaries, Wine execution environment, and active player state (`Quipu Elementalist`, Level 20).
+  - Common endpoints: `GET /status`, `GET /health`, `POST /download`, and `POST /launch`.
+- **`Dockerfile.osrs`, `Dockerfile.wow`, `Dockerfile.gw` & `docker-compose.yml`**:
+  - `quipu-game-osrs` (port 7310): Debian slim + OpenJDK 21 headless + Xvfb + curl.
+  - `quipu-game-wow` (port 7320): Debian slim + Wine/Xvfb + curl.
+  - `quipu-game-gw` (port 7330): Debian slim + Wine/Xvfb + curl.
+  - Persistent Docker named volumes: `osrs_game_data`, `wow_game_data`, and `gw_game_data`.
+- **`tests/test_game_asset_downloader.py`**: 4 unit tests verifying asset download structure, SHA-256 hashing, and daemon state serialization. Full test suite passes with 29 tests.
+
 ## [0.43.0] Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration (2026-09-24)
 
 - **`src/quipu/stream_corpus_scanner.py`**: High-volume stream scanner generating 60+ recording files across 18 modalities for WoW, OSRS, and GW. Renders video frames with dynamic HUD vitals and radar blip polar coordinates, writes synchronized speech transcripts with authentic gamer commentary, and encapsulates sessions using authenticated GARD Shard v2 containers (`gard-shard/v2`, AES-256-GCM + zlib level 6). Projects concept-dense tokens and tactical action bigrams directly into the toroidal Quipu vector graph (`mesh_slm`), updating 7-D embeddings and directed GNN quipu edges with holographic Weyl tensor compaction.
