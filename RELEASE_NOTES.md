@@ -1,5 +1,32 @@
 # Release Notes
 
+## v0.42.0 - 2026-09-24
+
+**Continuous Video & Stream Recording Trainer Daemon Container**
+
+Continuous ingestion daemon watching `/app/recordings` for incoming Twitch and YouTube gameplay clips (.mp4, .mkv, .webm, .avi and synchronized .txt speech transcripts) across World of Warcraft, Old School RuneScape, and Guild Wars:
+
+### Added & Enhanced
+- **Continuous Video Trainer Daemon (`src/quipu/video_trainer_daemon.py`)**
+  - Continuous directory watcher monitoring `/app/recordings` for new video streams and transcript files.
+  - Video frame extraction: samples gameplay at 2 FPS, extracting unit frame vitals (health, mana, combat state) and minimap radar blips via `HUDVisionExtractor`.
+  - Spoken audio intent parsing via `StreamerAudioParser` mapping player commentary into tactical action intents.
+  - Multi-game streaming replay synthesis: continuously generates demonstration batches across WoW, OSRS, and Guild Wars to ensure the model continuously potentiates even when offline recordings are idle.
+  - Inverse Graph Tension Learning (IGTL): runs quasi-Newton L-BFGS-B optimization on Quipu knot tension weights and utility reward profiles, minimizing Negative Log-Likelihood loss.
+  - Human Behavioral Fidelity evaluation: benchmarks each training batch via `PeriodicFidelityAssessor` across cadence variance, path wander, and personal space buffers.
+  - Persists learned parameters to `/app/quipu_learned_artifacts/quipu_learned_parameters.json` and records monotone history in `training_history.jsonl`.
+  - Live HTTP status server on port 7250 with `GET /status`, Prometheus `GET /metrics`, and `POST /queue` endpoints.
+
+- **Dedicated Trainer Container (`Dockerfile.trainer`) & Docker Compose Integration**
+  - Packaged standalone container `quipu-video-trainer:dev` listening on port 7250.
+  - Added `quipu-video-trainer` service to `docker-compose.yml` with host volume mounts for `./recordings` and `./quipu_learned_artifacts`.
+
+- **Unit & Integration Test Suite (`tests/test_video_trainer_daemon.py`)**
+  - Added tests for state serialization, synthetic video clip processing, and HTTP endpoint monitoring.
+  - Total test suite expanded to 20 passing tests.
+
+---
+
 ## v0.41.0 - 2026-09-24
 
 **Multi-Game Human Behavioral Fidelity & Social Indistinguishability Assessor**

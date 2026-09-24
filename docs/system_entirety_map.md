@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
 > **Version**: 0.39.0  
-> **Annealed**: 2026-09-24T02:04:40.142404+00:00  
-> **Map revision**: v149 · fingerprint `9057fd4011b0bcd4`  
+> **Annealed**: 2026-09-24T12:15:06.160506+00:00  
+> **Map revision**: v187 · fingerprint `9057fd4011b0bcd4`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,13 +31,13 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-09-24T02:04:40.142404+00:00`
+> Snapshot at annealing time `2026-09-24T12:15:06.160506+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
 | Sense | Value |
 |---|---|
-| vision | 27.0% |
+| vision | 26.7% |
 | touch | 4.2% |
 | smell | 3.4% |
 | body | 3.2% |
@@ -45,7 +45,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 | perception | 4.0% |
 
 **Observer tangent** (7th-D orthogonal excitation): 37.5%  
-**7-D magnitude**: 1.1040
+**7-D magnitude**: 1.1033
 
 ### 2.2 Material Bifurcation
 
@@ -89,38 +89,38 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Vocab size | 4119 / 4096 (100.56%) |
-| Quipu edges (GNN) | 1075364 |
-| Training rounds | 6741 |
-| Last loss | 0.4969042570881623 |
-| 8th-D MESH field | 0.9896 |
-| Last STP embed gap | 1.749366 |
-| Last STP torus gap | 1.602241 |
+| Vocab size | 4169 / 4096 (101.78%) |
+| Quipu edges (GNN) | 1120530 |
+| Training rounds | 7841 |
+| Last loss | 8.662717817311516e-07 |
+| 8th-D MESH field | 0.9821 |
+| Last STP embed gap | 1.755079 |
+| Last STP torus gap | 1.655111 |
 
 **STP P1 trend** (loss plateau while the geodesic gap keeps falling):
 
 | Series | Slope | P1 |
 |---|---|---|
-| loss | -0.010142200000000018 | plateaued: False |
-| STP embed gap | -0.07421105000000017 | False |
-| STP torus gap | 0.13654879999999991 | False |
+| loss | -0.003887699999999999 | plateaued: False |
+| STP embed gap | -0.1716534999999999 | False |
+| STP torus gap | -0.11137719999999995 | False |
 
 ---
 
 ## 4. Structural Changelog
 
-- **2026-09-24T01:44:37.317416+00:00** map v148 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-24T01:44:11.588200+00:00** map v147 (0.39.0) — hash `9057fd4011b0bcd4`
-- **2026-09-24T01:14:26.773068+00:00** map v146 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-24T01:14:12.514772+00:00** map v145 (0.39.0) — hash `9057fd4011b0bcd4`
-- **2026-09-24T00:45:17.488256+00:00** map v144 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-24T00:44:11.793606+00:00** map v143 (0.38.0) — hash `7e323e22c2d367d8`
-- **2026-09-24T00:15:20.292982+00:00** map v142 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-24T00:14:16.797017+00:00** map v141 (0.38.0) — hash `7e323e22c2d367d8`
-- **2026-09-23T23:44:15.662106+00:00** map v140 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-23T23:44:12.584967+00:00** map v139 (0.38.0) — hash `7e323e22c2d367d8`
-- **2026-09-23T23:14:21.688800+00:00** map v138 (0.33.1) — hash `de1d8a9b6df07687`
-- **2026-09-23T23:14:12.586905+00:00** map v137 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-24T12:14:11.877091+00:00** map v186 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T11:44:57.769208+00:00** map v185 (0.39.0) — hash `9057fd4011b0bcd4`
+- **2026-09-24T11:44:11.618570+00:00** map v184 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T11:15:06.097477+00:00** map v183 (0.39.0) — hash `9057fd4011b0bcd4`
+- **2026-09-24T11:14:11.729011+00:00** map v182 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T10:44:36.416480+00:00** map v181 (0.39.0) — hash `9057fd4011b0bcd4`
+- **2026-09-24T10:44:12.159136+00:00** map v180 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T10:14:53.807812+00:00** map v179 (0.39.0) — hash `9057fd4011b0bcd4`
+- **2026-09-24T10:14:11.903870+00:00** map v178 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T09:44:49.322681+00:00** map v177 (0.39.0) — hash `9057fd4011b0bcd4`
+- **2026-09-24T09:44:11.518204+00:00** map v176 (0.41.0) — hash `9efdf23c86f0751c`
+- **2026-09-24T09:14:38.195505+00:00** map v175 (0.39.0) — hash `9057fd4011b0bcd4`
 
 ---
 
