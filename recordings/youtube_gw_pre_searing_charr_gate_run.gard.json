@@ -1,0 +1,110 @@
+{
+  "authentication": {
+    "algorithm": "AES-256-GCM",
+    "mode": "aead"
+  },
+  "compressed_bytes": 504,
+  "compressed_sha256": "0ed35e57a003c7cb3e8411411cbdbf050267fef423ceb88036b8af22782c5072",
+  "compression": {
+    "algorithm": "zlib",
+    "level": 6
+  },
+  "domain": "SiCi_SQRT(-1)",
+  "encoding": "base64",
+  "encryption": {
+    "algorithm": "AES-256-GCM",
+    "padding": "none"
+  },
+  "model_context": {
+    "architecture": "MESH-SLM-SCM-GLM-Quipu-GNN",
+    "gard": {
+      "domain": "SiCi_SQRT(-1)",
+      "protocol": "gard-shard/v2",
+      "verify_digest_default": true
+    },
+    "gard_state5": [
+      0.384216,
+      0.996409,
+      0.9,
+      0.7105,
+      0.058824
+    ],
+    "mesh_state7": [
+      0.2689,
+      0.0417,
+      0.034,
+      0.0318,
+      1.0,
+      0.0395,
+      0.375
+    ],
+    "models": {
+      "glm": {
+        "architecture": "MESH-GLM",
+        "id": "mesh-glm/7d-alignment"
+      },
+      "gnn": {
+        "architecture": "Quipu-GNN",
+        "id": "quipu-gnn/hebbian"
+      },
+      "scm": {
+        "architecture": "SCM",
+        "id": "saturation-cycle-model"
+      },
+      "slm": {
+        "architecture": "MESH-SLM-GLM-GNN",
+        "id": "mesh-slm/torus-quipu-7d"
+      }
+    },
+    "quipu_gnn": {
+      "compaction": {
+        "compaction_ratio": 447118,
+        "compaction_scalar": 0.49056,
+        "gard_crb": {
+          "compaction_scalar_at_crb_floor": 0.451372,
+          "cramer_rao_var": 0.0025000000000000005,
+          "floor_bytes": 5,
+          "sigma": 0.05
+        },
+        "hawking_remnant_score": 0.666667,
+        "mesh_bytes_total": 36886640
+      },
+      "edge_count": 1122004,
+      "rounds": 7894,
+      "vocab_capacity": 4096,
+      "vocab_size": 4171
+    },
+    "schema": "gard-model-context/v1",
+    "scm": {
+      "coherence_depth": 3,
+      "langevin_sigma_reference": 0.04982,
+      "last_emission": null,
+      "phase_weight": 0.9,
+      "phi": 10.210176
+    },
+    "weyl_psi5": [
+      0.384216,
+      0.996409,
+      0.9,
+      0.7105,
+      0.058824
+    ]
+  },
+  "model_digest": "eb72ad9baa303d6f8cc24d87eef76f0d1711a2165fdb2518614a92a9efe5c609",
+  "plaintext_bytes": 1210,
+  "plaintext_sha256": "1ca3402dc41e2f1faa35e145a33c6b4deedb5ed3b5efe83c09b0b7300caf1805",
+  "protocol": "gard-shard/v2",
+  "protocol_version": 2,
+  "schema": "gard-shard-envelope/v2",
+  "shard_count": 1,
+  "shards": [
+    {
+      "ciphertext_b64": "XjaoV5au1KBLbfOXJ6d+Fz1ADEUknWIHTU3fozzMhHLVN12lv0eFlYNkFDIYo+4VABDHtmhJ9sDo09Zdfd3J9jHEhTISxliD1P7I5CtV4XepQpP6Gf7FKyAB8e2WkAmQqE6nU79rFdI39oB6iam/XWHc7fKK2HNjbutN7uDvfLgWY3riHck4wEyZCcEDgPrW6+Z5Ip85WZFvFVTIt2Ujq3v2r+J9b2bvT1YQZzeFBH+aVQ5yv2KuQqSZvJvF5ASBNMalXNZ6PZMf1Y1v8J+VHvFglFIX4Nf48d3QasV9vWSuLtlsrsKVJJNm5VS+CopI7hKznSjmVOzo15KHnmy5Ke1V0uVX0RjHxZppWdvq5By/pECA3bJZUkPPi3/K/kUOmoQaxvU8qgi59uSSFMvUJpYi9INc16Xqa+X9xzlgxcX4Op2eWXjF2Kp1nAYZZB0H7ECo6Q7e8Kj3H/Fi0GfClHRqMdTGIejmURD1wCsT3G1x7pTpZ/Z1QMtNTDMv03ibtk724YDTf3wxaKJgJDYfpKtSUJu/KKVx2XeEmM2Fe3tgUpdwlcWHtGn8/GApHx/ZvP9sHVf5hK08e3lvLOawkWrRU6KX+P+lEYdAvUPdz32OAS3Eo6eMt9E17Ie81lM5GDjytRPoptmSBPfbvkaYLlnvfKv8AHGyVH3LzYJcyIBM8ot69a5nsQ==",
+      "ciphertext_sha256": "68dc7b3d6db44dacd893a52272700e9aaa00b66e7beaaf6f0bd49747d15d6946",
+      "count": 1,
+      "index": 0,
+      "nonce_b64": "AZmMJrnbPB/9UvXP",
+      "salt_b64": "emPUqKt3H0w9qZI6VUPanCwRTs8JufUP32zQrk0PDdY="
+    }
+  ]
+}

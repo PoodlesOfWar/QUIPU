@@ -30,11 +30,13 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 
+from .gard_shard_model import GardShardConfig, decrypt_json, read_envelope_json
 from .human_fidelity_assessor import (
     AssessmentVerdict,
     PeriodicFidelityAssessor,
     SupportedGame,
 )
+from .mesh_slm import feed_corpus, train_round
 from .quipu_game_mesh import TacticalActionType
 from .video_gameplay_pipeline import (
     DemonstrationStep,
@@ -161,9 +163,63 @@ class ContinuousVideoTrainer:
         logger.info("Extracted %d demonstration frames from %s", len(steps), video_path.name)
         return steps
 
+    def process_gard_shard_file(self, shard_path: Path) -> list[DemonstrationStep]:
+        """Decompresses an authenticated GARD Shard container and reconstructs demonstration steps."""
+        logger.info("Processing GARD Shard recording: %s", shard_path.name)
+        try:
+            envelope = read_envelope_json(shard_path)
+            secret = os.environ.get("SCBRAIN_GRID_SECRET", "quipu-stream-grid-secret-v2")
+            payload = decrypt_json(envelope, secret=secret, config=GardShardConfig())
+        except Exception as exc:
+            logger.warning("Could not decrypt GARD shard %s: %s", shard_path.name, exc)
+            return []
+
+        steps: list[DemonstrationStep] = []
+        raw_demos = payload.get("demonstrations", [])
+        base_step = self.pipeline.build_synthetic_demonstrations(1)[0]
+
+        for item in raw_demos:
+            try:
+                intent = StreamerSpeechIntent(item.get("speech_intent", "neutral_chat"))
+            except Exception:
+                intent = StreamerSpeechIntent.NEUTRAL_CHAT
+
+            try:
+                action = TacticalActionType(item.get("action", "traverse_navmesh"))
+            except Exception:
+                action = TacticalActionType.TRAVERSE_NAVMESH
+
+            step = DemonstrationStep(
+                step_id=f"{shard_path.stem}_{item.get('step_index', 0)}",
+                timestamp_s=float(item.get("timestamp_s", 0.0)),
+                agent_state=base_step.agent_state,
+                entities=[],
+                nav_waypoints=[],
+                affordances=[],
+                occluders=[],
+                speech_intent=intent,
+                human_action=action,
+            )
+            step.agent_state.hp_pct = float(item.get("hp_pct", 1.0))
+            step.agent_state.mp_pct = float(item.get("mp_pct", 1.0))
+            step.agent_state.is_in_combat = bool(item.get("in_combat", False))
+            steps.append(step)
+
+        # Feed concepts into vector graph
+        try:
+            game = payload.get("game", "mmo")
+            cat = payload.get("category", "gameplay")
+            feed_text = f"{game} {cat} {payload.get('dominant_action', '')} {payload.get('streamer', '')}"
+            feed_corpus(feed_text, source=f"gard_shard_{game}")
+        except Exception as exc:
+            logger.debug("Failed feeding GARD shard into vector graph: %s", exc)
+
+        logger.info("Extracted %d demonstrations from GARD Shard %s", len(steps), shard_path.name)
+        return steps
+
     def scan_for_recordings(self) -> list[Path]:
-        """Finds video recording files in the watch directory."""
-        extensions = ["*.mp4", "*.mkv", "*.webm", "*.avi"]
+        """Finds video and GARD Shard recording files in the watch directory."""
+        extensions = ["*.mp4", "*.mkv", "*.webm", "*.avi", "*.gard.json", "*.gard.store"]
         files: list[Path] = []
         for ext in extensions:
             files.extend(_RECORDINGS_DIR.glob(ext))
@@ -179,14 +235,20 @@ class ContinuousVideoTrainer:
             _STATE.current_game = current_game.value
             _STATE.training_round += 1
 
-            # 1. Check for real video recordings
+            # 1. Check for real video & GARD Shard recordings
             real_files = self.scan_for_recordings()
             _STATE.active_recordings = [f.name for f in real_files]
             demonstrations: list[DemonstrationStep] = []
 
             if real_files:
-                for vf in real_files[:2]:  # Process up to 2 videos per round
-                    demo_batch = self.process_real_video_file(vf)
+                batch_size = min(4, len(real_files))
+                start_idx = (_STATE.training_round * batch_size) % len(real_files)
+                selected_files = [real_files[(start_idx + i) % len(real_files)] for i in range(batch_size)]
+                for rf in selected_files:
+                    if rf.name.endswith((".gard.json", ".gard.store")):
+                        demo_batch = self.process_gard_shard_file(rf)
+                    else:
+                        demo_batch = self.process_real_video_file(rf)
                     demonstrations.extend(demo_batch)
                     _STATE.real_video_files_processed += 1
 
@@ -234,6 +296,13 @@ class ContinuousVideoTrainer:
             }
             with open(_ARTIFACT_DIR / "training_history.jsonl", "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
+
+            # Periodically settle online vector graph training (every 5 rounds)
+            if _STATE.training_round % 5 == 0:
+                try:
+                    train_round(max_seconds=2.0, max_chunks=20)
+                except Exception as exc:
+                    logger.debug("Vector graph train_round: %s", exc)
 
             logger.info(
                 "Round %d [%s] Complete — Loss: %.5f — Top-1: %.1f%% — Fidelity: %.1f%% (%s)",

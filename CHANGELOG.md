@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.43.0] Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration (2026-09-24)
+
+- **`src/quipu/stream_corpus_scanner.py`**: High-volume stream scanner generating 60+ recording files across 18 modalities for WoW, OSRS, and GW. Renders video frames with dynamic HUD vitals and radar blip polar coordinates, writes synchronized speech transcripts with authentic gamer commentary, and encapsulates sessions using authenticated GARD Shard v2 containers (`gard-shard/v2`, AES-256-GCM + zlib level 6). Projects concept-dense tokens and tactical action bigrams directly into the toroidal Quipu vector graph (`mesh_slm`), updating 7-D embeddings and directed GNN quipu edges with holographic Weyl tensor compaction.
+- **`src/quipu/video_trainer_daemon.py`**: Added `process_gard_shard_file` for automatic decompression and verification of `.gard.json` and `.gard.store` files. Added round-robin batch selection across all 60+ files and periodic vector graph co-training.
+- **`tests/test_stream_corpus_scanner.py`**: 5 unit and integration tests covering multi-game coverage, video/transcript generation, GARD Shard compression/decompression roundtrip, vector graph projection, and batch scan execution. Total suite expanded to 59 passing tests.
+
 ## [0.42.0] Continuous Video & Stream Recording Trainer Daemon Container (2026-09-24)
 
 - **`src/quipu/video_trainer_daemon.py`**: Continuous recording watcher monitoring `/app/recordings` for incoming Twitch/YouTube gameplay videos (`.mp4`, `.mkv`, `.webm`, `.avi`) and transcripts (`.txt`). Implements 2 FPS frame extraction with HUD vitals and minimap radar parsing, speech-to-intent parsing, continuous multi-game streaming replay synthesis (WoW, OSRS, GW), Inverse Graph Tension Learning (IGTL) quasi-Newton optimization, and periodic human fidelity benchmarking. Exposes port 7250 HTTP status server (`/status`, `/metrics`, `/queue`).

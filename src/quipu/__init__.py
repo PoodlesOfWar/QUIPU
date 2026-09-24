@@ -64,5 +64,6 @@ from . import video_gameplay_pipeline
 from . import game_pipeline_service
 from . import human_fidelity_assessor
 from . import video_trainer_daemon
+from . import stream_corpus_scanner
 
 

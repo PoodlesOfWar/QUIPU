@@ -1,5 +1,29 @@
 # Release Notes
 
+## v0.43.0 - 2026-09-24
+
+**Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration**
+
+High-volume gameplay stream ingestion across World of Warcraft (WoW), Old School RuneScape (OSRS), and Guild Wars (GW), sealed via GARD Shard v2 (AES-256-GCM + zlib level 6) authenticated containers and projected directly into the toroidal Quipu vector graph (`mesh_slm`):
+
+### Added & Enhanced
+- **Stream Corpus Scanner (`src/quipu/stream_corpus_scanner.py`)**
+  - Multi-Game Catalog: 18 streaming sessions covering dungeons (Scarlet Monastery, Blackrock Depths), raids (Molten Core, Theatre of Blood), solo bossing (Zulrah, TzTok-Jad), world PvP (Stranglethorn Vale, Deep Wilderness, Warsong Gulch), slayer, hardcore leveling, and Guild Wars elite missions (Fissure of Woe, Underworld, Heroes' Ascent, Droknar's Forge, Pre-Searing).
+  - High-Volume File Ingestion: Generates 60+ files in `recordings/` (21 `.mp4` video streams with dynamic HUD vitals and minimap radar blips, 21 synchronized `.txt` speech transcripts with authentic gamer commentary).
+  - GARD Shard Compression & Decompression (`gard-shard/v2`): Encapsulates demonstration bundles into authenticated `.gard.json` and `.gard.store` containers with zlib level 6 compression and AES-256-GCM encryption. Provides lossless roundtrip reconstruction with bit-for-bit accuracy.
+  - Toroidal Quipu Vector Graph Projection (`mesh_slm` in `local_brain.sqlite`): Maps session concepts and tactical action tuples into `mesh_corpus_feed` and executes `train_round()` to update 7-D embedding coordinates on the torus, grow the vocabulary, and train directed Hebbian GNN quipu edges.
+  - Holographic Weyl Compaction: Computes Page-curve Hawking information remnant score and compaction ratio via `ueqgm_engine`.
+
+- **Enhanced Continuous Video Trainer Daemon (`src/quipu/video_trainer_daemon.py`)**
+  - Integrated GARD Shard Container Decompression: Automatically detects and decrypts `.gard.json` and `.gard.store` files alongside raw `.mp4` video files.
+  - Round-Robin File Rotation: Slices and rotates across all 60+ recording files round-by-round (`training_round % len(all_recordings)`).
+  - Continuous Vector Graph Co-Potentiation: Periodically executes `mesh_slm.train_round()` during live video training rounds to keep the vector graph continuously aligned with live gameplay.
+
+- **Comprehensive Test Suite Expansion (`tests/test_stream_corpus_scanner.py`)**
+  - 5 new tests covering multi-game coverage, video/transcript generation, GARD Shard AES-256-GCM + zlib compression roundtrip, vector graph projection, and batch scan execution. Full test suite expanded to 59 passing tests.
+
+---
+
 ## v0.42.0 - 2026-09-24
 
 **Continuous Video & Stream Recording Trainer Daemon Container**

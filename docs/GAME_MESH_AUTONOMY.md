@@ -151,3 +151,28 @@ curl http://127.0.0.1:7250/status
 curl http://127.0.0.1:7250/metrics
 ```
 
+---
+
+## 7. Stream Corpus Scanner, GARD Shard Packaging & Vector Graph Integration
+
+### 7.1 High-Volume Streaming Corpus Ingestion
+The **Stream Corpus Scanner** (`src/quipu/stream_corpus_scanner.py`) scans and generates 18 rich streaming sessions across Twitch and YouTube, generating 60+ files in `recordings/` across World of Warcraft, Old School RuneScape, and Guild Wars:
+- **Dungeons & Raids**: Scarlet Monastery, Molten Core, Theatre of Blood, Blackrock Depths.
+- **Bossing & Hardcore**: Zulrah rotation switching, TzTok-Jad prayer flicking, Elwynn Fargodeep mine survival.
+- **Wilderness & PvP**: Stranglethorn Vale ganking, Deep Wilderness Revenant Caves multi-PK escape, Warsong Gulch flag carrying.
+- **Guild Wars Campaigns**: Fissure of Woe Menzies temple defense, Underworld reaper escort, Heroes' Ascent 8v8, Droknar's Forge mountain traverse, Pre-Searing Ascalon North Gate exploration.
+
+### 7.2 GARD Shard Compression & Lossless Decompression (`gard-shard/v2`)
+Every demonstration session is sealed and authenticated into a `.gard.json` / `.gard.store` container using the existing `gard_shard_model.py` architecture:
+- **Compression**: zlib level 6 with canonical deterministic JSON formatting.
+- **AEAD Encryption**: AES-256-GCM authenticated encryption with 12-byte random nonce and 16-byte MAC tag bound to domain `SiCi_SQRT(-1)`.
+- **Zero Data Dissociation**: Lossless bit-for-bit reconstruction via `decrypt_json()` with constant-time AEAD verification.
+- **Holographic Compaction**: Computes Page-curve Hawking information remnant score and compaction ratio via `ueqgm_engine.weyl_scalar_tensor()`.
+
+### 7.3 Toroidal Quipu Vector Graph Integration (`mesh_slm`)
+Session concept-dense tokens and tactical action tuples are projected directly into `mesh_slm` (`local_brain.sqlite`):
+1. **Corpus Ingestion**: Tokens are appended to `mesh_corpus_feed` under platform/game source tags.
+2. **7-D Embedding Updates**: Token positions in `mesh_slm_embed` are adjusted across the seven sense axes (`vision`, `touch`, `smell`, `body`, `brain`, `perception`, `entirety`).
+3. **Directed Hebbian GNN Quipu Edges**: Bigram transitions update message-passing channel weights in `mesh_slm_quipu` ($w \leftarrow w + \eta_q \cdot (1 - w)$).
+4. **Co-Potentiation**: The containerized `video_trainer_daemon` automatically decompresses GARD Shard containers and executes online `train_round()` cycles, keeping the video agent and the vector graph co-potentiating in real time.
+
