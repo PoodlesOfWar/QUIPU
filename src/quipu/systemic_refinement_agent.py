@@ -153,7 +153,10 @@ def raise_refinement_breakage(
     context: Optional[dict] = None,
 ) -> str:
     """Trigger a Gate 6 Hold when systemic refinement encounters uncertainty or breakage."""
-    from quipu.games.gate6_user_interlock import get_global_interlock, BreakageType
+    try:
+        from perceptopoly.games.gate6_user_interlock import get_global_interlock, BreakageType
+    except ImportError:
+        from .gate6_interlock import get_global_interlock, BreakageType
     interlock = get_global_interlock()
     event = interlock.raise_breakage(
         domain="systemic_refinement",
@@ -172,7 +175,10 @@ def confirm_refinement_breakage(
     confirmed_path: str,
 ) -> dict:
     """Confirm the right path for a held refinement cycle, releasing Gate 6."""
-    from quipu.games.gate6_user_interlock import get_global_interlock
+    try:
+        from perceptopoly.games.gate6_user_interlock import get_global_interlock
+    except ImportError:
+        from .gate6_interlock import get_global_interlock
     interlock = get_global_interlock()
     return interlock.confirm_right_path(
         breakage_id=breakage_id,

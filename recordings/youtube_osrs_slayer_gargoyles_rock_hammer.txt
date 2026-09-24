@@ -1,4 +1,0 @@
-Slaying gargoyles in Morytania slayer tower.
-Respecting other players' mob tags, no kill stealing.
-Rock hammer smashes the stone gargoyle at low HP.
-Picking up rune full helm and gold coin drops.
