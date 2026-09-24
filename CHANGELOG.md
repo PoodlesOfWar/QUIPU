@@ -4,7 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.41.0] Human Behavioral Fidelity & Social Indistinguishability Assessor (2026-09-24)
+
+- **`src/quipu/human_fidelity_assessor.py`**: Periodic empirical assessment suite evaluating agent interaction telemetry against human distributions for WoW, OSRS, and GW across 4 dimensions: reaction latency variance & right-skew tail ratio, spatial wander & curvature entropy, social etiquette & personal space buffers, and downtime hesitation pacing.
+- **`src/quipu/game_pipeline_service.py`**: Live containerized microservice updated with `GET /assessments` (multi-game fidelity reports) and `POST /assess` (on-demand game evaluation), plus automated telemetry sample recording on `POST /tick`.
+- **`tests/test_human_fidelity_assessor.py`**: 4 unit tests validating human-mimic passes, synthetic bot detection, multi-game profiles, and sample size fallbacks. Total test suite passes with 17 tests.
+
 ## [0.40.0] Game Mesh Autonomy & Video Pre-Training Pipeline (2026-09-24)
+
 
 - **`src/quipu/quipu_game_mesh.py`**: Full hierarchical Andean Quipu topology (Primary Trunk, Spatial/Threat/Affordance/Social Pendants, Figure-8/Long/Single Knots, and Flee/Add/Escape Subsidiaries) for classic MMORPG ground-bound autonomy (WoW: Forever, OSRS, GW). Implements level-delta aggro radius scaling, social pull alerts, humanoid runner flee vector raycasting, LoS corner occlusion, and dynamic tension utility optimization.
 - **`src/quipu/video_gameplay_pipeline.py`**: Video frame HUD vitals extraction, minimap radar entity detection, speech-to-intent parsing, and Inverse Graph Tension Learning (IGTL) via quasi-Newton L-BFGS-B to train knot weights from human expert demonstrations.
