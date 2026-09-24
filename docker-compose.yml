@@ -19,5 +19,23 @@ services:
       - ./bridge_state:/app/bridge_state
     restart: unless-stopped
 
+  quipu-game-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.game
+    image: quipu-game-pipeline:dev
+    container_name: quipu-game-pipeline
+    ports:
+      - "127.0.0.1:7200:7200"
+    environment:
+      SCB_DB_PATH: /data/local_brain.sqlite
+      GAME_PIPELINE_PORT: "7200"
+      GAME_PIPELINE_HOST: "0.0.0.0"
+    volumes:
+      - quipu_brain:/data
+      - ./quipu_learned_artifacts:/app/quipu_learned_artifacts
+    restart: unless-stopped
+
 volumes:
   quipu_brain:
+

@@ -4,7 +4,16 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.40.0] Game Mesh Autonomy & Video Pre-Training Pipeline (2026-09-24)
+
+- **`src/quipu/quipu_game_mesh.py`**: Full hierarchical Andean Quipu topology (Primary Trunk, Spatial/Threat/Affordance/Social Pendants, Figure-8/Long/Single Knots, and Flee/Add/Escape Subsidiaries) for classic MMORPG ground-bound autonomy (WoW: Forever, OSRS, GW). Implements level-delta aggro radius scaling, social pull alerts, humanoid runner flee vector raycasting, LoS corner occlusion, and dynamic tension utility optimization.
+- **`src/quipu/video_gameplay_pipeline.py`**: Video frame HUD vitals extraction, minimap radar entity detection, speech-to-intent parsing, and Inverse Graph Tension Learning (IGTL) via quasi-Newton L-BFGS-B to train knot weights from human expert demonstrations.
+- **`src/quipu/game_pipeline_service.py`**: Containerized daemon service exposing port 7200 with `/health`, `/parameters`, `/tick`, and `/train` endpoints.
+- **`Dockerfile.game` & `docker-compose.yml`**: Packaged `quipu-game-pipeline:dev` container running actively with health check.
+- **`tests/test_quipu_game_mesh.py` & `tests/test_video_gameplay_pipeline.py`**: 13 unit and integration tests passing offline.
+
 ## [0.38.0] Sensing Layer — more feeds, a critical coupled layer, routing around silence (2026-09-23)
+
 
 Operator directive, 2026-09-23: *"Build the sensing layer"* — criticality control, silent-source routing and new input terminals, all three.
 
