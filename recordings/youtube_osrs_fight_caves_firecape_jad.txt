@@ -1,4 +1,0 @@
-Jad slammed front feet: protect from ranged immediately!
-Healers spawned, tag each healer once without moving into melee range!
-Natural human reaction latency maintained, do not double-click prayer!
-Jad defeated! Fire cape unlocked!

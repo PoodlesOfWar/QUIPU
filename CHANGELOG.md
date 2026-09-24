@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.46.0] Perceptopoly Decoupling & Extraction (2026-09-24)
+
+- **Dedicated Perceptopoly Repository**: Extracted all game mesh autonomy, video pre-training pipelines, continuous stream trainer daemons, multi-game client containers (OSRS, WoW, GW), Tailscale mesh VPN, and mass session handling out of `QUIPU` into dedicated repository `https://github.com/loadopoly/Perceptopoly.git` (`Perceptopoly`, v2.1.0).
+- **Core QUIPU Streamlining**: `QUIPU` retains its core purpose as the computational universe, supply chain brain orchestrator, and qpsi governance engine. Preserves `gate6_interlock.py` for Physical Gate 6 (*Beautiful Output* / Two-Party Attestation) user confirmation across systemic refinement cycles.
+- **Verification**: All 551 core tests passing in `QUIPU`; all 34 game autonomy and pipeline tests passing in `Perceptopoly`.
+
 ## [0.45.0] Mass Session Handler, Tailscale Mesh VPN & Physical Gate 6 User Integration (2026-09-24)
 
 - **`src/quipu/games/mass_session_handler.py`**: Centralized mass login and session orchestrator coordinating across OSRS (`7310`), WoW (`7320`), and GW (`7330`) containers. Directly integrated with r-ADMIN (rADAM toroidal pressure optimizer) to monitor session stability tensors ($z = \text{stability} + i \cdot \text{friction}$), dispatch multi-account rotations, and respect Gate 6 holds. Exposes full CLI (`--login`, `--logout`, `--status`, `--vpn`, `--accounts`, `--gate6-list`, `--gate6-confirm`, `--r-admin`).
