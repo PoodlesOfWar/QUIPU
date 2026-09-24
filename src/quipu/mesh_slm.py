@@ -3278,7 +3278,7 @@ def generate(
             if any(k in low_p for k in ("eoq", "demand", "ordering cost", "holding", "calculate eoq")):
                 try:
                     import re as _re
-                    nums = [float(x) for x in _re.findall(r"[\d.]+", prompt or "") if float(x) > 0.5][:4]
+                    nums = [float(x) for x in _re.findall(r"\d+(?:\.\d+)?", prompt or "") if float(x) > 0.5][:4]
                     if len(nums) >= 1:
                         d = nums[0]
                         s = nums[1] if len(nums) > 1 else 50.0

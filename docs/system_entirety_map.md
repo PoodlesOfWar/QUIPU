@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
 > **Version**: 0.33.1  
-> **Annealed**: 2026-09-16T22:22:07.142086+00:00  
-> **Map revision**: v10 · fingerprint `de1d8a9b6df07687`  
+> **Annealed**: 2026-09-24T00:45:17.488256+00:00  
+> **Map revision**: v144 · fingerprint `de1d8a9b6df07687`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,21 +31,21 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-09-16T22:22:07.142086+00:00`
+> Snapshot at annealing time `2026-09-24T00:45:17.488256+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
 | Sense | Value |
 |---|---|
-| vision | 3.0% |
+| vision | 26.8% |
 | touch | 4.2% |
 | smell | 3.4% |
 | body | 3.2% |
-| brain | 3.2% |
+| brain | 100.0% |
 | perception | 4.0% |
 
-**Observer tangent** (7th-D orthogonal excitation): 0.9%  
-**7-D magnitude**: 0.0867
+**Observer tangent** (7th-D orthogonal excitation): 37.5%  
+**7-D magnitude**: 1.1035
 
 ### 2.2 Material Bifurcation
 
@@ -61,7 +61,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Transaction drive | 18.1% |
+| Transaction drive | 33.5% |
 | Transaction kind | `n/a` |
 
 ### 2.4 UEQGM Runtime
@@ -89,35 +89,38 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Vocab size | 4098 / 4096 (100.05%) |
-| Quipu edges (GNN) | 914249 |
-| Training rounds | 2874 |
-| Last loss | 0.6806767469537685 |
-| 8th-D MESH field | 0.9675 |
-| Last STP embed gap | 0.927144 |
-| Last STP torus gap | 1.359541 |
+| Vocab size | 4118 / 4096 (100.54%) |
+| Quipu edges (GNN) | 1070814 |
+| Training rounds | 6658 |
+| Last loss | 0.04284837131288276 |
+| 8th-D MESH field | 0.9897 |
+| Last STP embed gap | 1.244514 |
+| Last STP torus gap | 1.305113 |
 
 **STP P1 trend** (loss plateau while the geodesic gap keeps falling):
 
 | Series | Slope | P1 |
 |---|---|---|
-| loss | -0.01166345000000002 | plateaued: False |
-| STP embed gap | 0.04321275000000013 | False |
-| STP torus gap | 0.08529714999999993 | False |
+| loss | 0.007970599999999994 | plateaued: False |
+| STP embed gap | -0.09193349999999989 | False |
+| STP torus gap | -0.07785449999999994 | False |
 
 ---
 
 ## 4. Structural Changelog
 
-- **2026-09-14T13:15:31.730012+00:00** map v9 (0.33.0) — hash `3fd505756747eb4b`
-- **2026-09-08T23:44:11.536872+00:00** map v8 (0.32.0) — hash `297c05b412e55203`
-- **2026-08-22T23:44:11.306446+00:00** map v7 (0.31.0) — hash `fc9b41886199c297`
-- **2026-08-22T19:44:10.294464+00:00** map v6 (0.30.0) — hash `8586f0037efc8213`
-- **2026-08-20T19:44:08.686959+00:00** map v5 (0.29.0) — hash `46bad90693753017`
-- **2026-08-20T19:14:09.610778+00:00** map v4 (0.28.0) — hash `5dde21aa68e7bbd1`
-- **2026-07-23T19:14:06.468763+00:00** map v3 (0.27.0) — hash `fd21e419f5f63fd7`
-- **2026-07-23T18:44:06.424649+00:00** map v2 (0.26.0) — hash `95232d12f98265c4`
-- **2026-07-23T16:13:05.345781+00:00** map v1 (0.26.0) — hash `1654d33aaadbafd1`
+- **2026-09-24T00:44:11.793606+00:00** map v143 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-24T00:15:20.292982+00:00** map v142 (0.33.1) — hash `de1d8a9b6df07687`
+- **2026-09-24T00:14:16.797017+00:00** map v141 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-23T23:44:15.662106+00:00** map v140 (0.33.1) — hash `de1d8a9b6df07687`
+- **2026-09-23T23:44:12.584967+00:00** map v139 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-23T23:14:21.688800+00:00** map v138 (0.33.1) — hash `de1d8a9b6df07687`
+- **2026-09-23T23:14:12.586905+00:00** map v137 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-23T22:45:17.446070+00:00** map v136 (0.33.1) — hash `de1d8a9b6df07687`
+- **2026-09-23T22:44:13.059566+00:00** map v135 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-23T22:14:27.856821+00:00** map v134 (0.33.1) — hash `de1d8a9b6df07687`
+- **2026-09-23T22:14:13.457829+00:00** map v133 (0.38.0) — hash `7e323e22c2d367d8`
+- **2026-09-23T21:44:52.190527+00:00** map v132 (0.33.1) — hash `de1d8a9b6df07687`
 
 ---
 
