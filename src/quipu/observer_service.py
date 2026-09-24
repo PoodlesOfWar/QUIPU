@@ -458,6 +458,33 @@ def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, d
         return 500, {"ok": False, "error": str(exc)}
 
 
+def _world_model_transition(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """Forward state prediction and rollout simulation endpoint."""
+    try:
+        state = body.get("state", {})
+        if "actions" in body:
+            actions = body.get("actions", [])
+            dt = float(body.get("dt", 1.0))
+            trajectory = world_model.simulate_rollout(state, actions, dt=dt)
+            return 200, {
+                "ok": True,
+                "mode": "rollout",
+                "trajectory": [s.to_dict() for s in trajectory],
+                "final_state": trajectory[-1].to_dict(),
+            }
+        else:
+            action = body.get("action")
+            dt = float(body.get("dt", 1.0))
+            next_state = world_model.transition_step(state, action, dt=dt)
+            return 200, {
+                "ok": True,
+                "mode": "step",
+                "predicted_state": next_state.to_dict(),
+            }
+    except Exception as exc:
+        return 400, {"ok": False, "error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Background trainer — the Observer's learning loop.
 # ---------------------------------------------------------------------------
@@ -602,6 +629,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="classify")
             elif parsed.path == "/generate":
                 code, payload = _slm(body, endpoint_kind="generate")
+            elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
+                code, payload = _world_model_transition(body)
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
             self._send_json(code, payload)

@@ -1,0 +1,16 @@
+task_id,variant,correctness,latency_ms,tokens,confidence,grounding,fallback,result_preview,python,ts,platform
+eoq_basic,slm_only,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+eoq_basic,full_cascade,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+eoq_basic,expert_swarm,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+eoq_basic,peer_via_router,0.0,800.5,0,0.0,0.0,True,"{'error': ""cannot access local variable 'dec' where it is not associated with a value""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+eoq_basic,external_openrouter,0.0,1200.4,0,0.0,0.0,True,"{'error': ""external_openrouter failed: No module named 'src.quipu.llm_caller_openrouter'""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+multi_echelon_safety,slm_only,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+multi_echelon_safety,full_cascade,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+multi_echelon_safety,expert_swarm,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+multi_echelon_safety,peer_via_router,0.0,800.8,0,0.0,0.0,True,"{'error': ""cannot access local variable 'dec' where it is not associated with a value""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+multi_echelon_safety,external_openrouter,0.0,1200.6,0,0.0,0.0,True,"{'error': ""external_openrouter failed: No module named 'src.quipu.llm_caller_openrouter'""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+part_classify,slm_only,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+part_classify,full_cascade,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+part_classify,expert_swarm,0.0,0.0,0,0.75,0.1,False,{'simulated': 'peer LLM response'},3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+part_classify,peer_via_router,0.0,800.6,0,0.0,0.0,True,"{'error': ""cannot access local variable 'dec' where it is not associated with a value""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0
+part_classify,external_openrouter,0.0,1200.6,0,0.0,0.0,True,"{'error': ""external_openrouter failed: No module named 'src.quipu.llm_caller_openrouter'""}",3.13,2026-09-23T13:32:51+00:00,Windows-11-10.0.22631-SP0

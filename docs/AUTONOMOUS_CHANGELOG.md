@@ -1,3 +1,19 @@
+## 2026-09-23 — World Model Forward State Transition Function $\hat{S}_{t+1} = f(S_t, A_t)$ (v0.39.0)
+
+- **`src/quipu/world_model.py`**:
+  - Defined `WorldState` dataclass: $S_t$ state vector capturing inventory ($I \ge 0$), backlog ($B \ge 0$), pipeline delay queue ($P$), demand rate, capacity, flux, load ratio ($\rho$), cumulative operational cost ($C$), reliability ($R \in [0, 1]$), congestion latency, uncertainty variances ($\sigma$), and custom metrics.
+  - Defined `TransitionEvent` dataclass: $A_t$ action and disturbance vector supporting decisions (order quantity, expedite, capacity/demand targets) and exogenous shocks (demand surges, lead-time disruptions, capacity outages, defect shocks).
+  - Implemented `transition_step(S_t, A_t, \Delta t)`: deterministic discrete-time transition function enforcing mass conservation, pipeline delay progression, bottleneck clamping, cost accumulation, and uncertainty propagation.
+  - Implemented `simulate_rollout(S_0, actions, \Delta t)`: multi-horizon forward trajectory simulation $[S_0, \hat{S}_1, \dots, \hat{S}_T]$.
+  - Implemented `evaluate_prediction(\hat{S}_{t+1}, S_{t+1})`: residual computation, normalized Z-scores, MSE, MAE, and non-linear epistemic surprise mapping.
+  - Implemented `record_transition_prediction` and `record_transition_observation`: persistent SQLite integration via `brain_kv` coupling empirical prediction divergence to `world_model:surprise_ema` and logging rupture events on reality divergence.
+- **`src/quipu/observer_service.py`**:
+  - Added `POST /world-model/transition` endpoint (aliased to `/transition` and `/predict`) supporting single-step transitions and multi-horizon rollouts via JSON payload.
+- **`tests/test_world_model_transition.py`** (new):
+  - 13 comprehensive unit tests verifying serialization, steady-state mass balance, demand surges with backlog recovery, lead-time delays, capacity bottlenecks, economic costs, rollouts, prediction evaluation, brain_kv recording, order expediting, capacity outages, custom metrics, and 30-step physical invariants under randomized shocks.
+- **`tests/test_observer_service.py`**:
+  - Added endpoint tests validating HTTP `/world-model/transition` single-step and rollout modes.
+
 ## 2026-09-08 — Google gVisor (runsc) Sentry Containment & Hardened OCI Containment (v0.32.0)
 
 - **`src/quipu/security.py`** (new):
