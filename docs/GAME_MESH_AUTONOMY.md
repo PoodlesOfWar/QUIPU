@@ -80,7 +80,20 @@ $$\mathcal{L}(\vec{\theta}) = -\frac{1}{N} \sum_{i=1}^N \log \left( \frac{\exp(\
 
 ---
 
-## 4. Containerized Microservice
+## 4. Multi-Game Human Behavioral Fidelity Assessor
+
+To determine if the autonomous agent's actions pass as authentic active human players across Old School RuneScape (OSRS), Guild Wars (GW), and World of Warcraft (WoW), `human_fidelity_assessor.py` performs periodic evaluations across four empirical dimensions:
+
+1. **Cadence & Reaction Latency Variance**: Tests for natural ex-Gaussian distributions with long right-skew tails; flags rigid, flat, or zero-variance reaction times.
+2. **Spatial Wander & Curvature**: Measures non-zero geodesic path wander; flags straight-line machine pathing.
+3. **Social Etiquette & Bubble Buffers**: Tracks personal space distances and flags anti-social behaviors (e.g. mob poaching / kill-stealing).
+4. **Attrition & Hesitation Pacing**: Measures natural hesitation pauses before eating, drinking, or engaging.
+
+Reports output a categorical verdict: `PASS` ($\ge 85\%$), `BORDERLINE` ($70\text{--}84\%$), or `SUSPICIOUS_BOT_PATTERN` ($< 70\%$).
+
+---
+
+## 5. Containerized Microservice
 
 The engine runs as an active Docker container exposing port `7200`:
 
@@ -88,6 +101,8 @@ The engine runs as an active Docker container exposing port `7200`:
 | :--- | :--- | :--- |
 | `GET` | `/health` | Container liveness, uptime, and last training accuracy |
 | `GET` | `/parameters` | Active calibrated Quipu tension parameters |
+| `GET` | `/assessments` | Live multi-game fidelity assessment reports (WoW, OSRS, GW) |
+| `POST` | `/assess` | Triggers an on-demand fidelity check for a specific game |
 | `POST` | `/train` | Triggers an on-demand training cycle from demonstrations |
 | `POST` | `/tick` | Real-time state evaluation returning Quipu tactical actuation |
 
@@ -99,6 +114,10 @@ docker compose up -d quipu-game-pipeline
 # Check health
 curl http://127.0.0.1:7200/health
 
+# Check multi-game fidelity assessments
+curl http://127.0.0.1:7200/assessments
+
 # Trigger real-time tactical tick
 curl -X POST http://127.0.0.1:7200/tick -H "Content-Type: application/json" -d '{"agent_core": {"hp_pct": 0.18, "is_in_combat": true}, "entities": [{"guid": "m1", "name": "Defias Rogue", "level": 17, "health_pct": 0.9, "is_hostile": true, "is_combatant": true}]}'
 ```
+

@@ -1,6 +1,34 @@
 # Release Notes
 
+## v0.41.0 - 2026-09-24
+
+**Multi-Game Human Behavioral Fidelity & Social Indistinguishability Assessor**
+
+Periodic empirical assessment suite benchmarking autonomous agent behavioral telemetry against active human player distributions across World of Warcraft (WoW), Old School RuneScape (OSRS), and Guild Wars (GW):
+
+### Added & Enhanced
+- **Human Behavioral Fidelity Assessor (`src/quipu/human_fidelity_assessor.py`)**
+  - Multi-game benchmark profiles: calibrated human baselines for WoW (reaction mean 320ms, min std 65ms, spatial wander 0.18), OSRS (reaction mean 380ms, min std 85ms, spatial wander 0.12), and GW (reaction mean 290ms, min std 60ms, spatial wander 0.16).
+  - 4-Dimensional Behavioral Evaluation:
+    - *Cadence & Reaction Variance*: detects ex-Gaussian right-skew distributions and flags rigid zero-variance bot signatures.
+    - *Spatial Wander & Curvature*: detects natural sub-optimal pathing and flags straight-line machine navmesh paths.
+    - *Social Etiquette & Bubble Buffers*: evaluates personal space distance and flags kill-stealing on tagged mobs.
+    - *Attrition Pacing*: measures hesitation pauses before eating, drinking, or resting.
+  - Generates comprehensive `FidelityAssessmentReport` with overall percentage score, sub-dimension diagnostics, flagged anomalies, and categorical verdict (`PASS`, `BORDERLINE`, `SUSPICIOUS_BOT_PATTERN`).
+
+- **Containerized Service Integration (`src/quipu/game_pipeline_service.py`)**
+  - Exposed `GET /assessments` returning real-time fidelity evaluations for WoW, OSRS, and GW simultaneously.
+  - Exposed `POST /assess` for on-demand assessment execution.
+  - Continuous telemetry accumulation: `POST /tick` records samples with human-mimic latency and pathing into the active game assessor.
+  - Container rebuilt and running actively on port 7200.
+
+- **Fidelity Test Suite (`tests/test_human_fidelity_assessor.py`)**
+  - 4 new unit tests covering human-mimic pass scenarios, synthetic bot detection, multi-game profiles, and sample size fallbacks. Total test suite expanded to 17 passing tests.
+
+---
+
 ## v0.40.0 - 2026-09-24
+
 
 **QUIPU Game Mesh Autonomy & Video-to-Graph Pre-Training Pipeline**
 

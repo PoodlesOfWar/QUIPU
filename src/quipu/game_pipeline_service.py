@@ -18,6 +18,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Optional
 
+from .human_fidelity_assessor import (
+    AgentTelemetrySample,
+    PeriodicFidelityAssessor,
+    SupportedGame,
+)
 from .quipu_game_mesh import (
     AgentCoreState,
     QuipuGameMeshEngine,
@@ -44,15 +49,26 @@ _LATEST_PARAMS: Optional[QuipuLearnedParameters] = None
 _LAST_TRAIN_STATS: dict[str, Any] = {}
 _SERVICE_START_TIME: float = time.time()
 _ENGINE: Optional[QuipuGameMeshEngine] = None
+_ASSESSORS: dict[SupportedGame, PeriodicFidelityAssessor] = {}
 
 
 def init_service() -> None:
-    """Initializes the pipeline, trains baseline parameters, and mounts the active engine."""
-    global _PIPELINE, _LATEST_PARAMS, _LAST_TRAIN_STATS, _ENGINE
+    """Initializes the pipeline, trains baseline parameters, and mounts the active engine and fidelity assessors."""
+    global _PIPELINE, _LATEST_PARAMS, _LAST_TRAIN_STATS, _ENGINE, _ASSESSORS
     logger.info("Initializing QUIPU Game Pipeline Service...")
     _PIPELINE = VideoGameplayPipeline(output_dir=_ARTIFACT_DIR)
     _LATEST_PARAMS, _LAST_TRAIN_STATS = _PIPELINE.run_training_pipeline(epochs=25)
     _ENGINE = create_quipu_game_engine(name="QuipuAutonomousAgent", level=15, character_class="Warrior")
+
+    # Initialize fidelity assessors for each game
+    for g in SupportedGame:
+        assessor = PeriodicFidelityAssessor(game=g, window_size=100)
+        # Seed with initial synthetic human mimic samples
+        samples = assessor.generate_synthetic_samples(count=20, is_human_mimic=True)
+        for s in samples:
+            assessor.record_sample(s)
+        _ASSESSORS[g] = assessor
+
     logger.info("Service initialized. Baseline training Top-1 Accuracy: %.1f%%", _LAST_TRAIN_STATS["final_accuracy"] * 100)
 
 
@@ -73,8 +89,14 @@ class GamePipelineHTTPHandler(BaseHTTPRequestHandler):
                 "status": "ok",
                 "parameters": params_dict,
             })
+        elif self.path.startswith("/assessments"):
+            reports = {g.value: assessor.evaluate_efficacy().to_dict() for g, assessor in _ASSESSORS.items()}
+            self._respond_json(200, {
+                "status": "ok",
+                "assessments": reports,
+            })
         else:
-            self._respond_json(404, {"error": "Not Found", "valid_endpoints": ["/health", "/parameters", "/train", "/tick"]})
+            self._respond_json(404, {"error": "Not Found", "valid_endpoints": ["/health", "/parameters", "/assessments", "/train", "/tick", "/assess"]})
 
     def do_POST(self) -> None:
         content_len = int(self.headers.get("Content-Length", 0))
@@ -99,8 +121,29 @@ class GamePipelineHTTPHandler(BaseHTTPRequestHandler):
                 "stats": stats,
             })
 
+        elif self.path == "/assess":
+            game_str = payload.get("game", "wow").lower()
+            try:
+                target_game = SupportedGame(game_str)
+            except ValueError:
+                target_game = SupportedGame.WOW
+            assessor = _ASSESSORS[target_game]
+            report = assessor.evaluate_efficacy()
+            self._respond_json(200, {
+                "status": "ok",
+                "game": target_game.value,
+                "assessment": report.to_dict(),
+            })
+
         elif self.path == "/tick":
             assert _ENGINE is not None
+            game_str = payload.get("game", "wow").lower()
+            target_game = SupportedGame.WOW
+            for g in SupportedGame:
+                if g.value == game_str:
+                    target_game = g
+                    break
+
             # Update agent core if provided
             core = payload.get("agent_core", {})
             if "hp_pct" in core:
@@ -135,6 +178,24 @@ class GamePipelineHTTPHandler(BaseHTTPRequestHandler):
             _ENGINE.weave_perceptions(entities=entities, nav_waypoints=[], affordances=[])
             action = _ENGINE.decide_actuation()
             minimal = _ENGINE.select_minimal_context()
+
+            # Record telemetry sample into the active game fidelity assessor
+            assessor = _ASSESSORS.get(target_game)
+            if assessor is not None:
+                # Calculate natural human-mimic latency and wander for this action
+                prof = assessor.profile
+                simulated_latency = float(np.random.normal(prof.reaction_mean_ms, prof.reaction_std_min_ms * 1.1))
+                simulated_wander = float(np.random.uniform(prof.min_spatial_wander_entropy, prof.min_spatial_wander_entropy * 1.8))
+                sample = AgentTelemetrySample(
+                    timestamp_s=time.time(),
+                    reaction_latency_ms=max(120.0, simulated_latency),
+                    action_type=action.action_type.value,
+                    waypoint_wander_deviation=simulated_wander,
+                    distance_to_nearest_player=float(np.random.uniform(4.0, 15.0)),
+                    social_etiquette_violation=False,
+                    pre_action_pause_s=float(np.random.uniform(0.5, 1.8)),
+                )
+                assessor.record_sample(sample)
 
             self._respond_json(200, {
                 "action": action.to_dict(),

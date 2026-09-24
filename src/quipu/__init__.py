@@ -62,4 +62,6 @@ if os.environ.get("QUIPU_SELF_ORGANISING", "0") == "1":
 from . import quipu_game_mesh
 from . import video_gameplay_pipeline
 from . import game_pipeline_service
+from . import human_fidelity_assessor
+
 
