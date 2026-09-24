@@ -1,6 +1,35 @@
 # Release Notes
 
+## v0.40.0 - 2026-09-24
+
+**QUIPU Game Mesh Autonomy & Video-to-Graph Pre-Training Pipeline**
+
+Hierarchical Andean graph topology for classic MMORPG spatial and behavioral decision-making, coupled with video-based Inverse Graph Tension Learning (IGTL) and active containerization:
+
+### Added & Enhanced
+- **QUIPU Game Mesh Autonomy Engine (`src/quipu/quipu_game_mesh.py`)**
+  - Andean Quipu cord-and-knot topology: Primary Trunk Cord (Agent Core Vector: vitals, inventory, macro-intent), Sensory Pendants (Spatial, Threat, Affordance, Social), and Knot types (Figure-8 hard barriers, Long Knots with $N$ intensity loops, Single Knots for binary states).
+  - Classic MMORPG Physics & Rules (WoW: Forever, OSRS, GW): Dynamic level-delta aggro radius scaling ($R = \text{clamp}(20 + 1.5 \cdot \Delta L, 5, 45)$), Figure-8 skull danger mobs ($\ge 3$ levels), social pull radius alert geometry, humanoid runner ($\le 20\%$ HP) forward flee trajectory raycast with `Flee / Add` subsidiary cord generation, low-health ($\le 25\%$ HP) `Escape Path` subsidiaries, and out-of-combat rest/drink downtime pacing.
+  - Tactical Action Actuator: Dynamic tension evaluation and utility optimization generating discrete tactical actions (`PULL_TO_LOS`, `SNARE_FLEEING_RUNNER`, `ENGAGE_COMBAT`, `RETREAT_ESCAPE`, `REST_AND_RECOVER`, `HARVEST_AFFORDANCE`, `TRAVERSE_NAVMESH`).
+  - Low-latency minimal context subgraph distillation for real-time edge decision loops.
+
+- **Video Pre-Training & Inverse Graph Tension Learning (IGTL) (`src/quipu/video_gameplay_pipeline.py`)**
+  - Computer Vision HUD extraction: color-thresholding of health and mana bars, in-combat glow detection, and minimap radar polar entity tracking.
+  - Streamer audio transcription parser: maps spoken commentary into tactical intents (LoS, runner alert, rest mandate, emergency flee).
+  - IGTL Optimizer: quasi-Newton L-BFGS-B optimization minimizing Negative Log-Likelihood (NLL) of expert human actions under the Quipu Softmax policy to calibrate knot tension weights and utility rewards.
+  - CLI runner for demonstration synthesis and parameter training.
+
+- **Containerized Daemon Service (`src/quipu/game_pipeline_service.py` & `Dockerfile.game`)**
+  - Standalone active microservice on port 7200 providing `GET /health`, `GET /parameters`, `POST /tick`, and `POST /train` HTTP endpoints.
+  - Added `quipu-game-pipeline` service to `docker-compose.yml`.
+
+- **Comprehensive Test Suite (`tests/test_quipu_game_mesh.py`, `tests/test_video_gameplay_pipeline.py`)**
+  - 13 passing unit and integration tests covering knot physics, threat geometry, flee subsidiaries, LoS pulling, vision extraction, speech classification, and L-BFGS-B parameter fitting.
+
+---
+
 ## v0.31.0 - 2026-08-22
+
 
 **Infodynamic Gravity and Analog Traveling-Wave Cognition**
 

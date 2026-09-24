@@ -1,0 +1,12 @@
+{
+  "w_figure_eight": 3.0,
+  "w_threat_base": 1.0,
+  "w_dist_decay": 0.05,
+  "w_runner_urgency": 2.5,
+  "w_escape_urgency": 3.0,
+  "w_rest_reward": 80.0,
+  "w_los_pull_reward": 70.0,
+  "w_resource_cost_hp": 20.0,
+  "w_resource_cost_mp": 15.0,
+  "temperature": 1.0
+}

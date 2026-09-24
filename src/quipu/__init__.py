@@ -58,3 +58,8 @@ if os.environ.get("QUIPU_SELF_ORGANISING", "0") == "1":
     except Exception as _exc:  # pragma: no cover
         import logging as _logging
         _logging.getLogger(__name__).warning("self_organising not enabled: %s", _exc)
+
+from . import quipu_game_mesh
+from . import video_gameplay_pipeline
+from . import game_pipeline_service
+

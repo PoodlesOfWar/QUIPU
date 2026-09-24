@@ -8,4 +8,7 @@ pyarrow>=15.0.0
 # Optional: corpus_ingest streaming sources (FineWeb / C4 / Wikipedia / Dolma / ...)
 # Without these, corpus_ingest falls back to the http sources (arXiv, Gutenberg).
 requests>=2.31
+opencv-python-headless>=4.8.0
+scipy>=1.11.0
 # datasets>=2.19        # uncomment to enable HuggingFace streaming corpora
+
