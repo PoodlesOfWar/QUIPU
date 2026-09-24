@@ -1,0 +1,4 @@
+Mountain sprint through the Shiverpeaks to Droknar's Forge!
+Terrain friction and snow slowdown: keep dash and sprint up!
+Avoid Frost Titan patrol aggro radius!
+Safely entering Droknar's Forge outpost boundary.
