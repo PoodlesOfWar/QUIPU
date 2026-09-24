@@ -68,8 +68,13 @@ services:
       OSRS_PORT: "7310"
       OSRS_HOST: "0.0.0.0"
       OSRS_DIR: "/games/osrs"
+      TAILSCALE_AUTHKEY: "tskey-auth-kQUIPU-2026-MESH-V1"
+      TAILSCALE_TAILNET: "quipu.mesh"
+      TAILSCALE_OVERLAY_IP: "100.64.0.10"
+      TAILSCALE_HOSTNAME: "osrs.quipu.mesh"
     volumes:
       - osrs_game_data:/games/osrs
+      - ./src:/app/src:ro
     restart: unless-stopped
 
   quipu-game-wow:
@@ -84,8 +89,13 @@ services:
       WOW_PORT: "7320"
       WOW_HOST: "0.0.0.0"
       WOW_DIR: "/games/wow"
+      TAILSCALE_AUTHKEY: "tskey-auth-kQUIPU-2026-MESH-V1"
+      TAILSCALE_TAILNET: "quipu.mesh"
+      TAILSCALE_OVERLAY_IP: "100.64.0.20"
+      TAILSCALE_HOSTNAME: "wow.quipu.mesh"
     volumes:
       - wow_game_data:/games/wow
+      - ./src:/app/src:ro
     restart: unless-stopped
 
   quipu-game-gw:
@@ -100,8 +110,13 @@ services:
       GW_PORT: "7330"
       GW_HOST: "0.0.0.0"
       GW_DIR: "/games/gw"
+      TAILSCALE_AUTHKEY: "tskey-auth-kQUIPU-2026-MESH-V1"
+      TAILSCALE_TAILNET: "quipu.mesh"
+      TAILSCALE_OVERLAY_IP: "100.64.0.30"
+      TAILSCALE_HOSTNAME: "gw.quipu.mesh"
     volumes:
       - gw_game_data:/games/gw
+      - ./src:/app/src:ro
     restart: unless-stopped
 
 volumes:

@@ -58,6 +58,24 @@ def run_strategy(*, max_tools: int = 2) -> dict:
     actions: list[str] = []
 
     try:
+        from quipu.games.gate6_user_interlock import get_global_interlock, BreakageType
+        interlock = get_global_interlock()
+        active_holds = interlock.list_active_holds(domain="systemic_refinement")
+        if active_holds:
+            log.warning("systemic_refinement: HELD AT GATE 6 awaiting user confirmation: %s", [h.breakage_id for h in active_holds])
+            actions.append("held_at_gate_6:awaiting_user_confirmation")
+            entry = {
+                "ts": ts,
+                "actions": actions,
+                "status": "held_at_gate_6",
+                "active_holds": [h.to_dict() for h in active_holds],
+            }
+            _record_cycle(entry)
+            return entry
+    except Exception as exc:
+        log.debug("Gate 6 check skipped: %s", exc)
+
+    try:
         state = mesh_slm.state_summary()
     except Exception as exc:
         log.warning("systemic_refinement: state_summary failed: %s", exc)
@@ -129,4 +147,45 @@ def history() -> list[dict]:
     return h if isinstance(h, list) else []
 
 
-__all__ = ["run_strategy", "last_cycle", "history"]
+def raise_refinement_breakage(
+    reason: str,
+    suggested_paths: Optional[list[str]] = None,
+    context: Optional[dict] = None,
+) -> str:
+    """Trigger a Gate 6 Hold when systemic refinement encounters uncertainty or breakage."""
+    from quipu.games.gate6_user_interlock import get_global_interlock, BreakageType
+    interlock = get_global_interlock()
+    event = interlock.raise_breakage(
+        domain="systemic_refinement",
+        target="ring_5_refinement",
+        breakage_type=BreakageType.REFINEMENT_ANOMALY,
+        reason=reason,
+        suggested_paths=suggested_paths or ["Retrain with human prior", "Rollback to last checkpoint", "Accept candidate mutation"],
+        context=context or {},
+    )
+    return event.breakage_id
+
+
+def confirm_refinement_breakage(
+    breakage_id: str,
+    operator_signer: str,
+    confirmed_path: str,
+) -> dict:
+    """Confirm the right path for a held refinement cycle, releasing Gate 6."""
+    from quipu.games.gate6_user_interlock import get_global_interlock
+    interlock = get_global_interlock()
+    return interlock.confirm_right_path(
+        breakage_id=breakage_id,
+        operator_signer=operator_signer,
+        confirmed_path=confirmed_path,
+    )
+
+
+__all__ = [
+    "run_strategy",
+    "last_cycle",
+    "history",
+    "raise_refinement_breakage",
+    "confirm_refinement_breakage",
+]
+

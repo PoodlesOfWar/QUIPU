@@ -4,6 +4,15 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.45.0] Mass Session Handler, Tailscale Mesh VPN & Physical Gate 6 User Integration (2026-09-24)
+
+- **`src/quipu/games/mass_session_handler.py`**: Centralized mass login and session orchestrator coordinating across OSRS (`7310`), WoW (`7320`), and GW (`7330`) containers. Directly integrated with r-ADMIN (rADAM toroidal pressure optimizer) to monitor session stability tensors ($z = \text{stability} + i \cdot \text{friction}$), dispatch multi-account rotations, and respect Gate 6 holds. Exposes full CLI (`--login`, `--logout`, `--status`, `--vpn`, `--accounts`, `--gate6-list`, `--gate6-confirm`, `--r-admin`).
+- **`src/quipu/games/vpn_mesh_integration.py`**: Tailscale-like mesh VPN integration assigning CGNAT overlay addresses (`100.64.0.0/10`) to containers and r-ADMIN (`quipu-r-admin: 100.64.0.5`, `quipu-game-osrs: 100.64.0.10`, `quipu-game-wow: 100.64.0.20`, `quipu-game-gw: 100.64.0.30`, `quipu-video-trainer: 100.64.0.40`). Coordinates WireGuard peer routing, DERP relay fallback, and exit node selection (`exit-us-east`, `exit-eu-west`, `exit-us-central`).
+- **`src/quipu/games/account_store.py`**: Multi-account profile store securing credentials via AES-256-GCM authenticated encryption (`QUIPU_ACCOUNT_STORE_KEY`). Supports round-robin rotation, status tracking (`idle`, `authenticated`, `challenge_required`), and metadata tagging. Seeded with default profiles for OSRS, WoW, and Guild Wars.
+- **`src/quipu/games/gate6_user_interlock.py`**: Universal Physical Gate 6 (Beautiful Output / Two-Party Attestation) user confirmation protocol. When an autonomous game action, navigation obstacle, or systemic refinement anomaly breaks execution, a Gate 6 Hold is triggered in band `翈`. Operators confirm the verified path via signed attestations, clearing the hold and resuming r-ADMIN optimization.
+- **`src/quipu/systemic_refinement_agent.py`**: Linked directly to the Gate 6 User Interlock as the common level of User integration across all refinement and emergence cycles.
+- **`tests/test_mass_session_handler.py`**: 5 unit and integration tests covering multi-account encryption, VPN mesh peer pinging, Gate 6 hold resolution, mass session orchestration, and systemic refinement interlocks. Total suite expanded to 34 passing tests.
+
 ## [0.44.0] Dedicated Multi-Game Client Containers & Automated Asset Downloaders (2026-09-24)
 
 - **`src/quipu/game_asset_downloader.py`**: Automated multi-game asset downloader downloading and verifying game clients across Old School RuneScape, World of Warcraft, and Guild Wars 1:
