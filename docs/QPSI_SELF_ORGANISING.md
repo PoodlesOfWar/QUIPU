@@ -75,11 +75,11 @@ Every constant is a starting point, recorded in each `entirety_somn_log` row, an
 
 ```powershell
 # see the plan the network recorded (pure read)
-python -m src.quipu.qpsi.self_organising status
-python -m src.quipu.qpsi.self_organising pulse
+python -m src.quipu.qpsi status
+python -m src.quipu.qpsi pulse
 
 # apply one pulse of the field along the plan (the operator's act), then one step
-python -m src.quipu.qpsi.self_organising pulse --route
+python -m src.quipu.qpsi pulse --route
 #   --refine     also run Ring-5 refinement per Weyl cycle (default off: ingestion only)
 
 # the runner

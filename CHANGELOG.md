@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.46.1] `python -m src.quipu.qpsi` (2026-09-25)
+
+- **The runpy warning.** With `QUIPU_SELF_ORGANISING=1` in the environment (the operator's `setx`, 2026-09-23), `src/quipu/__init__.py` imports `qpsi.self_organising` to wire the loop, so `python -m src.quipu.qpsi.self_organising …` made runpy execute a second copy of the module as `__main__` and print `RuntimeWarning: 'src.quipu.qpsi.self_organising' found in sys.modules after import of package 'src.quipu.qpsi', but prior to execution …` on every run. The second copy dispatched to the canonical one (v0.34.0), so the behaviour was defined; only the warning was wrong.
+- **`src/quipu/qpsi/__main__.py`.** `python -m src.quipu.qpsi status | pulse [--route] | planes | accrete | fibre TOKEN` — an entry point imported by nothing, so runpy has nothing to warn about. The docs use it; the old command still works, with the warning, when the flag is on — `Start-Pulse.ps1` still calls the old form (its stderr is not shown by the scheduled task) and can be pointed at `-m src.quipu.qpsi` by changing that one argument.
+- 1 new test (the entry point runs clean under the flag with `-W error::RuntimeWarning`).
+
 ## [0.46.0] Perceptopoly Decoupling & Extraction (2026-09-24)
 
 - **Dedicated Perceptopoly Repository**: Extracted all game mesh autonomy, video pre-training pipelines, continuous stream trainer daemons, multi-game client containers (OSRS, WoW, GW), Tailscale mesh VPN, and mass session handling out of `QUIPU` into dedicated repository `https://github.com/loadopoly/Perceptopoly.git` (`Perceptopoly`, v2.1.0).
