@@ -344,3 +344,23 @@ def test_a_failed_accretion_is_rolled_back_whole_and_the_step_still_commits(isol
                           (cd.TABLE_DEPTH,)).fetchone()[0] == 0
     assert brain_kv.kv_get_json(ma.KV_STATE) is not None                                 # the SOMN step committed
     assert brain_kv.kv_get_json(cd.KV_SUMMARY) is None                                    # still fresh: retried next step
+
+
+def test_the_cli_entry_point_runs_clean_under_the_flag():
+    """``python -m src.quipu.qpsi`` (qpsi/__main__.py).  With QUIPU_SELF_ORGANISING=1
+    the package import already holds self_organising, so ``-m …qpsi.self_organising``
+    made runpy execute a second copy and warn ("found in sys.modules after import of
+    package … prior to execution") on every pulse.  The entry point is imported by
+    nothing, so the same command line is clean even with RuntimeWarning as an error."""
+    import os
+    import pathlib
+    import subprocess
+    import sys
+    from src.quipu.qpsi import __main__ as entry
+    assert entry._main is so._main                                            # one CLI, one module
+    root = pathlib.Path(__file__).resolve().parents[1]
+    env = dict(os.environ, QUIPU_SELF_ORGANISING="1", PYTHONPATH=str(root), PYTHONIOENCODING="utf-8")
+    r = subprocess.run([sys.executable, "-W", "error::RuntimeWarning", "-m", "src.quipu.qpsi", "--help"],
+                       cwd=root, env=env, capture_output=True, text=True, timeout=180)
+    assert r.returncode == 0, r.stderr
+    assert "found in sys.modules" not in r.stderr and "pulse" in r.stdout

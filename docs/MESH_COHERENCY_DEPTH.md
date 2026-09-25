@@ -48,9 +48,9 @@ Capacity: 4,101 × K epistemic states, K = 3 + number of emergent specialists (6
 ## Reading it
 
 ```powershell
-python -m src.quipu.qpsi.self_organising planes                 # counts per plane, coherencies, depth histogram
-python -m src.quipu.qpsi.self_organising fibre inventory        # one token's planes, C tensor, depth
-python -m src.quipu.qpsi.self_organising accrete [--limit N]    # rebuild now
+python -m src.quipu.qpsi planes                 # counts per plane, coherencies, depth histogram
+python -m src.quipu.qpsi fibre inventory        # one token's planes, C tensor, depth
+python -m src.quipu.qpsi accrete [--limit N]    # rebuild now
 ```
 
 ## What this module writes, and what it does not
