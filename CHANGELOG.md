@@ -4,6 +4,26 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.47.0] Edge identity and admission (2026-09-26)
+
+Operator directive, 2026-09-26: implement the proposed edge architecture — SCA/Hub and the Marketplace in their own containers in the ecosystem's relational structure — and let the system optimise within Invariance #7.
+
+### Found on the running fleet
+- QUIPU's observer accepted any write from anything that could reach `:7100`, as any source, and `GET /anneal` ran an annealing cycle for anyone. `Access-Control-Allow-Origin: *` let any open web page do the same through the operator's browser.
+- Perceptopoly never reached QUIPU: its containers run on their own network, `quipu_client` defaults to `127.0.0.1:7100` (the container itself), and its isolation check refuses every non-loopback name. The only observer source on record was supply-chain-brain.
+- gVisor is not installed on this Docker engine (runtimes: runc, nvidia); `DOCKER_RUNTIME_SANDBOX` falls back to runc for every service documented as sandboxed.
+
+### `src/quipu/qpsi/edge_admission.py` — additive
+- **Identity** (`QUIPU_EDGE_AUTH`, default `record`): per-source HMAC-SHA256 over method, path, timestamp and body hash; skew window; single-use signatures; body source must match the signer. Browser clients are accepted at `origin` assurance only from origins the grant binds to them.
+- **Admission** (`QUIPU_EDGE_BUDGET`, default `record`): the operator's grant (sources, per-source ceilings, total tokens/hour). QUIPU water-fills the total by each source's measured information (novel tokens per token, trailing hour) under the ceilings; sliding-hour admission with Retry-After. The plan is written to `entirety:edge:plan` only when an allocation moves ≥ 1 token/h; counters to `entirety:edge:stats` at most once a minute.
+- Invariance #7: allocation of the operator's grant among the operator's sources (the 2026-09-22 constrained-gate ruling). Grant and key files are read, never written; tested.
+- `observer_service`: every mutating route passes the edge; responses carry an `edge` block; `GET /edge`; CORS echoes bound origins only. Operator CLI `python -m src.quipu.qpsi.edge_admission mint|status`.
+- `docker-compose.yml` (standalone) mounts `QUIPU_EDGE_DIR` read-only. `docs/QUIPU_EDGE.md`.
+- 15 new tests.
+
+### Fleet (VS Code repository, not in this repo)
+- QUIPU left `fleet`; one internal edge network per writer (`edge-hubcore`, `edge-scb`, `edge-jobhawk`, `hideout_edge_perceptopoly`, plus the existing `touch`); `quipu-net` for its own egress. `hub_workspace.json`: decision engine now `scb-brain` (was `host.docker.internal`), Perceptopoly endpoint added, `edges` links declared (schema extended). Marketplace: QUIPU mount read-only, Bakugo's volume no longer mounted. JobHawk: `restart: on-failure:5` (it had restarted 2,878 times in 46 h re-running its application batch). HubCore's annealing forwarder and Perceptopoly's `quipu_client` sign; Perceptopoly's isolation accepts operator-named peers that resolve to private bridge addresses. `ops/New-QuipuEdgeKeys.ps1` mints keys and the grant template (operator's act).
+
 ## [0.46.1] `python -m src.quipu.qpsi` (2026-09-25)
 
 - **The runpy warning.** With `QUIPU_SELF_ORGANISING=1` in the environment (the operator's `setx`, 2026-09-23), `src/quipu/__init__.py` imports `qpsi.self_organising` to wire the loop, so `python -m src.quipu.qpsi.self_organising …` made runpy execute a second copy of the module as `__main__` and print `RuntimeWarning: 'src.quipu.qpsi.self_organising' found in sys.modules after import of package 'src.quipu.qpsi', but prior to execution …` on every run. The second copy dispatched to the canonical one (v0.34.0), so the behaviour was defined; only the warning was wrong.

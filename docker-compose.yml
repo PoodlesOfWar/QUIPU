@@ -14,9 +14,15 @@ services:
       QUIPU_HIDEOUT_HOST: scbrain-hideout
       QUIPU_HIDEOUT_MESH: hideout-mesh
       QUIPU_HIDEOUT_TUNNEL: scbrain-hideout.use2
+      QUIPU_EDGE_AUTH: "${QUIPU_EDGE_AUTH:-record}"
+      QUIPU_EDGE_BUDGET: "${QUIPU_EDGE_BUDGET:-record}"
+      QUIPU_EDGE_KEYS_FILE: /run/quipu-edge/edge_keys.json
+      QUIPU_EDGE_GRANT_FILE: /run/quipu-edge/edge_grant.json
     volumes:
       - quipu_brain:/data
       - ./bridge_state:/app/bridge_state
+      # Edge keys and grant, read-only, from outside the repository (qpsi.edge_admission).
+      - ${QUIPU_EDGE_DIR:-./docs/edge-empty}:/run/quipu-edge:ro
     restart: unless-stopped
 
 volumes:
