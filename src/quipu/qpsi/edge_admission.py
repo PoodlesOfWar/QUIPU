@@ -93,10 +93,17 @@ KV_STATS = "entirety:edge:stats"
 STATS_FLUSH_S = 60.0
 MUTATING = {("POST", "/observe"), ("POST", "/feedback"), ("POST", "/anneal"), ("GET", "/anneal")}
 H_SOURCE, H_TS, H_SIG = "X-Quipu-Source", "X-Quipu-Timestamp", "X-Quipu-Signature"
+H_IDEM = "X-Quipu-Idempotency"
+# Headers a public front door adds (Cloudflare, reverse proxies).  A request
+# carrying any of them came from outside this host and must be signed.
+PUBLIC_HEADERS = ("cf-connecting-ip", "cf-ray", "x-forwarded-for", "forwarded")
+IDEM_TABLE = "edge_idempotency"
+IDEM_RETAIN_S = 30 * 86400.0   # a write retried for up to a month is still recognised
 # The browser surfaces hub_workspace.json declares on this host (Loadopoly-OCR
-# :3000, the portal :9080).  Set QUIPU_CORS_ORIGINS to replace the list.
+# :3000, the portal :9080, the HubCore UI :8000).  Set QUIPU_CORS_ORIGINS to replace the list.
 DEFAULT_CORS_ORIGINS = ("http://localhost:3000,http://127.0.0.1:3000,"
-                        "http://localhost:9080,http://127.0.0.1:9080")
+                        "http://localhost:9080,http://127.0.0.1:9080,"
+                        "http://localhost:8000,http://127.0.0.1:8000")
 
 
 def _mode(env: str) -> str:
@@ -129,15 +136,23 @@ def _load_json(p: Path) -> dict:
 # Signing (clients use this)
 # ===========================================================================
 
-def canonical(method: str, path: str, ts: str, body: bytes) -> bytes:
-    return f"{method.upper()}\n{path}\n{ts}\n{hashlib.sha256(body).hexdigest()}".encode()
+def canonical(method: str, path: str, ts: str, body: bytes, idem: str | None = None) -> bytes:
+    msg = f"{method.upper()}\n{path}\n{ts}\n{hashlib.sha256(body).hexdigest()}"
+    if idem:
+        msg += f"\n{idem}"            # the idempotency key is signed: it cannot be swapped on a captured request
+    return msg.encode()
 
 
-def sign(key_hex: str, method: str, path: str, body: bytes, source: str, ts: float | None = None) -> dict:
-    """Headers a client adds to a request.  ``body`` must be the exact bytes sent."""
+def sign(key_hex: str, method: str, path: str, body: bytes, source: str, ts: float | None = None,
+         idem: str | None = None) -> dict:
+    """Headers a client adds to a request.  ``body`` must be the exact bytes sent.
+    (``src/quipu/edge_client.py`` is the full client: outbox, retries, idempotency.)"""
     t = str(int(time.time() if ts is None else ts))
-    mac = hmac.new(bytes.fromhex(key_hex), canonical(method, path, t, body), hashlib.sha256).hexdigest()
-    return {H_SOURCE: source, H_TS: t, H_SIG: mac}
+    mac = hmac.new(bytes.fromhex(key_hex), canonical(method, path, t, body, idem), hashlib.sha256).hexdigest()
+    out = {H_SOURCE: source, H_TS: t, H_SIG: mac}
+    if idem:
+        out[H_IDEM] = idem
+    return out
 
 
 # ===========================================================================
@@ -150,11 +165,12 @@ class Grant:
     total: float
     ceilings: dict[str, float]
     origins: dict[str, tuple[str, ...]]
+    relays: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     @classmethod
     def from_json(cls, d: Mapping) -> "Grant":
         srcs = d.get("sources") if isinstance(d.get("sources"), Mapping) else {}
-        ceil, orig = {}, {}
+        ceil, orig, rel = {}, {}, {}
         for name, spec in srcs.items():
             spec = spec if isinstance(spec, Mapping) else {}
             try:
@@ -165,12 +181,14 @@ class Grant:
                 ceil[str(name)] = c
             o = spec.get("browser_origins") or []
             orig[str(name)] = tuple(str(x).rstrip("/") for x in o if isinstance(x, str))
+            r = spec.get("relays_for") or []
+            rel[str(name)] = tuple(str(x) for x in r if isinstance(x, str))
         try:
             total = float(d.get("total_tokens_per_hour", sum(ceil.values())))
         except (TypeError, ValueError):
             total = sum(ceil.values())
         total = max(0.0, min(total, sum(ceil.values()))) if math.isfinite(total) else 0.0
-        return cls(ref=str(d.get("grant_ref") or ""), total=total, ceilings=ceil, origins=orig)
+        return cls(ref=str(d.get("grant_ref") or ""), total=total, ceilings=ceil, origins=orig, relays=rel)
 
     def allows(self, source: str) -> bool:
         return source in self.ceilings
@@ -221,10 +239,13 @@ class Decision:
     code: int = 200
     error: str | None = None
     source: str | None = None
-    assurance: str = "unverified"          # signed | origin | unverified
+    assurance: str = "unverified"          # signed | relayed | origin | unverified
     tokens: int = 0
     would_refuse: str | None = None        # what enforce would have done, in record mode
     retry_after: int | None = None
+    idempotency: str | None = None
+    relayed_for: str | None = None         # the source a relay carried this write for
+    duplicate: bool = False                # already applied: answer 200, do not learn again
 
     def to_json(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if v is not None}
@@ -234,14 +255,70 @@ class Decision:
 class _Src:
     admitted: deque = field(default_factory=deque)     # (t, tokens) admitted, trailing hour
     results: deque = field(default_factory=deque)      # (t, tokens, novel) trailing hour
-    counts: dict = field(default_factory=lambda: {"signed": 0, "origin": 0, "unverified": 0,
+    counts: dict = field(default_factory=lambda: {"signed": 0, "relayed": 0, "origin": 0, "unverified": 0,
                                                   "refused": 0, "would_refuse": 0})
+
+
+class IdempotencyStore:
+    """Keys of writes already applied, in the brain itself (table ``edge_idempotency``),
+    so a retry after a crash or a restart is still recognised.  Kept 30 days."""
+
+    def __init__(self, open_conn: Callable[[], Any] | None = None):
+        self._open = open_conn
+        self._ready = False
+        self._mem: dict[str, float] = {}
+
+    def _conn(self):
+        if self._open is not None:
+            return self._open()
+        from .. import brain_kv
+        return brain_kv.open_conn()
+
+    def _ensure(self, cn) -> None:
+        if not self._ready:
+            cn.execute(f"CREATE TABLE IF NOT EXISTS {IDEM_TABLE}(idem TEXT PRIMARY KEY, source TEXT, at REAL)")
+            self._ready = True
+
+    def seen(self, idem: str) -> bool:
+        if idem in self._mem:
+            return True
+        try:
+            cn = self._conn()
+            try:
+                self._ensure(cn)
+                return cn.execute(f"SELECT 1 FROM {IDEM_TABLE} WHERE idem = ?", (idem,)).fetchone() is not None
+            finally:
+                cn.close()
+        except Exception:
+            return False
+
+    def add(self, idem: str, source: str | None, now: float) -> None:
+        self._mem[idem] = now
+        if len(self._mem) > 4096:
+            self._mem.clear()
+        try:
+            cn = self._conn()
+            try:
+                self._ensure(cn)
+                cn.execute(f"INSERT OR IGNORE INTO {IDEM_TABLE}(idem, source, at) VALUES(?,?,?)", (idem, source, now))
+                if int(now) % 97 == 0:
+                    cn.execute(f"DELETE FROM {IDEM_TABLE} WHERE at < ?", (now - IDEM_RETAIN_S,))
+                cn.commit()
+            finally:
+                cn.close()
+        except Exception:
+            pass
+
+
+def _valid_idem(v: Any) -> str | None:
+    v = str(v or "").strip()
+    return v if (8 <= len(v) <= 80 and all(c.isalnum() or c in "-_" for c in v)) else None
 
 
 class Edge:
     def __init__(self, *, clock: Callable[[], float] = time.time,
                  keys: Mapping[str, str] | None = None, grant: Mapping | None = None,
-                 kv: Any = None):
+                 kv: Any = None, idempotency: IdempotencyStore | None = None):
         self._clock = clock
         self._lock = threading.Lock()
         self._keys_override = dict(keys) if keys is not None else None
@@ -252,6 +329,7 @@ class Edge:
         self._plan: dict[str, float] = {}
         self._last_flush = 0.0
         self._cache: dict[str, tuple[float, Any]] = {}
+        self._idem = idempotency or IdempotencyStore()
 
     # --- configuration (read only; re-read when the file changes) ----------
     def _file(self, key: str, p: Path) -> dict:
@@ -297,7 +375,8 @@ class Edge:
             now = self._clock()
             if abs(now - t) > skew:
                 return "unverified", body_source, "timestamp outside the skew window"
-            want = hmac.new(bytes.fromhex(key), canonical(method, path, str(ts), raw), hashlib.sha256).hexdigest()
+            idem = h.get(H_IDEM.lower())
+            want = hmac.new(bytes.fromhex(key), canonical(method, path, str(ts), raw, idem), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(want, str(sig)):
                 return "unverified", body_source, "signature mismatch"
             for s_, t_ in list(self._seen_sigs.items()):
@@ -307,6 +386,9 @@ class Edge:
                 return "unverified", body_source, "replayed signature"
             self._seen_sigs[str(sig)] = now
             if body_source is not None and body_source != src:
+                g = self.grant()
+                if g is not None and body_source in g.relays.get(src, ()):
+                    return "relayed", src, None          # the operator lets src carry body_source's writes
                 return "unverified", body_source, f"signed as {src} but body says {body_source}"
             return "signed", src, None
         origin = str(h.get("origin") or "").rstrip("/")
@@ -351,17 +433,31 @@ class Edge:
         if (method.upper(), path) not in MUTATING:
             return Decision(ok=True, assurance="n/a")
         auth, budget = _mode(AUTH_ENV), _mode(BUDGET_ENV)
+        hdr = {str(k).lower(): v for k, v in headers.items()}
+        public = any(h in hdr for h in PUBLIC_HEADERS)
+        if public:
+            # Arrived through a public front door (Cloudflare tunnel, reverse proxy):
+            # only a signed write is accepted, whatever the local mode.
+            auth, budget = "enforce", ("enforce" if budget != "off" else "off")
         with self._lock:
             now = self._clock()
             self._trim(now)
             body_source = canon(body.get("source")) if isinstance(body, Mapping) else None
             assurance, source, err = ("unverified", body_source, None) if auth == "off" else \
                 self._identify(method, path, headers, raw, body_source, canon)
+            if public and assurance == "origin":
+                assurance, err = "unverified", "browser origins are not accepted from a public front door"
             st = self._src.setdefault(source or "?", _Src())
             d = Decision(ok=True, source=source, assurance=assurance, tokens=int(tokens))
             refusals: list[tuple[int, str, int | None]] = []
             if auth != "off" and assurance == "unverified":
                 refusals.append((401, f"unverified: {err}", None))
+            d.idempotency = _valid_idem(hdr.get(H_IDEM.lower()))
+            if d.idempotency and not (auth == "enforce" and assurance == "unverified") \
+                    and self._idem.seen(d.idempotency):
+                d.duplicate = True                  # applied before: no learning, no budget
+                st.counts["duplicate"] = st.counts.get("duplicate", 0) + 1
+                return d
             g = self.grant() if budget != "off" else None
             if g is not None and path in ("/observe", "/feedback"):
                 if not source or not g.allows(source):
@@ -394,11 +490,16 @@ class Edge:
                     st.counts["would_refuse"] += 1
                 st.admitted.append((now, int(tokens)))
                 st.counts[assurance] = st.counts.get(assurance, 0) + 1
+                if assurance == "relayed":
+                    d.relayed_for = body_source
             self._maybe_flush(now)
             return d
 
     def settle(self, decision: Decision, result: Mapping | None) -> None:
-        """Feed the outcome back: how many of the admitted tokens were new to the mesh."""
+        """Record the write as applied (idempotency) and feed back how many of the
+        admitted tokens were new to the mesh."""
+        if decision.ok and decision.idempotency and not decision.duplicate:
+            self._idem.add(decision.idempotency, decision.source, self._clock())
         if not decision.ok or not decision.source or not isinstance(result, Mapping):
             return
         enacted = result.get("enacted") if isinstance(result.get("enacted"), Mapping) else {}
@@ -518,6 +619,7 @@ if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(_main())
 
 
-__all__ = ["AUTH_ENV", "BUDGET_ENV", "KEYS_ENV", "GRANT_ENV", "MUTATING", "H_SOURCE", "H_TS", "H_SIG",
+__all__ = ["AUTH_ENV", "BUDGET_ENV", "KEYS_ENV", "GRANT_ENV", "MUTATING", "H_SOURCE", "H_TS", "H_SIG", "H_IDEM",
+           "IdempotencyStore",
            "canonical", "sign", "Grant", "allocate", "Decision", "Edge", "edge", "cors_origin",
            "keys_path", "grant_path"]

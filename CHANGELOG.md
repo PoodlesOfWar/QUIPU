@@ -4,6 +4,29 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.48.0] One brain, one writer, every door leading to it (2026-09-26)
+
+Operator directive, 2026-09-26: run the whole Entirety in the container, and make every other use of QUIPU engage and add to the collective training — including from external servers — securely and without potential for failure.
+
+### Found
+- Two brains that never met: the observer container (vscode_quipu_brain: every fleet observation — 437 fed chunks from six sources, 610 tokens, 729 edges, and a second, disconnected Entirety with 6,898 flip-log rows) and the repository copy on the host (ingest pulse, self-organising loop, gates: 4,192 tokens, 1,253,412 edges). The gates, SOMN and ACRE never saw a fleet observation.
+- Tests that did not set SCB_DB_PATH opened the repository's live brain.
+- Every client wrote fire-and-forget: a write made while QUIPU was down was lost, and a retry would have been learned twice.
+
+### Added
+- `src/quipu/entirety_service.py` — the container's process: observer + expansion step + the operator's pulse (`QUIPU_PULSE_ROUTE`) + doc annealing, each in its own loop that records failures and carries on; `GET /entirety`. The Dockerfile runs it; `docs/` ships in the image and is mounted in compose.
+- Single writer: `local_store.db_path()` raises `BrainMovedError` on the host once `local_brain.MOVED.json` exists (the container sets `QUIPU_BRAIN_OWNER=1`). `tests/conftest.py` gives every test a throwaway brain.
+- `src/quipu/brain_migrate.py` — merges the observer brain into the host brain by replaying the observer's whole training record through `feed_corpus`/`train_round`; counters summed; the observer's own Entirety archived, not merged. Dry run on today's snapshots: 437 chunks replayed, edges 1,253,412 → 1,258,159, integrity ok; the vocabulary stays at its torus capacity (4,096 cells), so 90 of the observer's 610 tokens hold a cell — as they would have had they gone there first.
+- `src/quipu/edge_client.py` — the one client: durable SQLite outbox, idempotency key inside the signature, retry by edge status, never raises, bounded, refuses plain http to public hosts.
+- Edge: idempotency persisted in the brain (`edge_idempotency`, 30 days; duplicates answered 200 without learning or budget); operator-granted relays (`relays_for`, assurance `relayed`); public front-door requests (Cf-Connecting-IP / X-Forwarded-For / Forwarded) must be signed whatever the mode; HubCore UI origin added to the default CORS list.
+- `Start-Pulse.ps1`, `Start-Expansion.ps1`, `Start-DocAnnealing.ps1` run inside the container; the `Register-*` scripts refuse to register a second, host-side schedule unless `-Force`.
+- 16 new tests.
+
+### Fleet (VS Code repository and siblings; not in this repo)
+- Compose: quipu runs the Entirety (`QUIPU_BRAIN_OWNER`, `QUIPU_SELF_ORGANISING`, cadences, `QUIPU_PULSE_ROUTE` default on as the QuipuPulse task was registered), mounts `QUIPU/docs`, the attestation key read-only (`QUIPU_ATTEST_DIR`) and passes `QUIPU_REALISE_GRANT_REF`; outboxes on persistent paths for Bakugo, JobHawk and SCA; profile `tunnel-quipu` publishes QUIPU through a named tunnel on its own `edge-external` network.
+- Clients switched to the vendored `quipu_edge_client.py`: HubCore annealing, Perceptopoly (plus a tee from its own mesh's `feed_corpus`), Bakugo, `erp_dbo` (both copies), the SCA/JobHawk integrator (its docker-exec fallback removed), the tri-repo feedback loop (both copies, as a relay), and Loadopoly-OCR's browser client (localStorage outbox).
+- `ops/Move-QuipuBrain.ps1` performs the cut-over (with `-DryRun`), `ops/New-QuipuEdgeKeys.ps1` grant template gains `hub-floor` and SCB's relays.
+
 ## [0.47.0] Edge identity and admission (2026-09-26)
 
 Operator directive, 2026-09-26: implement the proposed edge architecture — SCA/Hub and the Marketplace in their own containers in the ecosystem's relational structure — and let the system optimise within Invariance #7.

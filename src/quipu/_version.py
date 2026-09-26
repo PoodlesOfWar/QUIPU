@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.47.0"
+__version__ = "0.48.0"
 __release__ = (
-    "Edge identity and admission: every write to the observer (observe, feedback, anneal) passes qpsi.edge_admission - per-source HMAC identity (or grant-bound browser origin), and admission inside the operator's grant, where QUIPU water-fills the total by each source's measured information under the operator's ceilings (the Invariance #7 constrained gate). Record mode by default; enforce is the operator's act. CORS no longer '*'."
+    "One brain, one writer: the quipu container runs the whole Entirety (observer, expansion step, the operator's pulse, doc annealing) against one brain; the host copy is retired behind a guard; brain_migrate replays the observer's record into the host brain. Every client writes through edge_client - durable outbox, signed idempotency, retry by edge status - and QUIPU applies each write once. Public front-door writes must be signed; relays need the operator's relays_for."
 )
 __build_date__ = "2026-09-25"
 
 PHASES = {
+    "0.48.0": "One brain, one writer: the quipu container runs the whole Entirety (observer, expansion step, the operator's pulse, doc annealing) against one brain; the host copy is retired behind a guard; brain_migrate replays the observer's record into the host brain. Every client writes through edge_client - durable outbox, signed idempotency, retry by edge status - and QUIPU applies each write once. Public front-door writes must be signed; relays need the operator's relays_for. 16 new tests.",
     "0.47.0": "Edge identity and admission: every write to the observer (observe, feedback, anneal) passes qpsi.edge_admission - per-source HMAC identity (or grant-bound browser origin), and admission inside the operator's grant, where QUIPU water-fills the total by each source's measured information under the operator's ceilings (the Invariance #7 constrained gate). Record mode by default; enforce is the operator's act. CORS no longer '*'. 15 new tests.",
     "0.46.1": "qpsi CLI entry point. src/quipu/qpsi/__main__.py: python -m src.quipu.qpsi <command>. With QUIPU_SELF_ORGANISING=1 the package import already holds qpsi.self_organising, so python -m src.quipu.qpsi.self_organising made runpy execute a second copy as __main__ and print RuntimeWarning 'found in sys.modules after import of package ... prior to execution' on every run (the copy dispatched to the canonical module since v0.34.0, so only the warning was wrong). The entry point is imported by nothing; the docs use it; the old command (which Start-Pulse.ps1 still calls) works as before. 1 new test (the entry point runs clean under the flag with RuntimeWarning as an error).",
     "0.46.0": "Perceptopoly Decoupling: Extracted Game Mesh Autonomy, Video Gameplay Pipeline, Dedicated Multi-Game Client Daemons (OSRS, WoW, GW), Tailscale Mesh VPN Overlay, and Mass Session Handling into dedicated Perceptopoly repository (loadopoly/Perceptopoly). QUIPU retains core Computational Universe, Supply Chain Brain, and Physical Gate 6 user interlock bridge. 551 core tests passing.",
