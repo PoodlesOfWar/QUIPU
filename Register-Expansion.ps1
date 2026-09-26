@@ -25,10 +25,20 @@
 
 param(
     [int]$Minutes = 10,
-    [switch]$Unregister
+    [switch]$Unregister,
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+
+# v0.48.0: the quipu container schedules this itself (src/quipu/entirety_service.py),
+# against the one brain.  A host task would run it a second time.  Only
+# -Unregister (remove the old host task) is meaningful now; -Force registers anyway.
+if (-not $Unregister -and -not $Force) {
+    Write-Host "Not registering: the quipu container runs this now (see src/quipu/entirety_service.py)." -ForegroundColor Yellow
+    Write-Host "Use -Unregister to remove the old host task, or -Force to register anyway." -ForegroundColor Yellow
+    return
+}
 $Repo = "C:\Users\agard\Documents\VS Code\QUIPU"
 $TaskName = "QuipuExpansion2"
 $Runner = "$Repo\Start-Expansion.ps1"

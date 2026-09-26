@@ -546,7 +546,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers",
-                             "Content-Type, X-Quipu-Source, X-Quipu-Timestamp, X-Quipu-Signature")
+                             "Content-Type, X-Quipu-Source, X-Quipu-Timestamp, X-Quipu-Signature, "
+                             "X-Quipu-Idempotency")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -623,6 +624,9 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(200, world_model.annealing_cycle())
             elif parsed.path == "/edge":
                 self._send_json(200, edge_admission.edge().status())
+            elif parsed.path == "/entirety":
+                from . import entirety_service
+                self._send_json(200, entirety_service.status())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -656,6 +660,10 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 decision = self._edge("POST", parsed.path, raw, body)
                 if not decision.ok:
                     self._refuse(decision)
+                    return
+                if decision.duplicate:
+                    # Already applied (a client retry): acknowledge, do not learn twice.
+                    self._send_json(200, {"ok": True, "duplicate": True, "edge": decision.to_json()})
                     return
 
             if parsed.path == "/observe":

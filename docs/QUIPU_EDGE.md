@@ -45,6 +45,44 @@ allocates the operator's grant among the operator's sources. It cannot add a
 source, raise a ceiling or the total, mint or read out a key, or change a mode;
 the grant and key files are only read.
 
+## One brain, one writer (v0.48.0)
+
+The `quipu` container runs the whole Entirety (`src/quipu/entirety_service.py`):
+the observer behind the edge, the expansion step, the operator's pulse
+(`QUIPU_PULSE_ROUTE`) and doc annealing, against one brain in the
+`vscode_quipu_brain` volume. The host no longer opens a QUIPU brain: after
+`ops/Move-QuipuBrain.ps1` the repository copy is renamed and
+`local_brain.MOVED.json` makes any host process that tries to open it fail
+loudly (`BrainMovedError`) instead of starting a second brain. Operator commands
+run inside the container (`docker exec quipu python -m ...`); `Start-Pulse.ps1`,
+`Start-Expansion.ps1` and `Start-DocAnnealing.ps1` now do exactly that.
+
+## Every write reaches it, once (`src/quipu/edge_client.py`)
+
+Every client writes through the same single-file, stdlib client, vendored into
+each codebase as `quipu_edge_client.py`: a local SQLite outbox keeps each write
+until QUIPU answers 2xx; each write carries `X-Quipu-Idempotency` (inside the
+signature), and QUIPU records applied keys in the brain (`edge_idempotency`,
+30 days) and answers a repeat with `duplicate: true` without learning again.
+401/403 hold the write (no key or grant yet), 429 waits for Retry-After, 400 is
+kept aside as rejected, everything else backs off up to an hour. Loadopoly-OCR's
+browser client keeps the same outbox in localStorage.
+
+Clients: HubCore annealing forwarder (its durable cursor plus idempotency),
+Perceptopoly (`quipu_client`, and its own mesh's `feed_corpus` is teed to QUIPU),
+Bakugo CardCenter, SCA (`erp_dbo`, both copies), the JobHawk/SCA integrator,
+the tri-repo feedback loop (both copies), Loadopoly-OCR.
+
+Relays: a client that forwards another source's writes signs as itself; the
+grant must list the originals under its `relays_for` (assurance `relayed`).
+
+External servers: `docker compose --profile tunnel-quipu up -d` publishes QUIPU
+through a named Cloudflare tunnel (`QUIPU_TUNNEL_TOKEN`). Anything arriving
+through a public front door (Cf-Connecting-IP, X-Forwarded-For, Forwarded) must
+be signed, whatever `QUIPU_EDGE_AUTH` says; browser-origin assurance is not
+accepted from outside. Remote clients use `edge_client` with
+`QUIPU_URL=https://…`; it refuses to send over plain http to a public address.
+
 ## Operator steps
 
 1. `.\ops\New-QuipuEdgeKeys.ps1 -WriteEnv` (fleet repo): mints keys into
