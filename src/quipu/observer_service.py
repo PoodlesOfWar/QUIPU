@@ -55,6 +55,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from . import brain_kv, hideout_mesh, mesh_slm, world_model, security
+from .qpsi import edge_admission
 from ._version import __version__
 from .local_store import db_path
 
@@ -532,16 +533,43 @@ class ObserverHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload).encode()
         self._send_raw(code, body, "application/json")
 
-    def _send_raw(self, code: int, body: bytes, ctype: str) -> None:
+    def _send_raw(self, code: int, body: bytes, ctype: str, extra: dict[str, str] | None = None) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # CORS: echo only origins the operator bound (grant browser_origins or
+        # QUIPU_CORS_ORIGINS) — never "*", which let any open web page write here.
+        allow = edge_admission.cors_origin(self.headers.get("Origin"))
+        if allow:
+            self.send_header("Access-Control-Allow-Origin", allow)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers",
+                             "Content-Type, X-Quipu-Source, X-Quipu-Timestamp, X-Quipu-Signature")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
+
+    def _edge(self, method: str, path: str, raw: bytes, body: dict[str, Any]):
+        """Identity and admission for a mutating route (qpsi.edge_admission)."""
+        text = ""
+        if path == "/observe":
+            text = str(body.get("text") or "")
+        elif path == "/feedback":
+            text = str(body.get("expected") or "")
+        try:
+            tokens = len(mesh_slm._tokenize(text)) if text else 0
+        except Exception:
+            tokens = len(text.split())
+        return edge_admission.edge().admit(method, path, dict(self.headers.items()), raw, body,
+                                           _canonical_source, tokens)
+
+    def _refuse(self, d) -> None:
+        extra = {"Retry-After": str(d.retry_after)} if d.retry_after else None
+        body = json.dumps({"ok": False, "error": d.error, "edge": d.to_json()}).encode()
+        self._send_raw(d.code, body, "application/json", extra)
 
     def do_OPTIONS(self) -> None:  # CORS preflight for the browser clients
         self._send_raw(204, b"", "text/plain")
@@ -588,7 +616,13 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(200, world_model.world_model_state())
             elif parsed.path == "/anneal":
                 # Execute on-demand self-annealing cycle across the sensory manifold
+                d = self._edge("GET", "/anneal", b"", {})
+                if not d.ok:
+                    self._refuse(d)
+                    return
                 self._send_json(200, world_model.annealing_cycle())
+            elif parsed.path == "/edge":
+                self._send_json(200, edge_admission.edge().status())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -617,6 +651,13 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "body must be an object"})
                 return
 
+            decision = None
+            if ("POST", parsed.path) in edge_admission.MUTATING:
+                decision = self._edge("POST", parsed.path, raw, body)
+                if not decision.ok:
+                    self._refuse(decision)
+                    return
+
             if parsed.path == "/observe":
                 code, payload = _observe(body)
             elif parsed.path == "/feedback":
@@ -633,6 +674,10 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _world_model_transition(body)
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
+            if decision is not None and isinstance(payload, dict):
+                if code == 200:
+                    edge_admission.edge().settle(decision, payload)
+                payload["edge"] = decision.to_json()
             self._send_json(code, payload)
         except Exception as exc:
             traceback.print_exc()
