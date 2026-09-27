@@ -57,6 +57,16 @@ loudly (`BrainMovedError`) instead of starting a second brain. Operator commands
 run inside the container (`docker exec quipu python -m ...`); `Start-Pulse.ps1`,
 `Start-Expansion.ps1` and `Start-DocAnnealing.ps1` now do exactly that.
 
+## The mirror aspect (v0.49.0)
+
+`QUIPU_MIRROR_UPDATE=1` (fleet default, operator ruling 2026-09-27): every 60 s
+the container trains, observes ACRE interactions, runs emergence, reviews held
+specialists, publishes the GARD manifest and steps the Entirety, all with the
+gates on. An edge that already exists takes the new knowledge; a new edge is
+held; a new ACRE specialist is held at gate 6 (`qpsi.specialist_gate`) until
+`self` and `the_beautiful_one` attest scope `specialist:<name>` with
+`--beautiful-output` and the grant is set.
+
 ## Every write reaches it, once (`src/quipu/edge_client.py`)
 
 Every client writes through the same single-file, stdlib client, vendored into

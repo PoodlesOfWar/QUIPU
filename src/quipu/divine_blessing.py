@@ -518,6 +518,20 @@ def _decision_dict(d: Decision) -> dict:
 # Routing
 # ---------------------------------------------------------------------------
 
+MIRROR_ENV = "QUIPU_MIRROR_UPDATE"
+_MIRROR_COUNTS = {"edge_updates": 0, "edge_creations_held": 0}
+
+
+def mirror_update_on() -> bool:
+    """Operator ruling 2026-09-27: the mirror aspect may update entities that
+    already exist behind the gates with new knowledge; it never creates one."""
+    return os.environ.get(MIRROR_ENV, "0").strip() == "1"
+
+
+def mirror_counts() -> dict:
+    return dict(_MIRROR_COUNTS)
+
+
 def enable() -> bool:
     """Route all write paths of every Entirety instance through the blessing."""
     global _ENABLED
@@ -535,6 +549,21 @@ def enable() -> bool:
         # The edge of the gate: a blessing on the bus AND an organizational grant.
         # Without both, nothing is written and the schema is not touched.
         if not (_CONFIG.realise_grant_ref and blessed(scope)):
+            # Mirror update (operator ruling 2026-09-27): an edge that already
+            # exists takes the new knowledge -- weight and samples move -- while
+            # a new edge is never created here; creation stays at the gate.
+            if mirror_update_on():
+                try:
+                    exists = cn.execute("SELECT 1 FROM corpus_edge WHERE src_id=? AND src_type=? AND dst_id=? "
+                                        "AND dst_type=? AND rel=?",
+                                        (src_id, src_type, dst_id, dst_type, rel)).fetchone() is not None
+                except Exception:
+                    exists = False
+                if exists:
+                    _MIRROR_COUNTS["edge_updates"] += 1
+                    return _ORIGINALS["se._mesh_upsert_edge"](cn, src_id, src_type, dst_id, dst_type, rel,
+                                                              weight, now)
+                _MIRROR_COUNTS["edge_creations_held"] += 1
             # Heartbeat only: last_seen moves, nothing is realised.
             try:
                 cn.execute("UPDATE corpus_edge SET last_seen=? WHERE src_id=? AND src_type=? "
