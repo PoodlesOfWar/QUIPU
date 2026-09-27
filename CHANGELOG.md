@@ -4,6 +4,19 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.49.0] The mirror aspect inside the gates; ACRE through gate 6 (2026-09-27)
+
+Operator rulings, 2026-09-27: the parallel bypass is the mirror aspect — within governance because it furthers QUIPU's knowledge acquisition by updating entities that already passed the gates, not by creating new ones; and `emergent_brain_smell` is to be used as the rest and given its pass through gate 6.
+
+### Found (host brain, 2026-09-26)
+- `scripts/run_parallel_bypass_pipeline.py` (fleet repo) switched the gates off for its whole process every 60 s since 2026-09-23. On edges it did what the ruling says: the three edges it touched existed already, and their weights and samples moved (~7,000 samples) where the gate would only have moved `last_seen`. It also ran `acre_emerge()`, which writes a new specialist the moment ACRE's own test passes: the host went from three emergent specialists to four (`emergent_brain_smell`) in that window. With the gates off, nothing stopped a new edge either.
+
+### Added
+- **Mirror update, written into the gate** (`divine_blessing`, `QUIPU_MIRROR_UPDATE=1`): an unblessed write to an edge that already exists applies the new knowledge (the ordinary weighted update); an unblessed write that would create an edge is held. Counted (`mirror_counts()`). Off by default in the package.
+- **`qpsi/specialist_gate.py`**: wraps `mesh_slm.acre_emerge` (mesh_slm.py untouched). A newly crystallised specialist is taken back out and held at gate 6 (`brain_kv["entirety:specialist_gate"]`, scope `specialist:<name>`); `review()` runs gate 6 (accepted beautiful_output attestations from `self` and `the_beautiful_one`, unclamped weight = bias norm within the Lipschitz bound of the specialists in place) and realises it when it passes and the grant is set. `admit(name)` keeps an already-active specialist working while its pass is pending — used for `emergent_brain_smell`.
+- **Mirror loop in the container** (`entirety_service`, `QUIPU_MIRROR_INTERVAL_S`, default 60 s): training round, ACRE interaction observation and emergence, specialist gate review, GARD manifest, world-model grounding, expansion step — the bypass's work, with the gates on. The fleet compose turns it on (the ruling).
+- 6 new tests.
+
 ## [0.48.0] One brain, one writer, every door leading to it (2026-09-26)
 
 Operator directive, 2026-09-26: run the whole Entirety in the container, and make every other use of QUIPU engage and add to the collective training — including from external servers — securely and without potential for failure.

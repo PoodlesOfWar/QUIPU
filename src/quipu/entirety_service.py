@@ -18,6 +18,16 @@ host (the ingest pulse, the self-organising loop, the gates; 4,190 tokens and
                   routed around silent sources, then one step
     docs          doc_annealing every QUIPU_DOC_ANNEAL_MINUTES (was the
                   QuipuDocAnnealing task)
+    mirror        every QUIPU_MIRROR_INTERVAL_S when QUIPU_MIRROR_UPDATE=1 (was
+                  the host's run_parallel_bypass_pipeline.py, which switched the
+                  gates off): a mesh training round, ACRE interaction
+                  observation and emergence, the GARD manifest, world-model
+                  grounding and an expansion step -- with the gates ON.  The
+                  operator's ruling (2026-09-27) is written into the gates, not
+                  granted by switching them off: an entity that already exists
+                  takes the new knowledge (divine_blessing mirror update); a new
+                  edge is not created; a new ACRE specialist is held at gate 6
+                  (qpsi.specialist_gate) until both parties attest.
 
 Each loop runs on its own thread, catches everything, records its last run and
 last error, and waits before trying again: one failing part never stops the
@@ -121,6 +131,41 @@ def pulse() -> dict:
         return self_organising.pulse(route=True, max_seconds=_f("QUIPU_PULSE_MAX_SECONDS", 0.0) or 0.0)
 
 
+def mirror() -> dict:
+    """The mirror aspect: knowledge acquisition with the gates on (see module doc)."""
+    from . import mesh_slm, divine_blessing
+    from .qpsi import specialist_gate
+    out: dict[str, Any] = {}
+    for name, fn in (
+        ("train", lambda: mesh_slm.train_round(max_seconds=5.0, max_chunks=20)),
+        ("interactions", lambda: mesh_slm.observe_interactions(reps=1)),
+        ("acre", lambda: mesh_slm.acre_emerge()),
+        ("specialists", specialist_gate.review),
+        ("gard", _gard_manifest),
+        ("world_model", _world_model_grounding),
+        ("step", expansion_step),
+    ):
+        try:
+            r = fn()
+            out[name] = r.get("status") if isinstance(r, dict) and "status" in r else "ok"
+        except Exception as exc:              # one part failing never stops the others
+            out[name] = f"error: {type(exc).__name__}: {exc}"
+    out["mirror_counts"] = divine_blessing.mirror_counts()
+    return out
+
+
+def _gard_manifest() -> Any:
+    from . import gard_shard_model
+    fn = getattr(gard_shard_model, "build_hub_manifest", None)
+    return fn() if fn else None
+
+
+def _world_model_grounding() -> Any:
+    from . import world_model
+    fn = getattr(world_model, "ground_observation", None)
+    return fn("perception", 0.05) if fn else None
+
+
 def doc_annealing() -> dict:
     from . import doc_annealing as da
     return da.anneal_docs()
@@ -132,6 +177,8 @@ def settings() -> dict:
         "pulse_route": os.environ.get("QUIPU_PULSE_ROUTE", "0").strip() == "1",
         "pulse_minutes": _f("QUIPU_PULSE_MINUTES", 10.0),
         "doc_anneal_minutes": _f("QUIPU_DOC_ANNEAL_MINUTES", 30.0),
+        "mirror_update": os.environ.get("QUIPU_MIRROR_UPDATE", "0").strip() == "1",
+        "mirror_interval_s": _f("QUIPU_MIRROR_INTERVAL_S", 60.0),
         "self_organising": os.environ.get("QUIPU_SELF_ORGANISING", "0").strip() == "1",
         "brain_owner": os.environ.get("QUIPU_BRAIN_OWNER") == "1",
     }
@@ -153,6 +200,11 @@ def start_background(stop: threading.Event | None = None) -> list[threading.Thre
     global _STARTED_AT
     _STARTED_AT = time.time()
     cfg = settings()
+    try:
+        from .qpsi import specialist_gate
+        specialist_gate.enable()              # ACRE creations pass gate 6, always
+    except Exception as exc:
+        _LOG.error("[entirety] specialist gate not enabled: %s", exc)
     if cfg["self_organising"]:
         try:
             from .qpsi import self_organising
@@ -167,6 +219,10 @@ def start_background(stop: threading.Event | None = None) -> list[threading.Thre
         plan.append(("pulse", cfg["pulse_minutes"] * 60.0, pulse, 90.0))
     else:
         _record("pulse", disabled="QUIPU_PULSE_ROUTE is not 1 (the operator's switch)")
+    if cfg["mirror_update"]:
+        plan.append(("mirror", cfg["mirror_interval_s"], mirror, 45.0))
+    else:
+        _record("mirror", disabled="QUIPU_MIRROR_UPDATE is not 1 (the operator's switch)")
     threads = []
     for name, every, fn, delay in plan:
         t = threading.Thread(target=_loop, args=(name, every, fn), kwargs={"first_delay_s": delay, "stop": stop},
