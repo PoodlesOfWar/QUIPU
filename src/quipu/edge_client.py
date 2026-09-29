@@ -95,13 +95,21 @@ def _clear_text_ok(url: str) -> bool:
     if p.scheme != "http":
         return False
     host = (p.hostname or "").lower()
-    if host in ("localhost", "127.0.0.1", "::1") or "." not in host:
-        return True                      # loopback or a container / compose service name
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return True
     try:
-        ip = ipaddress.ip_address(socket.gethostbyname(host))
-    except (OSError, ValueError):
+        infos = socket.getaddrinfo(host, None)
+    except (OSError, UnicodeError):
+        # A container / compose service name seen from outside its network does
+        # not resolve here, so nothing can be sent to it from here either.
+        return "." not in host
+    # Every address the name resolves to must be internal: a single-label name
+    # that DNS suffix search turns into a public host is not a container name.
+    try:
+        addrs = [ipaddress.ip_address(str(i[4][0]).split("%")[0]) for i in infos]
+    except ValueError:
         return False
-    return ip.is_private or ip.is_loopback
+    return bool(addrs) and all(a.is_private or a.is_loopback for a in addrs)
 
 
 _SCHEMA = """
