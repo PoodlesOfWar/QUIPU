@@ -58,7 +58,10 @@ def run_strategy(*, max_tools: int = 2) -> dict:
     actions: list[str] = []
 
     try:
-        from quipu.games.gate6_user_interlock import get_global_interlock, BreakageType
+        try:
+            from perceptopoly.games.gate6_user_interlock import get_global_interlock, BreakageType
+        except ImportError:
+            from .gate6_interlock import get_global_interlock, BreakageType
         interlock = get_global_interlock()
         active_holds = interlock.list_active_holds(domain="systemic_refinement")
         if active_holds:
