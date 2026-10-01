@@ -420,6 +420,17 @@ def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     return 200, {"ok": True, "source": source, "recorded": True, "log_size": len(log)}
 
 
+
+def _lambda_clusters(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """The Internal Marketplace's clusters for the λ tokens (shadow_tokens).  Only the
+    marketplace's own sources may set them; the edge has already checked who is asking."""
+    from . import shadow_tokens
+    source = (decision.source if decision is not None and decision.source else None) \
+        or _canonical_source(body.get("source"))
+    if source not in shadow_tokens.MARKET_SOURCES:
+        return 403, {"ok": False, "error": f"clusters come from the marketplace ({', '.join(shadow_tokens.MARKET_SOURCES)})"}
+    return 200, shadow_tokens.store_clusters(body.get("clusters"), source)
+
 def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, dict[str, Any]]:
     """Execute universal MESH-SLM inference, classification, or scoring over HTTP."""
     try:
@@ -627,6 +638,9 @@ class ObserverHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/entirety":
                 from . import entirety_service
                 self._send_json(200, entirety_service.status())
+            elif parsed.path == "/lambda":
+                from . import shadow_tokens
+                self._send_json(200, shadow_tokens.latest())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -678,6 +692,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="classify")
             elif parsed.path == "/generate":
                 code, payload = _slm(body, endpoint_kind="generate")
+            elif parsed.path == "/lambda/clusters":
+                code, payload = _lambda_clusters(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
             else:

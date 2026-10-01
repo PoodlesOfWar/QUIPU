@@ -91,7 +91,8 @@ DEFAULT_SKEW_S = 300.0
 KV_PLAN = "entirety:edge:plan"
 KV_STATS = "entirety:edge:stats"
 STATS_FLUSH_S = 60.0
-MUTATING = {("POST", "/observe"), ("POST", "/feedback"), ("POST", "/anneal"), ("GET", "/anneal")}
+MUTATING = {("POST", "/observe"), ("POST", "/feedback"), ("POST", "/anneal"), ("GET", "/anneal"),
+            ("POST", "/lambda/clusters")}
 H_SOURCE, H_TS, H_SIG = "X-Quipu-Source", "X-Quipu-Timestamp", "X-Quipu-Signature"
 H_IDEM = "X-Quipu-Idempotency"
 # Headers a public front door adds (Cloudflare, reverse proxies).  A request
