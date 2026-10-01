@@ -2,7 +2,11 @@
 
 The Essay (*The Aero-Chthonic Canvas*, Perceptopoly ``docs/essays``) has six
 movements, I–VI.  Each one is a plane: a direction in QUIPU's 7-D mesh, built
-from the movement's own words as QUIPU has embedded them.  Voicing the Essay
+from the movement's own words as QUIPU has embedded them, minus the Essay's
+mean direction (``contrast``).  Without the contrast the planes are nearly one
+plane: on the host brain (2026-10-01) ~95 % of every movement's direction is
+what the whole Essay shares, and the six directions have pairwise cosines of
+0.73–0.997; contrasted, −0.74 to 0.59.  Voicing the Essay
 through the mesh is a mixed-integer linear problem (one scenario ω):
 
     maximise   Σ_t Σ_p  s_tp(ω) · x_tp
@@ -409,7 +413,7 @@ def _q(vals: list[float], pct: float) -> float:
 def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: int = 384,
         iters: int = 200, seed: int | None = None, threshold: float = 0.3,
         clusters: Optional[list[dict[str, Any]]] = None, essay: Optional[str] = None,
-        mesh: Optional[Mesh] = None, persist: bool = True) -> dict[str, Any]:
+        mesh: Optional[Mesh] = None, persist: bool = True, contrast: bool = True) -> dict[str, Any]:
     started = time.time()
     path = essay_path(essay)
     if path is None:
@@ -457,7 +461,10 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
             if d is None:
                 d, _ = plane_direction(_words(p.text), mesh)
             D.append(d + rng.normal(0.0, mesh.sigma, 7))
-        S = Eu @ _unit(np.array(D)).T                                # (T, P) centred cosine
+        D = np.array(D)
+        if contrast and P > 1:
+            D = D - D.mean(axis=0)              # what each movement adds to the Essay
+        S = Eu @ _unit(D).T                                          # (T, P) centred cosine
         inst = Instance(S, member, q, k)
         ex = exact_milp(inst)
         if ex is not None:
@@ -521,6 +528,8 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
         "essay": essay_info, "planes": voiced,
         "problem": {"scenarios": scenarios, "k_per_plane": k, "budget": budget, "equity": equity,
                     "candidates": T, "clusters": C, "floor": floor, "sigma": round(mesh.sigma, 5),
+                    "planes": "contrasted" if contrast and P > 1 else "centred",
+                    "plane_cosine_max": _max_offdiag(planes_dirs(live_planes, mesh, contrast)),
                     "primal": "exact (HiGHS)" if exact_n == scenarios else
                               ("Lagrangian repair" if exact_n == 0 else f"exact in {exact_n}/{scenarios}")},
         "bounds": {"dual_mean": round(float(np.mean(bounds)), 5), "primal_mean": round(float(np.mean(primals)), 5),
@@ -534,6 +543,21 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
         from . import brain_kv
         brain_kv.kv_set_json(KV_LATEST, out)
     return out
+
+
+def planes_dirs(planes: list[Plane], mesh: Mesh, contrast: bool) -> np.ndarray:
+    D = np.array([plane_direction(_words(p.text), mesh)[0] for p in planes])
+    if contrast and len(D) > 1:
+        D = D - D.mean(axis=0)
+    return _unit(D)
+
+
+def _max_offdiag(U: np.ndarray) -> float:
+    if len(U) < 2:
+        return 0.0
+    G = U @ U.T
+    np.fill_diagonal(G, -np.inf)
+    return round(float(G.max()), 4)
 
 
 def latest() -> dict[str, Any]:

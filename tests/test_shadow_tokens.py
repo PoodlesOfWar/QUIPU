@@ -166,8 +166,9 @@ def test_monte_carlo_run_prices_equity_per_cluster(essay):
     clusters = [{"id": "hydraulic", "commodity": "steel", "size": 40},
                 {"id": "bearing", "commodity": "steel", "size": 25},
                 {"id": "nothing-here", "commodity": "unobtainium", "size": 3}]
+    # the synthetic planes are already orthogonal axes: no shared component to contrast away
     out = ST.run(scenarios=12, k=3, equity=0.5, seed=5, clusters=clusters, essay=essay,
-                 mesh=mesh, persist=False, threshold=0.3)
+                 mesh=mesh, persist=False, threshold=0.3, contrast=False)
     assert out["ok"], out
     lt = {r["cluster"]: r for r in out["lambda_tokens"]}
     assert set(lt) == {"hydraulic", "bearing"} and out["unanchored_clusters"] == ["nothing-here"]
@@ -192,6 +193,24 @@ def test_monte_carlo_run_prices_equity_per_cluster(essay):
     assert out["bounds"]["gap_mean"] >= -1e-6
     assert sum(p["attention"] for p in out["projections"]) == pytest.approx(1.0, abs=1e-3)
     assert "not currency" in out["note"]
+
+
+def test_contrast_separates_planes_that_share_the_essays_common_direction(essay):
+    """On the host brain ~95 % of every movement's direction is the Essay's shared part.
+    Here each plane word also carries a large common component; contrast removes it."""
+    mesh = _mesh()
+    common = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0])
+    for ax, words in PLANE_WORDS.items():
+        for w in words.split():
+            mesh.lookup[w] = mesh.lookup[w] + common
+    planes, _ = ST.essay_planes(ST.essay_path(essay))
+    flat = ST._max_offdiag(ST.planes_dirs(planes, mesh, contrast=False))
+    sharp = ST._max_offdiag(ST.planes_dirs(planes, mesh, contrast=True))
+    assert flat > 0.9 and sharp < 0.2
+    out = ST.run(scenarios=6, k=3, seed=4, clusters=[], essay=essay, mesh=mesh, persist=False)
+    assert out["problem"]["planes"] == "contrasted" and out["problem"]["plane_cosine_max"] < 0.2
+    em = {e["plane"]: e["tokens"] for e in out["emission"]}
+    assert any(t.startswith("tok0_") for t in em["I"]) and any(t.startswith("tok4_") for t in em["V"])
 
 
 def test_without_clusters_the_essay_is_voiced_with_no_prices(essay):
