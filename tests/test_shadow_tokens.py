@@ -190,6 +190,8 @@ def test_monte_carlo_run_prices_equity_per_cluster(essay):
     em = {e["plane"]: e for e in out["emission"]}
     assert set(em) == {"I", "II", "III", "IV", "V", "VI"}
     assert any(t.startswith("tok0_") for t in em["I"]["tokens"])
+    assert all(e["snr"] > 1.0 for e in out["emission"]) and all(v["resolvable"] for v in out["planes"])
+    assert len(em["I"]["frequencies"]) == 3 and em["I"]["frequencies"][0][1] >= 0.5
     assert out["bounds"]["gap_mean"] >= -1e-6
     assert sum(p["attention"] for p in out["projections"]) == pytest.approx(1.0, abs=1e-3)
     assert "not currency" in out["note"]
@@ -211,6 +213,12 @@ def test_contrast_separates_planes_that_share_the_essays_common_direction(essay)
     assert out["problem"]["planes"] == "contrasted" and out["problem"]["plane_cosine_max"] < 0.2
     em = {e["plane"]: e["tokens"] for e in out["emission"]}
     assert any(t.startswith("tok0_") for t in em["I"]) and any(t.startswith("tok4_") for t in em["V"])
+
+
+def test_a_plane_drowned_in_noise_is_reported_unresolvable(essay):
+    out = ST.run(scenarios=16, k=3, seed=8, clusters=[], essay=essay, mesh=_mesh(sigma=3.0), persist=False)
+    assert out["ok"] and not any(v["resolvable"] for v in out["planes"])
+    assert all(e["snr"] < 1.0 for e in out["emission"])
 
 
 def test_without_clusters_the_essay_is_voiced_with_no_prices(essay):
