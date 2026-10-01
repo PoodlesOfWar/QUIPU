@@ -28,6 +28,11 @@ host (the ingest pulse, the self-organising loop, the gates; 4,190 tokens and
                   takes the new knowledge (divine_blessing mirror update); a new
                   edge is not created; a new ACRE specialist is held at gate 6
                   (qpsi.specialist_gate) until both parties attest.
+    lambda        every QUIPU_LAMBDA_INTERVAL_S when QUIPU_LAMBDA_TOKENS=1: the
+                  Monte Carlo Lagrangian λ tokens over the Essay's planes
+                  (shadow_tokens): the Internal Marketplace's clusters priced
+                  for an equitable share of the Essay's voice; read-only on the
+                  mesh, results on GET /lambda.
 
 Each loop runs on its own thread, catches everything, records its last run and
 last error, and waits before trying again: one failing part never stops the
@@ -109,7 +114,8 @@ def _summary(out: Any) -> Any:
     if not isinstance(out, dict):
         return out if isinstance(out, (int, float, str, bool, type(None))) else str(type(out).__name__)
     keep = {}
-    for k in ("skipped", "expansion_phase", "flipped", "flip_count", "routed", "note", "changed", "version"):
+    for k in ("skipped", "expansion_phase", "flipped", "flip_count", "routed", "note", "changed", "version",
+              "ok", "error", "bounds"):
         if k in out:
             keep[k] = out[k]
     return keep or {"keys": sorted(out)[:12]}
@@ -166,6 +172,13 @@ def _world_model_grounding() -> Any:
     return fn("perception", 0.05) if fn else None
 
 
+def lambda_tokens() -> dict:
+    from . import shadow_tokens
+    return shadow_tokens.run(scenarios=int(_f("QUIPU_LAMBDA_SCENARIOS", 64)),
+                             k=int(_f("QUIPU_LAMBDA_K", 8)),
+                             equity=min(1.0, _f("QUIPU_LAMBDA_EQUITY", 0.5)))
+
+
 def doc_annealing() -> dict:
     from . import doc_annealing as da
     return da.anneal_docs()
@@ -179,6 +192,8 @@ def settings() -> dict:
         "doc_anneal_minutes": _f("QUIPU_DOC_ANNEAL_MINUTES", 30.0),
         "mirror_update": os.environ.get("QUIPU_MIRROR_UPDATE", "0").strip() == "1",
         "mirror_interval_s": _f("QUIPU_MIRROR_INTERVAL_S", 60.0),
+        "lambda_tokens": os.environ.get("QUIPU_LAMBDA_TOKENS", "0").strip() == "1",
+        "lambda_interval_s": _f("QUIPU_LAMBDA_INTERVAL_S", 1800.0),
         "self_organising": os.environ.get("QUIPU_SELF_ORGANISING", "0").strip() == "1",
         "brain_owner": os.environ.get("QUIPU_BRAIN_OWNER") == "1",
     }
@@ -223,6 +238,10 @@ def start_background(stop: threading.Event | None = None) -> list[threading.Thre
         plan.append(("mirror", cfg["mirror_interval_s"], mirror, 45.0))
     else:
         _record("mirror", disabled="QUIPU_MIRROR_UPDATE is not 1 (the operator's switch)")
+    if cfg["lambda_tokens"]:
+        plan.append(("lambda", cfg["lambda_interval_s"], lambda_tokens, 120.0))
+    else:
+        _record("lambda", disabled="QUIPU_LAMBDA_TOKENS is not 1 (the operator's switch)")
     threads = []
     for name, every, fn, delay in plan:
         t = threading.Thread(target=_loop, args=(name, every, fn), kwargs={"first_delay_s": delay, "stop": stop},

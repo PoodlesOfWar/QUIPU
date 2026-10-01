@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.49.0"
+__version__ = "0.50.0"
 __release__ = (
-    "The mirror aspect inside the gates: an existing gated edge takes new knowledge, a new one is held (QUIPU_MIRROR_UPDATE); new ACRE specialists are held at gate 6 until both parties attest (qpsi.specialist_gate); the container's mirror loop replaces the host bypass with the gates on."
+    "λ tokens over the Essay's planes (shadow_tokens): the Essay voiced through QUIPU's mesh as a MILP, with the Internal Marketplace's clusters held to an equitable floor; Lagrangian relaxation prices each floor (λ, a distribution over Monte Carlo scenarios of QUIPU's Langevin noise and the Essay's sentences), HiGHS solves the MILP exactly and the duality gap is reported. GET /lambda; clusters from the marketplace by signed POST /lambda/clusters; read-only on the mesh."
 )
-__build_date__ = "2026-09-25"
+__build_date__ = "2026-10-01"
 
 PHASES = {
+    "0.50.0": "λ tokens over the Essay's planes (shadow_tokens): the Essay voiced through QUIPU's mesh as a MILP, with the Internal Marketplace's clusters held to an equitable floor; Lagrangian relaxation prices each floor (λ, a distribution over Monte Carlo scenarios of QUIPU's Langevin noise and the Essay's sentences), HiGHS solves the MILP exactly and the duality gap is reported. GET /lambda; clusters from the marketplace by signed POST /lambda/clusters; read-only on the mesh. 10 new tests.",
     "0.49.0": "The mirror aspect inside the gates: an existing gated edge takes new knowledge, a new one is held (QUIPU_MIRROR_UPDATE); new ACRE specialists are held at gate 6 until both parties attest (qpsi.specialist_gate); the container's mirror loop replaces the host bypass with the gates on. 6 new tests.",
     "0.48.0": "One brain, one writer: the quipu container runs the whole Entirety (observer, expansion step, the operator's pulse, doc annealing) against one brain; the host copy is retired behind a guard; brain_migrate replays the observer's record into the host brain. Every client writes through edge_client - durable outbox, signed idempotency, retry by edge status - and QUIPU applies each write once. Public front-door writes must be signed; relays need the operator's relays_for. 16 new tests.",
     "0.47.0": "Edge identity and admission: every write to the observer (observe, feedback, anneal) passes qpsi.edge_admission - per-source HMAC identity (or grant-bound browser origin), and admission inside the operator's grant, where QUIPU water-fills the total by each source's measured information under the operator's ceilings (the Invariance #7 constrained gate). Record mode by default; enforce is the operator's act. CORS no longer '*'. 15 new tests.",

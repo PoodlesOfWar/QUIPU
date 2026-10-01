@@ -4,6 +4,20 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.50.0] λ tokens over the Essay's planes (2026-10-01)
+
+Operator request, 2026-10-01: Monte Carlo shadow-token generation across non-linear Lagrangian planes for a MILP, inside QUIPU's emitter, with MESH λ tokens for an equitable distribution across the Internal Marketplace, as symbiotic projections; the MILP is the Essay.
+
+### Added
+- **`src/quipu/shadow_tokens.py`.** The Essay (*The Aero-Chthonic Canvas*, Perceptopoly `docs/essays`, sha256 recorded on every run) is split at its movements I–VI; each is a plane, a direction in the 7-D mesh made from the movement's own words as QUIPU embeds them. Voicing the Essay is the MILP: per plane pick K tokens (Σ_t x_tp = K), a token voices one plane (Σ_p x_tp ≤ 1), every marketplace cluster gets an equitable floor (Σ_{t∈T_c} x ≥ q_c, q_c = ⌊equity·budget/C⌋ capped at the cluster's capacity); score = centred cosine of token and plane (non-linear in the plane). Tokens belong to the cluster whose anchor (category and commodity words) they sit nearest, or to the commons.
+- **Prices by Lagrangian relaxation.** A MILP has no LP shadow prices; the token-once and floor constraints are dualized (μ_t, λ_c ≥ 0), the rest splits by plane (top-K), and the dual is solved by projected subgradient with a Polyak step. The split problem has the integrality property, so the dual bound equals the LP-relaxation bound (tested against HiGHS `linprog`). The MILP is solved exactly with HiGHS (`scipy.optimize.milp`); without SciPy, by repairing the Lagrangian solution. The gap is reported per run (synthetic 384×6, 64 scenarios: mean 6e-5, about 9 s).
+- **Monte Carlo.** Each scenario re-draws every plane from a bootstrap of its sentences and adds QUIPU's own Langevin emission noise (σ from `_langevin_compute_sigma`, corpus freshness). λ_c is reported as a distribution: mean, std, p10/p50/p90, how often the floor binds.
+- **Outputs** (`brain_kv["entirety:lambda:latest"]`, `GET /lambda`): `lambda_tokens` (`λ:<cluster>` with its distribution, floor, capacity, expected share), `shadow_tokens` (against the free emission: *held back* and *pulled in*, weighted by selection-frequency difference, with the reduced score at the dual optimum), `emission` (each movement's voice: the tokens the MILP picks in most scenarios), `projections` (per cluster: the λ distribution and its share of the total price of equity, `attention`). λ is in units of centred cosine, not currency; a projection proposes nothing and changes no price.
+- **`POST /lambda/clusters`**: the marketplace's clusters (`[{id, commodity, size, anchors?}]`, sanitised, at most 64). Signed through the edge like every write; only supply-chain-brain, hubcore and hub-floor may set them (403 otherwise).
+- **Entirety loop `lambda`** every `QUIPU_LAMBDA_INTERVAL_S` (1800) when `QUIPU_LAMBDA_TOKENS=1` (off in the package; the operator's switch). `QUIPU_LAMBDA_SCENARIOS` (64), `QUIPU_LAMBDA_K` (8), `QUIPU_LAMBDA_EQUITY` (0.5), `QUIPU_ESSAY_PATH`.
+- Nothing is written to the mesh: no vocabulary, no edges, no specialists; no gate is involved.
+- `tests/test_shadow_tokens.py` (10): the Essay's movements; dual ≥ MILP and = LP relaxation; repair always feasible; a binding floor is priced and a slack one is not; the Monte Carlo run end to end (prices, shadow tokens, emission, projections); no clusters; sanitising; missing Essay; the HTTP routes (unsigned 401, non-marketplace 403, GET readable); the operator's switch.
+
 ## [0.49.0] The mirror aspect inside the gates; ACRE through gate 6 (2026-09-27)
 
 Operator rulings, 2026-09-27: the parallel bypass is the mirror aspect — within governance because it furthers QUIPU's knowledge acquisition by updating entities that already passed the gates, not by creating new ones; and `emergent_brain_smell` is to be used as the rest and given its pass through gate 6.
