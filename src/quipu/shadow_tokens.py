@@ -55,7 +55,10 @@ Outputs (``brain_kv["entirety:lambda:latest"]``, ``GET /lambda``):
   displaces them) and *pulled in* (the MILP picks them, free emission does not:
   a floor pays for them); weight = the difference in selection frequency
   across scenarios, with the token's mean reduced score at the dual optimum;
-* ``emission`` — per movement, the tokens the MILP picks in most scenarios;
+* ``emission`` — per movement, the tokens the MILP picks in most scenarios,
+  each movement's top-K selection frequencies, and its signal-to-noise ratio
+  (mean direction over the spread of its scenario draws); below 1 the mesh
+  cannot resolve that movement under its own noise, and its voice is empty;
 * ``projections`` — what the Internal Marketplace reads: per cluster, the λ
   distribution and its share of the total price of equity (``attention``).
   A projection proposes nothing and changes no price.
@@ -193,7 +196,8 @@ def load_mesh(n_candidates: int = 384, cn=None) -> Mesh:
         if not np.any(vec):
             continue
         lookup[tok] = vec
-        if len(cand_tok) < n_candidates and len(tok) >= 3 and not _NUMERIC.match(tok) and ":" not in tok:
+        if (len(cand_tok) < n_candidates and len(tok) >= 3 and not _NUMERIC.match(tok)
+                and ":" not in tok and tok.count("-") < 2 and not tok.endswith("-")):
             cand_tok.append(tok)
             cand_f.append(float(r[1]))
             cand_e.append(vec)
@@ -452,6 +456,7 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
     sel_pri = np.zeros((T, P))
     red_sum = np.zeros((T, P))
     gaps, bounds, primals, exact_n = [], [], [], 0
+    draws = np.zeros((scenarios, P, 7))
     for s in range(scenarios):
         D = []
         for p in live_planes:
@@ -464,6 +469,7 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
         D = np.array(D)
         if contrast and P > 1:
             D = D - D.mean(axis=0)              # what each movement adds to the Essay
+        draws[s] = D
         S = Eu @ _unit(D).T                                          # (T, P) centred cosine
         inst = Instance(S, member, q, k)
         ex = exact_milp(inst)
@@ -511,11 +517,23 @@ def run(*, scenarios: int = 64, k: int = 8, equity: float = 0.5, n_candidates: i
                                "reduced_score": round(float(red[t, pi]), 4)})
     shadow.sort(key=lambda r: -r["weight"])
 
+    # Signal-to-noise per plane across the scenarios: the plane's mean direction against
+    # the spread of its draws (sentence bootstrap + Langevin noise).  Below 1 the mesh
+    # cannot tell this movement from the others under QUIPU's own noise.
+    snr = np.linalg.norm(draws.mean(axis=0), axis=1) / np.maximum(
+        np.linalg.norm(draws.std(axis=0), axis=1), 1e-12)
+    by_plane = {p.n: i for i, p in enumerate(live_planes)}
+    for v in voiced:
+        if v["plane"] in by_plane:
+            v["snr"] = round(float(snr[by_plane[v["plane"]]]), 3)
+            v["resolvable"] = bool(snr[by_plane[v["plane"]]] >= 1.0)
     emission = []
     for pi, p in enumerate(live_planes):
         order = np.argsort(-sel_pri[:, pi])
         toks = [mesh.tokens[t] for t in order[:k] if sel_pri[t, pi] >= 0.5]
-        emission.append({"plane": p.n, "title": p.title, "tokens": toks, "text": " ".join(toks)})
+        emission.append({"plane": p.n, "title": p.title, "tokens": toks, "text": " ".join(toks),
+                         "snr": round(float(snr[pi]), 3),
+                         "frequencies": [[mesh.tokens[t], round(float(sel_pri[t, pi]), 3)] for t in order[:k]]})
 
     projections = [{"cluster": lt["cluster"], "commodity": lt["commodity"],
                     "lambda_p10": lt["p10"], "lambda_p50": lt["p50"], "lambda_p90": lt["p90"],
