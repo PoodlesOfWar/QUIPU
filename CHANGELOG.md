@@ -4,6 +4,33 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.51.0] Open doors: the λ run tuned by its pruned residual potential (2026-10-02)
+
+Operator request, 2026-10-02: "Pruned residual potential from the shadow tokens leads to the open door variables for dynamic hyper parameter tuning." Scope chosen by the operator: the λ run's own variables. The loop's four operations are named after Gambit/Rogue (Mr. and Mrs. X, X-Men) and Gauche/Grey (Black Clover).
+
+### Added
+- **The pruned residual potential** (`shadow_tokens.potential`), in Perceptopoly's form (`theseuscape.bonding.residual_potential`): every (token, movement) is a two-regime record across the scenarios, voiced or pruned. Real = the pruned excess (alignment above the lowest voiced score that the coupling pruned, per voiced slot) plus the pool excess (tokens past the candidate pool that clear a movement's cut). Imaginary = crossing rate × separation, where the crossing rate Σ 2f(1−f) / 2K is the share of the voice that changes between two draws. Per movement and in total, on `GET /lambda` (`potential`).
+- **`k_profile`**: for each movement, the free-emission crossing rate at every voice size; its minimum is where the movement's scores have a gap the noise does not cross (`GET /lambda`, `k_profile`).
+- **Tokens per movement** (`k` = int or `{movement: K}`): the MILP's plane rows, the Lagrangian split, the repair and the free emission all take one K per movement.
+- **The block past the pool** (`n_extension`, default 256) is scored in every scenario; scores are centred on the frequency-weighted mean of the whole embedded vocabulary, so a token scores the same whatever pool it sits in. Each run records its seed. `simulate()` keeps every scenario's record; `report()` publishes it.
+- **`qpsi/open_doors.py`**: the λ run's settings that are measurements (`k_per_plane`, `candidates`, `scenarios`) are doors. A door is open only where the operator's grant (`QUIPU_LAMBDA_DOORS`, JSON or a path) gives bounds; hard caps (k ≤ 64, candidates ≤ 4096, scenarios ≤ 512) only narrow it. Equity, threshold and contrast are the operator's alone: λ is the price the operator chose, so nothing minimises it. A closed door holds the operator's value; narrowing clamps; closing restores. One λ period:
+  - **Rogue (absorb)**: each door's charge a ← a + x(1 − a), relaxed by exp(−Δt/τ) with τ = 3 × the loop's median gap; x = the share of what the door measures that a move could discharge (k: the movement's crossing rate the best K inside the door would remove; candidates: the pool excess's share of the potential, or a shrink when the pool's last quarter is never voiced; scenarios: an undecided mirror).
+  - **Gambit (charge)**: the most charged open door at a ≥ ½ moves a share a of the way to its target, inside the door; one door per period.
+  - **Gauche (mirror)**: the moved setting on the same seed (the same plane draws), the door's own measure compared with the live run's, paired bootstrap SE; discharged / inconclusive / charged; a pool move is refused if the voices become less stable. Scenarios change precision, not the potential, and are applied without a mirror.
+  - **Grey (transform)**: a discharged move becomes the live setting; the next live run confirms it or Grey returns to the previous value (worse than the baseline by more than 2 combined SE).
+  - Every step in `brain_kv["entirety:lambda:doors"]` and the run's `doors` field; `python -m src.quipu.qpsi.open_doors status|cycle`.
+- The Entirety's `lambda` loop runs one open-doors period (`open_doors.cycle`); with no grant every door is shut and the run uses the operator's settings, measuring and reporting where the charges point (`closed_pressure`).
+- With constant evidence the charge settles at x / (1 − e^(−1/3)(1 − x)), so a door fires only when a move would discharge at least ~22 % of its measure run after run (or half in one run). What does not recur fades.
+
+### Measured (host brain snapshot, 2026-10-02; doors open: k 2–12, candidates 384–1536, scenarios 48–128; six periods)
+- The voices change by 89 % between two draws (crossing rate 0.89; potential ≈ 0.39i + 0.017). The best K inside the door would remove ~4 % of that; 34–38 tokens past the pool clear a cut per scenario, by noise. Rogue's charges peaked at 0.11; nothing fired, nothing moved. The instability is the mesh's resolution under its own noise, which no door changes; training does.
+
+### Fixed
+- `k_profile` selects exactly K per scenario (ties by rank); selecting every token tied at the K-th score had over-counted crossings.
+
+### Tests
+- `tests/test_open_doors.py` (12): the profile finds the gap; tokens past the pool; the grant (caps, the operator's own settings, files); closed and narrowed doors; Rogue's charge and decay; Gambit inside the bounds; Gauche on the same draws and Grey's transformation; Grey's return; the pool and scenarios doors; a period with every door shut; an open K door found, kept and confirmed over four periods; the Entirety loop. `tests/test_shadow_tokens.py` +1 (a K per movement).
+
 ## [0.50.0] λ tokens over the Essay's planes (2026-10-01)
 
 Operator request, 2026-10-01: Monte Carlo shadow-token generation across non-linear Lagrangian planes for a MILP, inside QUIPU's emitter, with MESH λ tokens for an equitable distribution across the Internal Marketplace, as symbiotic projections; the MILP is the Essay.
