@@ -302,11 +302,25 @@ def test_clusters_need_a_signed_marketplace_source_and_lambda_is_readable(monkey
 
 def test_the_lambda_loop_is_the_operators_switch(monkeypatch):
     from src.quipu import entirety_service as ES
+    from src.quipu.qpsi import open_doors as OD
     monkeypatch.delenv("QUIPU_LAMBDA_TOKENS", raising=False)
     assert ES.settings()["lambda_tokens"] is False
     monkeypatch.setenv("QUIPU_LAMBDA_TOKENS", "1")
     monkeypatch.setenv("QUIPU_LAMBDA_SCENARIOS", "3")
-    seen = {}
-    monkeypatch.setattr(ST, "run", lambda **kw: seen.update(kw) or {"ok": True})
-    assert ES.settings()["lambda_tokens"] is True and ES.lambda_tokens() == {"ok": True}
-    assert seen["scenarios"] == 3 and seen["k"] == 8 and seen["equity"] == 0.5
+    assert ES.settings()["lambda_tokens"] is True
+    b = OD.base_settings()          # what the loop runs with while every door is shut
+    assert (b["scenarios"], b["k_per_plane"], b["candidates"], b["equity"]) == (3, 8, 384, 0.5)
+
+
+def test_each_movement_can_voice_its_own_number_of_tokens(essay):
+    out = ST.run(scenarios=6, k={"*": 3, "I": 2, "VI": 4}, seed=1, clusters=[], essay=essay,
+                 mesh=_mesh(), persist=False)
+    assert out["ok"] and out["problem"]["k_per_plane"] == {"I": 2, "II": 3, "III": 3, "IV": 3, "V": 3, "VI": 4}
+    assert out["problem"]["budget"] == 18
+    em = {e["plane"]: e for e in out["emission"]}
+    assert em["I"]["k"] == 2 and len(em["I"]["frequencies"]) == 2 and len(em["VI"]["frequencies"]) == 4
+    rng = np.random.default_rng(0)
+    inst = ST.Instance(rng.normal(size=(20, 3)), np.full(20, -1), np.zeros(0), [2, 5, 1])
+    x, _ = ST.exact_milp(inst)
+    assert list(x.sum(axis=0)) == [2, 5, 1] and (x.sum(axis=1) <= 1).all()
+    assert list(ST._subproblem(inst.S, inst.K).sum(axis=0)) == [2, 5, 1]

@@ -173,10 +173,10 @@ def _world_model_grounding() -> Any:
 
 
 def lambda_tokens() -> dict:
-    from . import shadow_tokens
-    return shadow_tokens.run(scenarios=int(_f("QUIPU_LAMBDA_SCENARIOS", 64)),
-                             k=int(_f("QUIPU_LAMBDA_K", 8)),
-                             equity=min(1.0, _f("QUIPU_LAMBDA_EQUITY", 0.5)))
+    """One λ period: the live run, then the open doors' tuning (qpsi.open_doors).  With no
+    grant (QUIPU_LAMBDA_DOORS) the doors are shut and the run is the operator's settings."""
+    from .qpsi import open_doors
+    return open_doors.cycle()
 
 
 def doc_annealing() -> dict:
