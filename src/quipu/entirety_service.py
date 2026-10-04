@@ -271,4 +271,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())
+    # Run the package's copy of this module, not __main__: the observer imports
+    # src.quipu.entirety_service for GET /entirety, and a second copy would report
+    # loops that were started in the other one (empty, started_at null).
+    import importlib
+    raise SystemExit(importlib.import_module("src.quipu.entirety_service").main())

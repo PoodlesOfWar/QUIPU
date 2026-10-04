@@ -346,3 +346,18 @@ def test_a_relay_is_accepted_only_for_the_sources_the_grant_lets_it_carry(monkey
             assert d.ok and d.source == "supply-chain-brain" and d.relayed_for == "bakugo"
         else:
             assert d.code == 401
+
+
+def test_running_as_a_module_reports_from_the_copy_the_observer_reads():
+    """`python -m src.quipu.entirety_service` must start the loops in the package's module,
+    the one GET /entirety imports, not in a second __main__ copy."""
+    import runpy
+    import sys
+    from unittest import mock
+    from src.quipu import entirety_service as ES
+    with mock.patch.object(ES, "main", return_value=0) as m, mock.patch.object(sys, "argv", ["x", "status"]):
+        try:
+            runpy.run_module("src.quipu.entirety_service", run_name="__main__", alter_sys=False)
+        except SystemExit as exc:
+            assert exc.code == 0
+    assert m.called

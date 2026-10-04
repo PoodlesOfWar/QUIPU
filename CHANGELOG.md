@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.51.1] /entirety reports the loops that run (2026-10-04)
+
+### Fixed
+- GET /entirety reports the running loops: `python -m src.quipu.entirety_service` now runs the package's copy of the module, the one the observer imports (a second __main__ copy reported loops: {} and started_at null). Found after the first container deploy: the loops ran (pulse ingest in the logs; the mirror loop's specialist review passed `emergent_brain_smell` through gate 6) while `/entirety` showed none. 1 test.
+
 ## [0.51.0] Open doors: the λ run tuned by its pruned residual potential (2026-10-02)
 
 Operator request, 2026-10-02: "Pruned residual potential from the shadow tokens leads to the open door variables for dynamic hyper parameter tuning." Scope chosen by the operator: the λ run's own variables. The loop's four operations are named after Gambit/Rogue (Mr. and Mrs. X, X-Men) and Gauche/Grey (Black Clover).
