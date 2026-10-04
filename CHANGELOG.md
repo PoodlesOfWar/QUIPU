@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.52.0] - 2026-10-04
+
+### Added
+- **Relational records** (`observer_service._keep_relational`, `GET /relational`): an `/observe` whose `meta.relational` carries an `agent_id` and a `schema` is kept as the latest record of that entity for its source (`brain_kv` `relational:<source>:<entity>`), with a line in `relational:index` (Control, ratio, well, breaking pair, limit, links). `GET /relational` returns the index (`?source=` filters it); `?source=&entity=` returns one record (404 if none). Records over 256 KB are not kept. The first writer is Perceptopoly v2.10.3 (`perceptopoly.control/1`: Control, pair agreement and gravity wells of each fleet agent); the scope for the other clients is in Perceptopoly's `docs/RELATIONAL_SHARING.md`. The `/observe` response reports what was kept as `relational`.
+
+### Tests
+- `tests/test_divine_blessing.py`: a record kept, indexed, served, replaced; one without an id not kept; the payload within the `/observe` nesting bound.
+
 ## [0.51.2] - 2026-10-04
 
 ### Fixed

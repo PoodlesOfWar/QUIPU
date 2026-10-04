@@ -535,3 +535,47 @@ class TestEnvLipschitz:
         for bad in ("0", "-1", "inf", "nan"):
             monkeypatch.setenv(db.LIPSCHITZ_ENV, bad)
             assert db._env_lipschitz() == db._LIPSCHITZ_DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# meta.relational -- an entity's relational record, kept for every client
+# ---------------------------------------------------------------------------
+
+def _relational_record(agent_id="quipu_forager", control=0.56):
+    return {"schema": "perceptopoly.control/1", "agent_id": agent_id, "world": "world1", "role": "PC",
+            "readout": {"load": 0.8, "r": 0.8, "well": False, "control": control,
+                        "agreements": {"artisan|weapons": 0.83}, "weights": {"artisan|weapons": 1.0},
+                        "breaking": "artisan|lockpick"},
+            "derived": {"limit": 1.0, "tolerance": 4.0, "recovery_lag": 3.0},
+            "history": {"emerged": ["artisan", "weapons"],
+                        "wells": [{"load_at_entry": 1.0, "duration_ticks": 5, "recovery_ticks": 3, "residual_left": 1.0,
+                                   "pair_broken": "artisan|lockpick", "ticks_near_limit_before": 4}]},
+            "links": {"mirror_of": None, "bonds": ["threat:dog"]}}
+
+
+def test_observer_service_keeps_a_relational_record_and_serves_it(isolated, monkeypatch):
+    import src.quipu.observer_service as osvc
+    from src.quipu import security
+    monkeypatch.setattr(osvc.mesh_slm, "feed_corpus", lambda text, source=None: 0)
+    monkeypatch.setattr(osvc.mesh_slm, "state_summary", lambda: {})
+    monkeypatch.setattr(osvc.world_model, "assess_observation", lambda **kw: {})
+    monkeypatch.setattr(osvc, "_known_token_coverage", lambda toks: (1.0, []), raising=False)
+    body = {"source": "perceptopoly", "text": "control quipu_forager world1; control 0.56",
+            "meta": {"relational": _relational_record()}}
+    assert security.validate_observe_payload(body) == (True, None)        # within the nesting bound
+    status, out = osvc._observe(body)
+    assert status == 200 and out["relational"] == {"entity": "quipu_forager", "schema": "perceptopoly.control/1"}
+    rec = brain_kv.kv_get_json("relational:perceptopoly:quipu_forager")
+    assert rec["readout"]["breaking"] == "artisan|lockpick" and rec["source"] == "perceptopoly" and rec["received_at"]
+    code, idx = osvc._relational({})
+    row = idx["index"]["perceptopoly:quipu_forager"]
+    assert code == 200 and row["control"] == 0.56 and row["limit"] == 1.0 and row["links"] == {"bonds": ["threat:dog"]}
+    code, one = osvc._relational({"source": ["perceptopoly"], "entity": ["quipu_forager"]})
+    assert code == 200 and one["record"]["history"]["wells"][0]["pair_broken"] == "artisan|lockpick"
+    assert osvc._relational({"source": ["perceptopoly"], "entity": ["nobody"]})[0] == 404
+    assert osvc._relational({"source": ["bakugo"]})[1]["index"] == {}
+    # an update replaces the record; a record without an id or schema is not kept
+    osvc._observe({"source": "perceptopoly", "text": "again", "meta": {"relational": _relational_record(control=0.7)}})
+    assert osvc._relational({})[1]["index"]["perceptopoly:quipu_forager"]["control"] == 0.7
+    status, out = osvc._observe({"source": "perceptopoly", "text": "no id", "meta": {"relational": {"schema": "x"}}})
+    assert status == 200 and out["relational"] is None

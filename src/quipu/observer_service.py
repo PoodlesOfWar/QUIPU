@@ -51,7 +51,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
 from . import brain_kv, hideout_mesh, mesh_slm, world_model, security
@@ -140,6 +140,9 @@ _FEEDBACK_KEY = "observer:{source}:feedback"
 _LAST_TRAIN_KEY = "observer:last_train"
 _LAST_OSCILLATION_KEY = "observer:last_oscillation"
 _FRAME_KEY = "observer:frame:{source}"     # latest physical frame posted by a source (meta.frame)
+_RELATIONAL_KEY = "relational:{source}:{entity}"   # latest relational record of one entity (meta.relational)
+_RELATIONAL_INDEX = "relational:index"             # source:entity -> summary, for every client to read
+_RELATIONAL_MAX_BYTES = 256 * 1024
 _FRAME_FIELDS = ("standoff_m", "scale_mm_per_px", "coplanarity", "bearing_deg", "range_m",
                  "enu_e", "enu_n", "enu_u", "sigma_m", "reference_frame")
 
@@ -291,6 +294,55 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
     }
 
 
+def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
+    """Keep the latest relational record an entity's source posted (meta.relational; e.g. Perceptopoly's
+    perceptopoly.control/1: Control, pair agreement, wells, links) and its line in the index, so every
+    client reads it from GET /relational. Records without an agent_id or schema, or larger than
+    _RELATIONAL_MAX_BYTES, are not kept. Returns what was kept, or None."""
+    if not isinstance(rec, dict):
+        return None
+    entity = str(rec.get("agent_id") or "").strip()[:64]
+    schema = str(rec.get("schema") or "").strip()[:64]
+    if not entity or not schema:
+        return None
+    try:
+        if len(json.dumps(rec, default=str)) > _RELATIONAL_MAX_BYTES:
+            return None
+    except (TypeError, ValueError):
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    kept = {**rec, "source": source, "received_at": now}
+    ro = rec.get("readout") if isinstance(rec.get("readout"), dict) else {}
+    der = rec.get("derived") if isinstance(rec.get("derived"), dict) else {}
+    links = rec.get("links") if isinstance(rec.get("links"), dict) else {}
+    try:
+        brain_kv.kv_set_json(_RELATIONAL_KEY.format(source=source, entity=entity), kept)
+        idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+        idx[f"{source}:{entity}"] = {"source": source, "entity": entity, "schema": schema,
+                                     "world": rec.get("world"), "received_at": now,
+                                     "control": ro.get("control"), "r": ro.get("r"), "well": bool(ro.get("well")),
+                                     "breaking": ro.get("breaking"), "limit": der.get("limit"),
+                                     "links": {k: links.get(k) for k in ("mirror_of", "lineage_of", "inherited_from", "bonds") if links.get(k)}}
+        brain_kv.kv_set_json(_RELATIONAL_INDEX, idx)
+    except Exception:
+        return None
+    return {"entity": entity, "schema": schema}
+
+
+def _relational(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """GET /relational: the index of every kept relational record (?source= filters it), or one record
+    (?source=&entity=)."""
+    source = (qs.get("source") or [""])[0]
+    entity = (qs.get("entity") or [""])[0]
+    if source and entity:
+        rec = brain_kv.kv_get_json(_RELATIONAL_KEY.format(source=source, entity=entity[:64]), None)
+        return (200, {"ok": True, "record": rec}) if rec else (404, {"ok": False, "error": "no relational record"})
+    idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+    if source:
+        idx = {k: v for k, v in idx.items() if v.get("source") == source}
+    return 200, {"ok": True, "index": idx}
+
+
 def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     # Enforce gVisor security and payload bounding
     valid, sec_err = security.validate_observe_payload(body)
@@ -352,6 +404,8 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             except Exception:
                 pass
 
+    relational = _keep_relational(source, (body.get("meta") or {}).get("relational"))
+
     world_model_result = world_model.assess_observation(
         source=source,
         tokens=tokens,
@@ -374,6 +428,7 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "calibration": _calibration(source),
         },
         "world_model": world_model_result,
+        "relational": relational,
         "totals": {
             "observations": stats.get("observations"),
             "tokens": stats.get("tokens"),
@@ -635,6 +690,9 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(200, world_model.annealing_cycle())
             elif parsed.path == "/edge":
                 self._send_json(200, edge_admission.edge().status())
+            elif parsed.path == "/relational":
+                code, payload = _relational(parse_qs(parsed.query))
+                self._send_json(code, payload)
             elif parsed.path == "/entirety":
                 from . import entirety_service
                 self._send_json(200, entirety_service.status())
