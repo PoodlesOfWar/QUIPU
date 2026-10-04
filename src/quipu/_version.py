@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.51.1"
+__version__ = "0.51.2"
 __release__ = (
     "Open doors: the λ run's own settings (tokens per movement, candidate pool, scenarios) tuned by the pruned residual potential of its shadow tokens (Perceptopoly's form: real = pruned excess, imaginary = crossing rate x separation), inside the bounds the operator grants (QUIPU_LAMBDA_DOORS); Rogue absorbs, Gambit fires, Gauche mirrors on the same draws, Grey transforms or returns."
 )
 __build_date__ = "2026-10-04"
 
 PHASES = {
-    "0.51.1": "GET /entirety reports the running loops: `python -m src.quipu.entirety_service` now runs the package's copy of the module, the one the observer imports (a second __main__ copy reported loops: {} and started_at null). 1 new test.",
+    "0.51.2": "GET /entirety reports the running loops: `python -m src.quipu.entirety_service` now runs the package's copy of the module, the one the observer imports (a second __main__ copy reported loops: {} and started_at null). 1 new test.",
     "0.51.0": "Open doors: the λ run's own settings (tokens per movement, candidate pool, scenarios) tuned by the pruned residual potential of its shadow tokens (Perceptopoly's form: real = pruned excess, imaginary = crossing rate x separation), inside the bounds the operator grants (QUIPU_LAMBDA_DOORS); Rogue absorbs, Gambit fires, Gauche mirrors on the same draws, Grey transforms or returns. 13 new tests.",
     "0.50.0": "λ tokens over the Essay's planes (shadow_tokens): the Essay voiced through QUIPU's mesh as a MILP, with the Internal Marketplace's clusters held to an equitable floor; Lagrangian relaxation prices each floor (λ, a distribution over Monte Carlo scenarios of QUIPU's Langevin noise and the Essay's sentences), HiGHS solves the MILP exactly and the duality gap is reported. GET /lambda; clusters from the marketplace by signed POST /lambda/clusters; read-only on the mesh. 12 new tests.",
     "0.49.0": "The mirror aspect inside the gates: an existing gated edge takes new knowledge, a new one is held (QUIPU_MIRROR_UPDATE); new ACRE specialists are held at gate 6 until both parties attest (qpsi.specialist_gate); the container's mirror loop replaces the host bypass with the gates on. 6 new tests.",

@@ -20,8 +20,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional, Sequence
 
-from quipu import brain_kv
-from quipu.qpsi.governance import (
+from . import brain_kv
+from .qpsi.governance import (
     ASSURANCE_APPROVED,
     Attestation,
     Candidate,

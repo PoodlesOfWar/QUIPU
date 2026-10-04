@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.51.2] - 2026-10-04
+
+### Fixed
+- `gate6_interlock` imported `quipu.brain_kv` absolutely, so inside the container (package `src.quipu`) it never loaded: `systemic_refinement_agent` silently skipped raising and resolving brk_ holds. Imports are now relative.
+
 ## [0.51.1] /entirety reports the loops that run (2026-10-04)
 
 ### Fixed
