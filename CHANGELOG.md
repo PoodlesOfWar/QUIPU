@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.53.0] - 2026-10-07
+
+### Added
+- `qpsi/resonance_phase.py`: the expansion parity as the realised part of a unit phasor `Z = e^{iφ}` whose imaginary part is the latent (翈) axis. A resonance `R` forms on each ingest run and decays between runs; `τ` and `κ` are derived from `corpus_ingest:history` (overridable with `QUIPU_RESONANCE_TAU_S` / `QUIPU_RESONANCE_KAPPA`; thresholds `QUIPU_RESONANCE_THETA_ON` / `_OFF`, default 0.6 / 0.3). The hysteresis band is the latent quarter turn, so the bit flips only by turning through it (broaden → dusk +i → deepen −1 → dawn −i → broaden) and gives one dusk and one dawn per session instead of a flip at every gap longer than the 300 s flux window.
+- `QUIPU_RESONANCE_PHASE` flag in `self_organising` (default on when `QUIPU_SELF_ORGANISING=1` and the flux phase is on; `0` returns the bit to `flux_phase`). The step summary and `status` gain a `resonance` reading; `after_step` records it at `entirety:resonance_phase:system_entirety`. Input to no gate.
+
 ## [0.52.4] - 2026-10-07
 
 ### Documented

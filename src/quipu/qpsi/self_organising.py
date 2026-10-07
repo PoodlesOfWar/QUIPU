@@ -20,7 +20,9 @@ That is the boundary kept here.
 ``enable()`` wraps three attributes of ``system_entirety`` at import time, the
 way ``divine_blessing.enable()`` does, and ``disable()`` restores them:
 
-    bit_flip_parity             → flux_phase.wrap_bit_flip_parity
+    bit_flip_parity             → flux_phase.wrap_bit_flip_parity, then (under
+                                  QUIPU_RESONANCE_PHASE, default on)
+                                  resonance_phase.wrap_bit_flip_parity over it
     observer_tangent            → learned_prior.wrap_observer_tangent
     oscillating_expansion_step  → the original, then ``after_step``: one SOMN
                                   step and the prior's realisation check, on
@@ -72,11 +74,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training
+from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training, resonance_phase
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
 FLUX_ENV: str = "QUIPU_FLUX_PHASE"
+RESONANCE_ENV: str = resonance_phase.ENV        # QUIPU_RESONANCE_PHASE (refines flux_phase)
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
@@ -108,6 +111,7 @@ class Flags:
     mirror_training: bool = True
     coherency_depth: bool = True
     annealed_senses: bool = True
+    resonance_phase: bool = True        # applies only when flux_phase is on
 
     @classmethod
     def from_env(cls) -> "Flags":
@@ -115,7 +119,7 @@ class Flags:
             return os.environ.get(name, "1").strip() != "0"
         return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
                    mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV),
-                   annealed_senses=on(SENSES_ENV))
+                   annealed_senses=on(SENSES_ENV), resonance_phase=on(RESONANCE_ENV))
 
 
 _FLAGS = Flags()
@@ -158,7 +162,16 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
     out: dict[str, Any] = {"flux": flux.to_json(), "step_phase": summary.get("expansion_phase")}
     axes = summary.get("axes") or {}
     observer = float(summary.get("observer") or 0.0)
+    resonance = None
+    if flags.flux_phase and flags.resonance_phase:
+        try:
+            resonance = resonance_phase.read(now=now)
+            out["resonance"] = resonance.to_json(transitions=4)
+        except Exception as exc:
+            out["resonance"] = {"error": str(exc)}
     with se._conn() as cn:
+        if resonance is not None:
+            resonance_phase.record(cn, resonance, "system_entirety")
         drive = mirror_training.mirror_drive(cn, "system_entirety") if flags.mirror_training else None
         if flags.somn:
             res = memristive_axes.step(cn, axes=axes, observer=observer, flux_on=flux.on,
@@ -230,7 +243,9 @@ def enable(flags: Flags | None = None) -> bool:
         for n in ("bit_flip_parity", "observer_tangent", "oscillating_expansion_step"):
             fn = getattr(se, n)
             if getattr(fn, MARK, False):
-                _ORIGINALS[f"se.{n}"] = fn.__wrapped__
+                while getattr(fn, MARK, False):          # resonance wraps flux wraps the cosine
+                    fn = fn.__wrapped__
+                _ORIGINALS[f"se.{n}"] = fn
         try:
             from .. import mesh_slm
             if getattr(mesh_slm._score_candidates, MARK, False):
@@ -245,6 +260,14 @@ def enable(flags: Flags | None = None) -> bool:
         _ORIGINALS["se.bit_flip_parity"] = se.bit_flip_parity
         se.bit_flip_parity = flux_phase.wrap_bit_flip_parity(se.bit_flip_parity)
         setattr(se.bit_flip_parity, MARK, True)
+        if _FLAGS.resonance_phase:
+            # The bit becomes the realised part of the resonance phasor; the
+            # flux reading stays underneath as its fallback (then the cosine).
+            se.bit_flip_parity = resonance_phase.wrap_bit_flip_parity(se.bit_flip_parity)
+            # __wrapped__ names the true original (the cosine), as every wrapper
+            # here does; the flux fallback is held in the closure (_qpsi_fallback).
+            se.bit_flip_parity.__wrapped__ = _ORIGINALS["se.bit_flip_parity"]
+            setattr(se.bit_flip_parity, MARK, True)
 
     if _FLAGS.learned_prior:
         _ORIGINALS["se.observer_tangent"] = se.observer_tangent
@@ -333,6 +356,13 @@ def _senses_status() -> dict:
                           for s, t in r["terminals"].items()}}
 
 
+def _resonance_status() -> dict:
+    try:
+        return resonance_phase.read().to_json(transitions=8)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def status() -> dict:
     from .. import brain_kv
     from .. import system_entirety as se
@@ -345,6 +375,7 @@ def status() -> dict:
     return {
         "enabled": _ENABLED, "master_switch": master_switch_on(), "flags": _FLAGS.__dict__,
         "flux": flux_phase.read_flux().to_json(),
+        "resonance": _resonance_status(),
         "somn": {"g": st.g, "m": st.m, "steps": st.steps, "last_t": st.last_t,
                  "potentiation_steps": st.potentiation_steps, "relaxation_steps": st.relaxation_steps},
         "allocation": brain_kv.kv_get_json(memristive_axes.KV_ALLOCATION, None),

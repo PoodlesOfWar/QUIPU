@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.52.4"
+__version__ = "0.53.0"
 __release__ = (
     "Relational records: /observe keeps meta.relational (an entity's latest record per source, e.g. Perceptopoly's Control, pair agreement and gravity wells per fleet agent) and GET /relational serves the index and each record to every client."
 )
 __build_date__ = "2026-10-04"
 
 PHASES = {
+    "0.53.0": "Resonance phase. src/quipu/qpsi/resonance_phase.py makes the parity bit the realised part of one unit phasor whose imaginary part is the latent (翈) axis. A resonance R forms on each ingest run (R <- 1-(1-R)e^(-kappa n), saturating) and decays between runs (e^(-dt/tau)); tau and kappa are derived from the ingest history (session break at the largest jump in log inter-run gaps; tau = largest within-session gap / ln(theta_on/theta_off); kappa lifts a median run to (theta_on+1)/2). The hysteresis band theta_off <= R < theta_on is the latent quarter turn: broaden -> dusk (+i) -> deepen (-1, i^2) -> dawn (-i) -> broaden; the bit flips only on leaving the band on the far side, a band entered and left on the same side is a latent excursion with no flip. One dusk and one dawn per session (3/3 on three synthetic sessions where the 300 s flux window flipped 46 times). Installed over flux_phase under QUIPU_RESONANCE_PHASE (default on with the master switch; flux_phase then the cosine as fallbacks). Writes only entirety:resonance_phase:<instance>; input to no gate; the held latent potential is not fed back into R. 14 new tests.",
     "0.52.4": "Relational records: /observe keeps meta.relational per source and entity (brain_kv relational:<source>:<entity>, index relational:index); GET /relational serves them. First writer: Perceptopoly v2.10.3 (perceptopoly.control/1). 1 new test.",
     "0.51.2": "GET /entirety reports the running loops: `python -m src.quipu.entirety_service` now runs the package's copy of the module, the one the observer imports (a second __main__ copy reported loops: {} and started_at null). 1 new test.",
     "0.51.0": "Open doors: the λ run's own settings (tokens per movement, candidate pool, scenarios) tuned by the pruned residual potential of its shadow tokens (Perceptopoly's form: real = pruned excess, imaginary = crossing rate x separation), inside the bounds the operator grants (QUIPU_LAMBDA_DOORS); Rogue absorbs, Gambit fires, Gauche mirrors on the same draws, Grey transforms or returns. 13 new tests.",
