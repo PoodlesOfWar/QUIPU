@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.52.2] - 2026-10-07
+
+### Fixed
+- `self_organising.pulse(max_seconds=...)` bounds the whole pulse. It was passed to each source's ingest, so a pulse over N sources ran N x max_seconds holding the step lock (the mirror loop and expansion waited behind it). Sources past the budget are recorded as skipped. The fleet compose now sets `QUIPU_PULSE_MAX_SECONDS=120`.
+
 ## [0.52.1] - 2026-10-07
 
 ### Fixed

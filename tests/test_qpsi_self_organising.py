@@ -213,6 +213,30 @@ def test_pulse_with_route_runs_exactly_the_plan(isolated, monkeypatch):
     assert "flip_count" in out["step"]
 
 
+def test_pulse_max_seconds_bounds_the_whole_pulse(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    plan = so.plan()["docs_per_source"]
+    budgets = []
+    clock = [1000.0]
+    monkeypatch.setattr(so.time, "monotonic", lambda: clock[0])
+
+    def fake_run(sources, *, docs_per_source, max_seconds=0.0, **kw):
+        budgets.append(max_seconds)
+        clock[0] += max_seconds               # each source spends its whole budget
+        return {"per_source": {sources[0]: {"ingested": docs_per_source}}, "elapsed_s": max_seconds}
+
+    monkeypatch.setattr(corpus_ingest, "run_ingest", fake_run)
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    out = so.pulse(route=True, max_seconds=120.0)
+    assert budgets and budgets[0] == 120.0 and sum(budgets) <= 120.0
+    if len([k for k, v in plan.items() if int(v) > 0]) > 1:
+        assert any(r.get("skipped") == "pulse time budget spent" for r in out["runs"])
+
+
 def test_status_reports_flags_flux_state_and_prior(isolated):
     so.enable()
     st = so.status()

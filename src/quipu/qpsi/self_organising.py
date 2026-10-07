@@ -430,12 +430,21 @@ def pulse(*, route: bool = False, refine: bool = False, max_seconds: float = 0.0
     from .. import corpus_ingest
     from .. import system_entirety as se
     known = set(corpus_ingest.SOURCES.keys()) & set(grant()["sources"])
+    # max_seconds bounds the whole pulse, not each source: per source, a pulse over N
+    # sources ran N x max_seconds while holding the step lock.
+    deadline = time.monotonic() + max_seconds if max_seconds > 0 else None
     for key, n in docs.items():
         if key not in known:                   # cannot happen after constrained_gate(); refuse anyway
             result["runs"].append({"source": key, "skipped": "outside the grant"})
             continue
+        budget = max_seconds
+        if deadline is not None:
+            budget = deadline - time.monotonic()
+            if budget <= 0:
+                result["runs"].append({"source": key, "requested": n, "skipped": "pulse time budget spent"})
+                continue
         res = corpus_ingest.run_ingest([key], docs_per_source=n, refine_every=(1 if refine else 0),
-                                       max_seconds=max_seconds)
+                                       max_seconds=budget)
         result["runs"].append({"source": key, "requested": n,
                                "ingested": (res.get("per_source") or {}).get(key, {}).get("ingested"),
                                "elapsed_s": res.get("elapsed_s")})
