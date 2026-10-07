@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.52.1] - 2026-10-07
+
+### Fixed
+- `GET /health` no longer builds the full state summary (edge count over ~1.3M rows plus the mesh field) on every call. Under `/observe` load that waited on the brain lock past the 4 s healthcheck timeout, so the container stayed unhealthy and clients timed out. It now reports vocab/edge counts refreshed in the background every `QUIPU_HEALTH_TTL_S` (default 60 s), with `counts_age_s`.
+- docker-compose: `init: true` on the quipu service so timed-out healthcheck children are reaped (about 600 zombies had accumulated under the python PID 1).
+
 ## [0.52.0] - 2026-10-04
 
 ### Added

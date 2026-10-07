@@ -151,6 +151,41 @@ _last_oscillation: dict[str, Any] = {}
 _pending_lock = threading.Lock()
 _pending_observations = 0
 
+# GET /health is the container's liveness probe (4 s timeout). It used to call
+# mesh_slm.state_summary(), which counts ~1.3M edges and builds the mesh field
+# under the brain's write lock; while /observe traffic held that lock the probe
+# timed out and the container sat "unhealthy". /health now reports counts that a
+# background thread refreshes at most every QUIPU_HEALTH_TTL_S seconds, so the
+# probe never waits on the brain.
+_HEALTH_TTL_S = float(os.environ.get("QUIPU_HEALTH_TTL_S", "60"))
+_health_counts: dict[str, Any] = {"vocab": None, "edges": None, "at": None}
+_health_refreshing = threading.Lock()
+
+
+def _refresh_health_counts() -> None:
+    if not _health_refreshing.acquire(blocking=False):
+        return
+    try:
+        with mesh_slm._conn() as cn:
+            vocab = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_vocab").fetchone()["c"])
+            edges = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_quipu").fetchone()["c"])
+        _health_counts.update(vocab=vocab, edges=edges, at=time.time())
+    except Exception:
+        pass
+    finally:
+        _health_refreshing.release()
+
+
+def _health_snapshot() -> dict[str, Any]:
+    at = _health_counts["at"]
+    if at is None or time.time() - at > _HEALTH_TTL_S:
+        threading.Thread(target=_refresh_health_counts, name="health-counts", daemon=True).start()
+    return {
+        "vocab": _health_counts["vocab"],
+        "edges": _health_counts["edges"],
+        "counts_age_s": None if at is None else round(time.time() - at, 1),
+    }
+
 
 def _canonical_source(raw: str | None) -> str | None:
     s = (raw or "").strip().lower().replace(" ", "-")
@@ -645,15 +680,14 @@ class ObserverHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/health":
-                summary = mesh_slm.state_summary()
+                counts = _health_snapshot()
                 sec_posture = security.get_security_posture()
                 self._send_json(200, {
                     "ok": True,
                     "service": "quipu-observer",
                     "version": __version__,
                     "db": str(db_path()),
-                    "vocab": summary.get("vocab_size"),
-                    "edges": summary.get("quipu_edges"),
+                    **counts,
                     "pending": _pending_observations,
                     "hideout": hideout_mesh.hideout_identity(),
                     "gvisor_sandboxed": sec_posture["gvisor_sandboxed"],
