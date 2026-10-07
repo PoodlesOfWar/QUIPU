@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.54.0] - 2026-10-07
+
+### Added
+- `qpsi/weyl_reference.py`: the Dark Energy Survey's measurement of the Weyl potential as a physical reference. Records the published values with sources (DES Y3 Weyl potential evolution ĵ(z) in four redshift bins, arXiv:2312.06434; DES Y3 and Y6 cosmic shear S₈, Ω_m, σ₈, arXiv:2105.13544 and arXiv:2602.10065; the 2026 w₀w_aCDM re-analysis, arXiv:2605.22599; Planck 2018) and computes the values that follow from them: growth D₁ and f, the GR prediction of ĵ(z), the Weyl decay rate d ln ĵ / d ln a, and per-bin Σ_eff, pulls, χ² and the amplitude A_W (GR predicts 1).
+- `python -m src.quipu.qpsi.weyl_reference [--full] [--record]`; `--record` writes `entirety:weyl_reference`. The `self_organising status` output gains a `weyl_reference` summary. Input to no gate; nothing in mesh_slm.py reads it.
+
 ## [0.53.0] - 2026-10-07
 
 ### Added

@@ -363,6 +363,14 @@ def _resonance_status() -> dict:
         return {"error": str(exc)}
 
 
+def _weyl_reference_status() -> dict:
+    try:
+        from . import weyl_reference
+        return weyl_reference.summary()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def status() -> dict:
     from .. import brain_kv
     from .. import system_entirety as se
@@ -376,6 +384,7 @@ def status() -> dict:
         "enabled": _ENABLED, "master_switch": master_switch_on(), "flags": _FLAGS.__dict__,
         "flux": flux_phase.read_flux().to_json(),
         "resonance": _resonance_status(),
+        "weyl_reference": _weyl_reference_status(),
         "somn": {"g": st.g, "m": st.m, "steps": st.steps, "last_t": st.last_t,
                  "potentiation_steps": st.potentiation_steps, "relaxation_steps": st.relaxation_steps},
         "allocation": brain_kv.kv_get_json(memristive_axes.KV_ALLOCATION, None),
