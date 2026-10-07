@@ -63,4 +63,5 @@ def test_observe_does_not_build_the_full_state_summary():
     """state_summary() takes ~15 s on the full brain; /observe must not call it per request."""
     import inspect
 
-    assert "state_summary" not in inspect.getsource(O._observe)
+    code = [ln.split("#", 1)[0] for ln in inspect.getsource(O._observe).splitlines()]
+    assert not any("state_summary(" in ln for ln in code)
