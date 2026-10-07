@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.55.0] - 2026-10-07
+
+### Changed
+- The DES-measured Weyl amplitude A_W (from `qpsi/weyl_reference.py`) replaces two constant fallbacks in `mesh_slm`, under `QUIPU_WEYL_REFERENCE` (default on when `QUIPU_SELF_ORGANISING=1`):
+  - with no stored `learnings:weyl_tensor`, `_weyl_tensor()` returns `0.5 · A_W` per Ψ scalar instead of `0.5` (0.463 by default), which sets the Weyl drive phase in `resonant_specialists` to 0.926π instead of π;
+  - with no boost in `temporal_spatiality_rhythm` or the source payload, `_resuscitation_runtime()` reports `weyl_boost = A_W` instead of `1.0`, with `weyl_boost_source`.
+- Stored values always win, and any failure returns the original result. `QUIPU_WEYL_REFERENCE_COSMOLOGY` selects another recorded cosmology (default: Planck 2018, the DES paper's own comparison). `mesh_slm.py` is not edited; both functions are wrapped as module attributes and `disable()` restores them.
+
 ## [0.54.0] - 2026-10-07
 
 ### Added

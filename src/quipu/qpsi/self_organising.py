@@ -74,12 +74,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training, resonance_phase
+from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training, resonance_phase, weyl_reference
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
 FLUX_ENV: str = "QUIPU_FLUX_PHASE"
 RESONANCE_ENV: str = resonance_phase.ENV        # QUIPU_RESONANCE_PHASE (refines flux_phase)
+WEYL_REF_ENV: str = weyl_reference.ENV           # QUIPU_WEYL_REFERENCE (DES A_W into the Weyl fallbacks)
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
@@ -101,6 +102,7 @@ _LOG = logging.getLogger(__name__)
 _ORIGINALS: dict[str, Any] = {}
 _ENABLED = False
 MARK: str = "__qpsi_self_organising__"      # set on every wrapper this module installs
+_WEYL_ATTRS: tuple[str, ...] = ("_weyl_tensor", "_resuscitation_runtime")
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,7 @@ class Flags:
     coherency_depth: bool = True
     annealed_senses: bool = True
     resonance_phase: bool = True        # applies only when flux_phase is on
+    weyl_reference: bool = True         # DES A_W replaces mesh_slm's constant Weyl fallbacks
 
     @classmethod
     def from_env(cls) -> "Flags":
@@ -119,7 +122,8 @@ class Flags:
             return os.environ.get(name, "1").strip() != "0"
         return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
                    mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV),
-                   annealed_senses=on(SENSES_ENV), resonance_phase=on(RESONANCE_ENV))
+                   annealed_senses=on(SENSES_ENV), resonance_phase=on(RESONANCE_ENV),
+                   weyl_reference=on(WEYL_REF_ENV))
 
 
 _FLAGS = Flags()
@@ -250,6 +254,10 @@ def enable(flags: Flags | None = None) -> bool:
             from .. import mesh_slm
             if getattr(mesh_slm._score_candidates, MARK, False):
                 _ORIGINALS["mesh_slm._score_candidates"] = mesh_slm._score_candidates.__wrapped__
+            for n in _WEYL_ATTRS:
+                fn = getattr(mesh_slm, n, None)
+                if getattr(fn, MARK, False):
+                    _ORIGINALS[f"mesh_slm.{n}"] = fn.__wrapped__
         except Exception:
             pass
         _ENABLED = True
@@ -288,6 +296,29 @@ def enable(flags: Flags | None = None) -> bool:
             mesh_slm._score_candidates = coherency_depth.wrap_score_candidates(mesh_slm._score_candidates)
             setattr(mesh_slm._score_candidates, MARK, True)
 
+    if _FLAGS.weyl_reference:
+        # The DES-measured Weyl amplitude replaces the two constant fallbacks
+        # (qpsi.weyl_reference); stored values still win.  mesh_slm.py is not
+        # edited; the module attributes are wrapped, as above.
+        from .. import mesh_slm
+        if not getattr(mesh_slm._weyl_tensor, MARK, False):
+            _ORIGINALS["mesh_slm._weyl_tensor"] = mesh_slm._weyl_tensor
+
+            def _read_stored():
+                with mesh_slm._conn() as cn:
+                    return mesh_slm._brain_kv_get(cn, weyl_reference.TENSOR_KEY, None)
+            mesh_slm._weyl_tensor = weyl_reference.wrap_weyl_tensor(mesh_slm._weyl_tensor, _read_stored)
+            setattr(mesh_slm._weyl_tensor, MARK, True)
+        if not getattr(mesh_slm._resuscitation_runtime, MARK, False):
+            _ORIGINALS["mesh_slm._resuscitation_runtime"] = mesh_slm._resuscitation_runtime
+
+            def _read_rhythm(cn):
+                raw = mesh_slm._brain_kv_get(cn, weyl_reference.RHYTHM_KEY, "{}")
+                return mesh_slm._json_load(raw, {})
+            mesh_slm._resuscitation_runtime = weyl_reference.wrap_resuscitation_runtime(
+                mesh_slm._resuscitation_runtime, _read_rhythm)
+            setattr(mesh_slm._resuscitation_runtime, MARK, True)
+
     if _FLAGS.somn or _FLAGS.learned_prior or _FLAGS.mirror_training or _FLAGS.coherency_depth:
         _ORIGINALS["se.oscillating_expansion_step"] = orig_step = se.oscillating_expansion_step
 
@@ -324,6 +355,10 @@ def disable() -> None:
     if "mesh_slm._score_candidates" in _ORIGINALS:
         from .. import mesh_slm
         mesh_slm._score_candidates = _ORIGINALS.pop("mesh_slm._score_candidates")
+    for n in _WEYL_ATTRS:
+        if f"mesh_slm.{n}" in _ORIGINALS:
+            from .. import mesh_slm
+            setattr(mesh_slm, n, _ORIGINALS.pop(f"mesh_slm.{n}"))
     annealed_senses.disable()
     _ENABLED = False
 

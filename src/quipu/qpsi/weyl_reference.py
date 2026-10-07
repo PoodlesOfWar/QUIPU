@@ -70,9 +70,14 @@ Relation to QUIPU's Weyl channel, and what this module does not do
 ``learnings:weyl_tensor`` (Ψ₀–Ψ₄ from corpus compression) and the CAT
 ``weyl_channel`` split are QUIPU's own Weyl objects; they are not physical
 curvature, and no mapping from Mpc-scale lensing into them is asserted here.
-This module supplies a measured reference beside them.  It writes only
-``brain_kv["entirety:weyl_reference"]`` (``_kv_set`` refuses any other key),
-is an input to no gate, and is not read by mesh_slm.py, which is untouched.
+This module supplies a measured reference beside them.  Under
+``QUIPU_WEYL_REFERENCE`` (wired by ``self_organising``) it also replaces two
+constant fallbacks: with no stored tensor, ``mesh_slm._weyl_tensor`` returns
+0.5·A_W per scalar instead of 0.5; with no boost set,
+``_resuscitation_runtime`` reports ``weyl_boost`` = A_W instead of 1.0.
+Stored values always win.  It writes only ``brain_kv["entirety:weyl_reference"]``
+(``_kv_set`` refuses any other key), is an input to no gate, and mesh_slm.py
+is not edited: the two functions are wrapped as module attributes.
 Stdlib only.  No network: the measurements are the published numbers.
 
 翈 — the reference is what was measured; how far QUIPU leans on it stays the
@@ -414,6 +419,129 @@ __all__ = [
     "weyl_decay_rate", "BinCheck", "Confirmation", "confirm", "curve", "reference",
     "record", "summary",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Feeding the reference into QUIPU's constant Weyl fallbacks
+# ---------------------------------------------------------------------------
+#
+# Two places in mesh_slm.py fall back to a constant when nothing has been
+# written: _weyl_tensor() returns [0.5]*5 (the neutral midpoint of each Ψ
+# scalar on [0, 1]) and _resuscitation_runtime() reports weyl_boost = 1.0
+# (neutral multiplier).  A_W has the same form as both: the measured Weyl
+# amplitude over the GR expectation, neutral at 1.  So, only where the
+# fallback would apply:
+#
+#     Ψ_k  = clip(0.5 · A_W)          (the neutral midpoint, scaled by the measurement)
+#     weyl_boost = A_W
+#
+# A stored tensor or boost always wins; this only replaces the constant.
+# The default comparison is the paper's own: DES Y3 ĵ with the CMB prior
+# against Planck 2018.  QUIPU_WEYL_REFERENCE_COSMOLOGY selects another
+# recorded cosmology by name prefix (e.g. "DES Y6 cosmic shear (NLA)").
+
+ENV: str = "QUIPU_WEYL_REFERENCE"
+COSMOLOGY_ENV: str = "QUIPU_WEYL_REFERENCE_COSMOLOGY"
+TENSOR_KEY: str = "learnings:weyl_tensor"            # read only (corpus_ingest writes it)
+RHYTHM_KEY: str = "temporal_spatiality_rhythm"       # read only
+NEUTRAL_PSI: float = 0.5
+SOURCE_LABEL: str = "qpsi.weyl_reference"
+
+_AMPLITUDE_CACHE: dict[tuple[str, str], Confirmation] = {}
+
+
+def select_cosmology(name: str | None = None) -> Cosmology:
+    import os
+    want = (name if name is not None else os.environ.get(COSMOLOGY_ENV, "")).strip()
+    if not want:
+        return PLANCK18
+    for c in COSMOLOGIES:
+        if c.name.startswith(want):
+            return c
+    return PLANCK18
+
+
+def amplitude(c: Cosmology | None = None, m: WeylMeasurement = DES_Y3_WEYL_CMB) -> Confirmation:
+    """A_W (with its error and pull) for one cosmology against one measurement; cached."""
+    c = c or select_cosmology()
+    key = (c.name, m.name)
+    hit = _AMPLITUDE_CACHE.get(key)
+    if hit is None:
+        hit = _AMPLITUDE_CACHE[key] = confirm(c, m)
+    return hit
+
+
+def reference_tensor(c: Cosmology | None = None) -> list[float]:
+    """The fallback Ψ₀–Ψ₄: the neutral midpoint scaled by A_W, clipped to [0, 1]."""
+    v = min(1.0, max(0.0, NEUTRAL_PSI * amplitude(c).amplitude))
+    return [v] * 5
+
+
+def _stored_tensor_valid(raw) -> bool:
+    try:
+        v = json.loads(raw) if isinstance(raw, str) else raw
+        return isinstance(v, list) and len(v) >= 5 and all(math.isfinite(float(x)) for x in v[:5])
+    except (TypeError, ValueError):
+        return False
+
+
+def wrap_weyl_tensor(original, read_stored):
+    """Drop-in for mesh_slm._weyl_tensor().  ``read_stored()`` returns the raw
+    learnings:weyl_tensor value (or None).  A valid stored tensor → the original
+    result, unchanged.  Otherwise → reference_tensor().  Any failure → original."""
+    def _weyl_tensor() -> list[float]:
+        try:
+            if _stored_tensor_valid(read_stored()):
+                return original()
+            return reference_tensor()
+        except Exception:
+            return original()
+
+    _weyl_tensor.__name__ = getattr(original, "__name__", "_weyl_tensor")
+    _weyl_tensor.__doc__ = (getattr(original, "__doc__", "") or "") + \
+        "\n\n[qpsi.weyl_reference] with no stored tensor, the neutral 0.5 is scaled by the DES A_W."
+    _weyl_tensor.__wrapped__ = original              # type: ignore[attr-defined]
+    return _weyl_tensor
+
+
+def _boost_was_set(rhythm, payload) -> bool:
+    for src, keys in ((rhythm, ("boost", "lr_factor")), (payload, ("weyl_boost",))):
+        if isinstance(src, Mapping):
+            for k in keys:
+                try:
+                    if src.get(k) and float(src.get(k)) != 0.0:
+                        return True
+                except (TypeError, ValueError):
+                    continue
+    return False
+
+
+def wrap_resuscitation_runtime(original, read_rhythm):
+    """Drop-in for mesh_slm._resuscitation_runtime(cn, source_key=None).
+    When neither the rhythm nor the source payload set a boost, weyl_boost
+    becomes A_W and ``weyl_boost_source`` names this module.  Otherwise the
+    result is unchanged.  Any failure → the original result."""
+    def _resuscitation_runtime(cn, source_key=None):
+        out = original(cn, source_key=source_key)
+        try:
+            if not _boost_was_set(read_rhythm(cn), out.get("source_payload") or {}):
+                amp = amplitude()
+                out["weyl_boost"] = amp.amplitude
+                out["weyl_boost_source"] = SOURCE_LABEL
+                out["weyl_boost_reference"] = {"cosmology": amp.cosmology, "measurement": amp.measurement,
+                                               "A_W_err": amp.amplitude_err}
+        except Exception:
+            pass
+        return out
+
+    _resuscitation_runtime.__name__ = getattr(original, "__name__", "_resuscitation_runtime")
+    _resuscitation_runtime.__doc__ = getattr(original, "__doc__", None)
+    _resuscitation_runtime.__wrapped__ = original    # type: ignore[attr-defined]
+    return _resuscitation_runtime
+
+
+__all__ += ["ENV", "COSMOLOGY_ENV", "select_cosmology", "amplitude", "reference_tensor",
+            "wrap_weyl_tensor", "wrap_resuscitation_runtime"]
 
 if __name__ == "__main__":
     raise SystemExit(_main())

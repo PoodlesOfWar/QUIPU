@@ -91,3 +91,107 @@ def test_record_writes_only_its_own_key():
 def test_negative_redshift_is_rejected():
     with pytest.raises(ValueError):
         w.growth(-0.1, w.PLANCK18)
+
+
+# ---------------------------------------------------------------------------
+# The reference in QUIPU's constant Weyl fallbacks
+# ---------------------------------------------------------------------------
+
+def test_amplitude_defaults_to_the_papers_comparison_and_is_selectable(monkeypatch):
+    monkeypatch.delenv(w.COSMOLOGY_ENV, raising=False)
+    a = w.amplitude()
+    assert a.cosmology == w.PLANCK18.name and a.measurement == w.DES_Y3_WEYL_CMB.name
+    assert a.amplitude == pytest.approx(0.926, abs=0.002)
+    monkeypatch.setenv(w.COSMOLOGY_ENV, "DES Y6 cosmic shear (NLA)")
+    assert w.amplitude().cosmology == w.DES_Y6_NLA.name
+    monkeypatch.setenv(w.COSMOLOGY_ENV, "no such cosmology")
+    assert w.amplitude().cosmology == w.PLANCK18.name
+
+
+def test_reference_tensor_is_the_neutral_midpoint_scaled_by_a_w(monkeypatch):
+    monkeypatch.delenv(w.COSMOLOGY_ENV, raising=False)
+    t = w.reference_tensor()
+    assert len(t) == 5 and len(set(t)) == 1
+    assert t[0] == pytest.approx(0.5 * w.amplitude().amplitude)
+
+
+def test_weyl_tensor_wrapper_defers_to_a_stored_tensor():
+    orig = lambda: [0.1, 0.2, 0.3, 0.4, 0.9]          # noqa: E731
+    stored = w.wrap_weyl_tensor(orig, lambda: "[0.1, 0.2, 0.3, 0.4, 0.9]")
+    assert stored() == [0.1, 0.2, 0.3, 0.4, 0.9]
+    for raw in (None, "", "not json", "[1, 2]", '{"a": 1}', "[1, 2, 3, 4, NaN]"):
+        fn = w.wrap_weyl_tensor(lambda: [0.5] * 5, lambda raw=raw: raw)
+        assert fn() == w.reference_tensor(), raw
+    broken = w.wrap_weyl_tensor(lambda: [0.5] * 5, lambda: (_ for _ in ()).throw(RuntimeError("db")))
+    assert broken() == [0.5] * 5                      # any failure → the original
+    assert stored.__wrapped__ is orig
+
+
+def test_runtime_wrapper_fills_the_boost_only_when_nothing_set_it():
+    def orig(cn, source_key=None):
+        return {"weyl_boost": 1.0, "source_payload": payload, "weyl_phase": 0.0}
+    payload = {}
+    fn = w.wrap_resuscitation_runtime(orig, lambda cn: {})
+    out = fn(None)
+    assert out["weyl_boost"] == pytest.approx(w.amplitude().amplitude)
+    assert out["weyl_boost_source"] == w.SOURCE_LABEL and out["weyl_phase"] == 0.0
+    for rhythm, pl in (({"boost": 1.3}, {}), ({"lr_factor": 0.8}, {}), ({}, {"weyl_boost": 1.2})):
+        payload = pl
+
+        def orig2(cn, source_key=None, pl=pl):
+            return {"weyl_boost": 9.9, "source_payload": pl}
+        out = w.wrap_resuscitation_runtime(orig2, lambda cn, r=rhythm: r)(None)
+        assert out["weyl_boost"] == 9.9 and "weyl_boost_source" not in out
+
+
+@pytest.fixture
+def mesh_isolated(tmp_path, monkeypatch):
+    from src.quipu import mesh_slm
+    from src.quipu.qpsi import self_organising as so
+    db_file = tmp_path / "brain.sqlite"
+
+    def _open_conn(timeout: float = 30, path=None):
+        cn = sqlite3.connect(db_file, timeout=timeout)
+        cn.row_factory = sqlite3.Row
+        return cn
+    monkeypatch.setattr(mesh_slm, "_open_conn", _open_conn)
+    with mesh_slm._conn() as cn:
+        cn.execute("CREATE TABLE IF NOT EXISTS brain_kv(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
+    monkeypatch.delenv(w.COSMOLOGY_ENV, raising=False)
+    so.disable()
+    yield mesh_slm, so, db_file
+    so.disable()
+
+
+def _flags(so, **on):
+    base = dict(flux_phase=False, learned_prior=False, somn=False, mirror_training=False,
+                coherency_depth=False, annealed_senses=False, resonance_phase=False, weyl_reference=False)
+    base.update(on)
+    return so.Flags(**base)
+
+
+def test_enabled_through_self_organising_the_live_functions_use_the_reference(mesh_isolated):
+    mesh_slm, so, db_file = mesh_isolated
+    orig_tensor, orig_runtime = mesh_slm._weyl_tensor, mesh_slm._resuscitation_runtime
+    assert orig_tensor() == [0.5] * 5                                    # the constant today
+    so.enable(_flags(so, weyl_reference=True))
+    assert mesh_slm._weyl_tensor() == w.reference_tensor()
+    with mesh_slm._conn() as cn:
+        rt = mesh_slm._resuscitation_runtime(cn)
+    assert rt["weyl_boost"] == pytest.approx(w.amplitude().amplitude)
+    # a stored tensor and a rhythm boost win
+    with mesh_slm._conn() as cn:
+        cn.execute("INSERT INTO brain_kv(key, value) VALUES(?, ?)", (w.TENSOR_KEY, "[0.2, 0.3, 0.4, 0.6, 0.7]"))
+        cn.execute("INSERT INTO brain_kv(key, value) VALUES(?, ?)", (w.RHYTHM_KEY, '{"boost": 1.25}'))
+    assert mesh_slm._weyl_tensor() == [0.2, 0.3, 0.4, 0.6, 0.7]
+    with mesh_slm._conn() as cn:
+        assert mesh_slm._resuscitation_runtime(cn)["weyl_boost"] == 1.25
+    so.disable()
+    assert mesh_slm._weyl_tensor is orig_tensor and mesh_slm._resuscitation_runtime is orig_runtime
+
+
+def test_flag_off_leaves_mesh_slm_untouched(mesh_isolated):
+    mesh_slm, so, _ = mesh_isolated
+    orig_tensor, orig_runtime = mesh_slm._weyl_tensor, mesh_slm._resuscitation_runtime
+    so.enable(_flags(so, weyl_reference=False))
+    assert mesh_slm._weyl_tensor is orig_tensor and mesh_slm._resuscitation_runtime is orig_runtime
