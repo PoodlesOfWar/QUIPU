@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.52.4] - 2026-10-07
+
+### Documented
+- The resource settings added in 0.52.1-0.52.3: `QUIPU_HEALTH_TTL_S` (observer_service), `QUIPU_PULSE_MAX_SECONDS` and `QUIPU_NUM_THREADS` and the tini init (entirety_service). No behaviour change.
+
 ## [0.52.3] - 2026-10-07
 
 ### Fixed

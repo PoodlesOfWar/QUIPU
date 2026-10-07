@@ -34,6 +34,12 @@ host (the ingest pulse, the self-organising loop, the gates; 4,190 tokens and
                   for an equitable share of the Essay's voice; read-only on the
                   mesh, results on GET /lambda.
 
+Resource bounds (the operator's settings, in docker-compose / .env): QUIPU_PULSE_MAX_SECONDS caps the
+whole pulse, not each source (compose default 120; 0 = unbounded); QUIPU_NUM_THREADS sets the numpy/BLAS
+thread count for the container (compose default 2) so the loops leave CPU for the observer's HTTP
+threads; QUIPU_HEALTH_TTL_S is documented in observer_service.  The container runs under tini
+(compose ``init: true``) so a timed-out healthcheck child is reaped, not left as a zombie.
+
 Each loop runs on its own thread, catches everything, records its last run and
 last error, and waits before trying again: one failing part never stops the
 others or the door.  The expansion step and the pulse share a lock (the pulse

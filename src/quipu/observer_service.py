@@ -20,7 +20,7 @@ into the MESH SLM (vocab + quipu bigram edges) on a fixed cadence, so the
 enacted guidance strengthens as both corpora accumulate.
 
 Endpoints (all JSON unless noted):
-    GET  /health              liveness + mesh counters + hideout identity
+    GET  /health              liveness + mesh counters + hideout identity (counts are cached; see QUIPU_HEALTH_TTL_S)
     GET  /state               mesh_slm.state_summary()
     GET  /hideout             Black Bulls Hideout realization (scbrain-hideout)
     POST /observe             {source, text, kind?, confidence?, meta?}
@@ -33,6 +33,9 @@ Environment:
     QUIPU_PORT            port (default 7100)
     QUIPU_TRAIN_INTERVAL  seconds between trainer wake-ups (default 45)
     QUIPU_TRAIN_BUDGET    max seconds per train_round (default 8)
+    QUIPU_HEALTH_TTL_S    how often the vocab/edge counts reported by /health and
+                          the /observe reply are refreshed in the background (default 60).
+                          Counting ~1.3M edges takes ~15 s, so neither route computes it per request.
     SCB_DB_PATH           SQLite brain location (honoured by local_store)
     QUIPU_HIDEOUT_HOST    MESH peer host (default scbrain-hideout)
     QUIPU_HIDEOUT_MESH    mesh target (default hideout-mesh)
