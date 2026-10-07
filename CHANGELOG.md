@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.52.3] - 2026-10-07
+
+### Fixed
+- `POST /observe` no longer calls `mesh_slm.state_summary()` for the mesh counts in its reply. On the full brain that call takes ~15 s, longer than the clients' timeout, so every observation was applied and then reported as a timeout and retried from the client's outbox. The reply uses the background-refreshed counts from `/health`.
+
 ## [0.52.2] - 2026-10-07
 
 ### Fixed

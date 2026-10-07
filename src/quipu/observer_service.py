@@ -449,7 +449,10 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         novel_tokens=unknown,
     )
 
-    summary = mesh_slm.state_summary()
+    # The reply's mesh counts come from the same background-refreshed snapshot as
+    # /health: state_summary() takes ~15 s on the full brain, longer than the
+    # clients' timeout, so every observation timed out after it had been applied.
+    counts = _health_snapshot()
     res_body = {
         "ok": True,
         "source": source,
@@ -468,7 +471,7 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "observations": stats.get("observations"),
             "tokens": stats.get("tokens"),
         },
-        "mesh": {"vocab": summary.get("vocab_size"), "edges": summary.get("quipu_edges")},
+        "mesh": {"vocab": counts["vocab"], "edges": counts["edges"]},
         "hideout": hideout_mesh.hideout_identity(),
     }
     if osc:

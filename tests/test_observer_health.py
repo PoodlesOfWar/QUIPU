@@ -57,3 +57,10 @@ def test_health_reports_counts_once_refreshed(monkeypatch):
     snap = O._health_snapshot()
     assert snap["vocab"] == 7 and snap["edges"] == 11
     assert snap["counts_age_s"] is not None and snap["counts_age_s"] < 5
+
+
+def test_observe_does_not_build_the_full_state_summary():
+    """state_summary() takes ~15 s on the full brain; /observe must not call it per request."""
+    import inspect
+
+    assert "state_summary" not in inspect.getsource(O._observe)
