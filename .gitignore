@@ -7,6 +7,8 @@ venv/
 
 # Runtime state (recreated locally; never commit)
 bridge_state/
+local_brain.MOVED.json
+local_brain*.sqlite*
 *.sqlite
 *.sqlite3
 *sqlite-shm

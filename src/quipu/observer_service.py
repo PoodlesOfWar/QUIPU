@@ -116,6 +116,13 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis_source": "jobhawk/code/hideout-mesh",
         "sibling": "supply-chain-brain",
     },
+    "stockopoly": {
+        "kind": "warehouse_spatial_slotting",
+        "axis": "touch",
+        "axis_source": "stockopoly/code/hideout-mesh",
+        "sibling": "loadopoly-ocr",
+        "siblings": ["loadopoly-ocr", "bakugo"],
+    },
 }
 
 _ALIASES = {
@@ -136,6 +143,8 @@ _ALIASES = {
     "hub_floor": "hub-floor",
     "job_hawk": "jobhawk",
     "job-hawk": "jobhawk",
+    "stockopoly": "stockopoly",
+    "stock_opoly": "stockopoly",
 }
 
 _STATS_KEY = "observer:{source}:stats"
