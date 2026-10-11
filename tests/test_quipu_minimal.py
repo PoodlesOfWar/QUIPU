@@ -16,6 +16,8 @@ def isolated_qm(tmp_path, monkeypatch):
     db_file = tmp_path / "qm.sqlite"
     monkeypatch.setenv("SCB_DB_PATH", str(db_file))
     monkeypatch.delenv("SCB_QUIPU_MINIMAL", raising=False)
+    # This fixture's corpus is the entity/edge tables, which train only when generated text is allowed.
+    monkeypatch.setenv("QUIPU_TRAIN_GENERATED", "1")
 
     import importlib
     import src.quipu.local_store as ls

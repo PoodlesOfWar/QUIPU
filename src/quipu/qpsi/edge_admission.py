@@ -322,6 +322,9 @@ class Edge:
                  kv: Any = None, idempotency: IdempotencyStore | None = None):
         self._clock = clock
         self._lock = threading.Lock()
+        # Keys admitted and still being applied. A retry that arrives meanwhile (the client timed out while a slow
+        # write was applied) is told to come back (429) instead of being learned a second time.
+        self._inflight: set[str] = set()
         self._keys_override = dict(keys) if keys is not None else None
         self._grant_override = grant
         self._kv = kv
@@ -459,6 +462,10 @@ class Edge:
                 d.duplicate = True                  # applied before: no learning, no budget
                 st.counts["duplicate"] = st.counts.get("duplicate", 0) + 1
                 return d
+            if d.idempotency and d.idempotency in self._inflight:
+                st.counts["inflight"] = st.counts.get("inflight", 0) + 1
+                return Decision(ok=False, code=429, error="the same write is being applied; retry", source=source,
+                                assurance=assurance, tokens=int(tokens), retry_after=15, idempotency=d.idempotency)
             g = self.grant() if budget != "off" else None
             if g is not None and path in ("/observe", "/feedback"):
                 if not source or not g.allows(source):
@@ -493,14 +500,25 @@ class Edge:
                 st.counts[assurance] = st.counts.get(assurance, 0) + 1
                 if assurance == "relayed":
                     d.relayed_for = body_source
+                if d.idempotency:
+                    self._inflight.add(d.idempotency)
             self._maybe_flush(now)
             return d
+
+    def release(self, decision: Decision | None) -> None:
+        """The write was not applied (an error): its key is free, so the client's retry is applied."""
+        if decision is not None and decision.idempotency:
+            with self._lock:
+                self._inflight.discard(decision.idempotency)
 
     def settle(self, decision: Decision, result: Mapping | None) -> None:
         """Record the write as applied (idempotency) and feed back how many of the
         admitted tokens were new to the mesh."""
         if decision.ok and decision.idempotency and not decision.duplicate:
             self._idem.add(decision.idempotency, decision.source, self._clock())
+        if decision.idempotency:
+            with self._lock:
+                self._inflight.discard(decision.idempotency)
         if not decision.ok or not decision.source or not isinstance(result, Mapping):
             return
         enacted = result.get("enacted") if isinstance(result.get("enacted"), Mapping) else {}

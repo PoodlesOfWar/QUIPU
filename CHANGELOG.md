@@ -4,6 +4,25 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.56.0] - 2026-10-09
+
+### Changed
+- **Eviction on the saturated torus** (`mesh_slm._eviction_victim`). The torus stays 64 x 64. A new token used to start at frequency 1 and become the next victim, so nothing novel stayed (on the live brain none of Perceptopoly's supernova subjects, nor the game's everyday entities, were in the vocab). Now:
+  - newcomers are not evicted for `QUIPU_NEWCOMER_GRACE_S` (default 7 days) after they first appear;
+  - the shadow's words are never evicted: the Essay's plane words and the marketplace anchor words (`shadow_tokens`), plus any listed under brain_kv `mesh:protected_tokens` (`protected_tokens()`);
+  - among the rest the victim is the lowest frequency halved for every `QUIPU_EVICT_HALF_LIFE_S` (default 14 days) since the token was last seen. With everything protected, the old rule applies.
+  - When the torus is full the cell probe is skipped (it was up to 4,096 lookups per new token).
+- **Code-generated text no longer trains the mesh** unless `QUIPU_TRAIN_GENERATED=1`: corpus_entity labels and corpus_edge relations written by QUIPU's own modules (asset_resource_mesh, system_entirety, ...), LLM dispatch replies and the EOQ seed text. On the live brain this text had made `gard_desktop`, `asset_resource_tunnel` and the like among the most frequent tokens. The mesh learns from `mesh_corpus_feed`: what was observed or read.
+- `feed_corpus` refuses text with no tokens (HubCore had fed `{}`).
+
+### Added
+- **Regions**: each chunk's tokens and bigrams are also counted under its source's region (`game`, `operations`, `reading`, `self`, `generated`, `unclassed`) in `mesh_slm_region_vocab` and `mesh_slm_region_edge`, with the same Hebbian step. One vocabulary and one torus, so relational distances stay comparable; the global mesh is unchanged. Associations learned before 0.56.0 carry no region. `region_summary()`.
+- `forget_tokens(tokens)`: removes tokens with their embedding, edges and region records; their cells become free.
+- 7 tests (`tests/test_mesh_eviction_regions.py`). The two fixtures whose corpus is the entity tables set `QUIPU_TRAIN_GENERATED=1`.
+
+### Fixed
+- **A write could be learned twice.** The edge recorded a write's idempotency key only after the write was applied. When applying took longer than the client's timeout (just after a restart, /observe took over 10 s), the client's retry arrived before the key existed and was applied again (seen 2026-10-10: every Perceptopoly reading arrived two or three times). A key is now held from admission: a retry while it is being applied gets 429 with Retry-After; a write that fails releases its key, so the retry is applied. A client that has gone no longer leaves a traceback for the 500 reply. 1 test.
+
 ## [0.55.0] - 2026-10-07
 
 ### Changed

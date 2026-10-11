@@ -257,3 +257,24 @@ def test_cors_echoes_bound_origins_only(server):
         req = urllib.request.Request(url + "/health", headers={"Origin": origin}, method="OPTIONS")
         with urllib.request.urlopen(req, timeout=5) as r:
             assert r.headers.get("Access-Control-Allow-Origin") == want
+
+
+def test_a_retry_while_the_write_is_being_applied_comes_back_later(monkeypatch):
+    """A slow write: the client times out and retries before the first copy is settled.
+    The retry is told to come back (429) instead of being learned twice (QUIPU 0.56.0)."""
+    monkeypatch.setenv(E.AUTH_ENV, "record")
+    monkeypatch.setenv(E.BUDGET_ENV, "record")
+    e, _ = _edge()
+    raw = _body(src="bakugo", text="applied once")
+    h = {E.H_IDEM: "idem-inflight-0001"}
+    first = _admit(e, raw, h)
+    assert first.ok and not first.duplicate
+    retry = _admit(e, raw, h)
+    assert not retry.ok and retry.code == 429 and retry.retry_after
+    e.settle(first, {"ok": True})
+    assert _admit(e, raw, h).duplicate                         # applied: later retries are acknowledged
+    h2 = {E.H_IDEM: "idem-inflight-0002"}
+    failed = _admit(e, raw, h2)
+    e.release(failed)                                          # not applied: the key is free again
+    again = _admit(e, raw, h2)
+    assert again.ok and not again.duplicate

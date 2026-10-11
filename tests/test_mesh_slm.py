@@ -11,6 +11,8 @@ def isolated_slm_db(tmp_path, monkeypatch):
     db_file = tmp_path / "slm.sqlite"
 
     monkeypatch.setenv("SCB_DB_PATH", str(db_file))
+    # This fixture's corpus is the entity/edge tables, which train only when generated text is allowed.
+    monkeypatch.setenv("QUIPU_TRAIN_GENERATED", "1")
 
     # Import after env var is set so local_store.db_path() picks it up.
     import importlib

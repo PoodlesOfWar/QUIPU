@@ -764,6 +764,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        decision = None
         try:
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
@@ -805,14 +806,22 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _world_model_transition(body)
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
-            if decision is not None and isinstance(payload, dict):
-                if code == 200:
+            if decision is not None:
+                if code == 200 and isinstance(payload, dict):
                     edge_admission.edge().settle(decision, payload)
-                payload["edge"] = decision.to_json()
+                else:
+                    edge_admission.edge().release(decision)
+                if isinstance(payload, dict):
+                    payload["edge"] = decision.to_json()
             self._send_json(code, payload)
         except Exception as exc:
             traceback.print_exc()
-            self._send_json(500, {"ok": False, "error": str(exc)})
+            if decision is not None and not decision.duplicate:
+                edge_admission.edge().release(decision)
+            try:
+                self._send_json(500, {"ok": False, "error": str(exc)})
+            except OSError:
+                pass                              # the client has gone (e.g. it timed out); the write stands
 
 
 def run() -> None:

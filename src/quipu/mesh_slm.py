@@ -902,6 +902,22 @@ CREATE TABLE IF NOT EXISTS mesh_slm_quipu_node (
     updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_mesh_slm_quipu_node_target ON mesh_slm_quipu_node(directed_target);
+CREATE TABLE IF NOT EXISTS mesh_slm_region_vocab (
+    token_id   INTEGER NOT NULL,
+    region     TEXT NOT NULL,
+    freq       INTEGER NOT NULL DEFAULT 0,
+    last_seen  TIMESTAMP,
+    PRIMARY KEY (token_id, region)
+);
+CREATE TABLE IF NOT EXISTS mesh_slm_region_edge (
+    src       INTEGER NOT NULL,
+    dst       INTEGER NOT NULL,
+    region    TEXT NOT NULL,
+    weight    REAL NOT NULL DEFAULT 0.0,
+    samples   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (src, dst, region)
+);
+CREATE INDEX IF NOT EXISTS idx_mesh_slm_region_edge_region ON mesh_slm_region_edge(region);
 CREATE TABLE IF NOT EXISTS mesh_corpus_feed (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     text        TEXT NOT NULL,
@@ -2042,11 +2058,13 @@ def _allocate_coord(cn: sqlite3.Connection, token: str) -> tuple[int, int]:
     """Hash-then-search for a free (i, j) on the torus.
 
     Stable seed: token hash → starting cell; linearly probe wrapped torus
-    until an unused cell is found.  When the torus saturates the oldest
-    least-frequent cell is overwritten (preserves the most-used tokens).
+    until an unused cell is found.  When the torus is full, the cell of the token
+    :func:`_eviction_victim` picks is reused.
     """
     base = hash(token) & 0xFFFFFFFF
-    for step in range(_VOCAB_LIMIT):
+    # Occupied cells, not rows: more tokens than cells can exist when two share one, and free cells may remain.
+    full = int(cn.execute("SELECT COUNT(DISTINCT i * ? + j) FROM mesh_slm_vocab", (_TORUS_N,)).fetchone()[0]) >= _VOCAB_LIMIT
+    for step in range(0 if full else _VOCAB_LIMIT):
         idx = (base + step) % _VOCAB_LIMIT
         i, j = divmod(idx, _TORUS_N)
         row = cn.execute(
@@ -2054,18 +2072,118 @@ def _allocate_coord(cn: sqlite3.Connection, token: str) -> tuple[int, int]:
         ).fetchone()
         if row is None:
             return i, j
-    # Saturated — evict the lowest-freq oldest token.
-    victim = cn.execute(
-        "SELECT token_id, i, j FROM mesh_slm_vocab "
-        "ORDER BY freq ASC, last_seen ASC LIMIT 1"
-    ).fetchone()
+    # Saturated: evict one token (see _eviction_victim) and take its cell.
+    victim = _eviction_victim(cn)
     if victim is not None:
-        cn.execute("DELETE FROM mesh_slm_quipu WHERE src=? OR dst=?",
-                   (victim["token_id"], victim["token_id"]))
-        cn.execute("DELETE FROM mesh_slm_embed WHERE token_id=?", (victim["token_id"],))
-        cn.execute("DELETE FROM mesh_slm_vocab WHERE token_id=?", (victim["token_id"],))
+        _forget_token(cn, int(victim["token_id"]))
         return int(victim["i"]), int(victim["j"])
     return 0, 0
+
+
+# ---------------------------------------------------------------------------
+# Eviction on a saturated torus
+# ---------------------------------------------------------------------------
+# The torus is a fixed 64 x 64 grid and stays that size: its geometry carries the nonlinear interactions
+# the shadow reads. When it is full, a new token takes the cell of an evicted one, and the evicted
+# token's embedding and every edge it had go with it. Two kinds of token are never chosen:
+#   * newcomers, for _NEWCOMER_GRACE_S after they first appear: a new token starts at frequency 1, so
+#     under "lowest frequency first" it was always the next victim and nothing novel could stay;
+#   * the shadow's words: the Essay's plane words and the marketplace anchor words (shadow_tokens),
+#     plus any listed under brain_kv "mesh:protected_tokens".
+# Among the rest the victim is the lowest frequency weighted toward recent use: a count halves for every
+# _EVICT_HALF_LIFE_S since the token was last seen, so long-silent high-volume tokens can give way.
+# If every token is protected the old rule applies (lowest frequency, then oldest).
+_NEWCOMER_GRACE_S: float = float(os.environ.get("QUIPU_NEWCOMER_GRACE_S", str(7 * 86400)))
+_EVICT_HALF_LIFE_S: float = float(os.environ.get("QUIPU_EVICT_HALF_LIFE_S", str(14 * 86400)))
+_PROTECTED_CACHE: dict[str, Any] = {"at": 0.0, "words": frozenset()}
+_PROTECTED_TTL_S: float = 600.0
+
+
+def _ts(value: Any) -> float | None:
+    """Epoch seconds from an ISO timestamp or SQLite's CURRENT_TIMESTAMP text; None if unreadable."""
+    if not value:
+        return None
+    try:
+        d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d.timestamp()
+
+
+def protected_tokens(cn: sqlite3.Connection, refresh: bool = False) -> frozenset[str]:
+    """Tokens eviction never takes: the shadow's plane and anchor words, and brain_kv mesh:protected_tokens."""
+    now = time.time()
+    if not refresh and now - float(_PROTECTED_CACHE["at"]) < _PROTECTED_TTL_S:
+        return _PROTECTED_CACHE["words"]
+    words: set[str] = set()
+    try:
+        from . import shadow_tokens as _st
+        path = _st.essay_path()
+        if path is not None:
+            planes, _ = _st.essay_planes(path)
+            for pl in planes:
+                words.update(_st._words(pl.text))
+        row = cn.execute("SELECT value FROM brain_kv WHERE key=?", (_st.KV_CLUSTERS,)).fetchone()
+        if row is not None:
+            rec = json.loads(row[0] or "{}")
+            for c in rec.get("clusters") or []:
+                for a in c.get("anchors") or []:
+                    words.update(_st._words(str(a)))
+    except Exception:
+        logger.debug("shadow words unavailable for eviction protection", exc_info=True)
+    try:
+        row = cn.execute("SELECT value FROM brain_kv WHERE key='mesh:protected_tokens'").fetchone()
+        if row is not None:
+            words.update(str(w).lower() for w in (json.loads(row[0] or "[]") or []))
+    except (sqlite3.OperationalError, ValueError):
+        pass
+    _PROTECTED_CACHE.update(at=now, words=frozenset(words))
+    return _PROTECTED_CACHE["words"]
+
+
+def _eviction_victim(cn: sqlite3.Connection) -> Any:
+    now = time.time()
+    protected = protected_tokens(cn)
+    best, best_score = None, None
+    rows = cn.execute("SELECT token_id, token, i, j, freq, first_seen, last_seen FROM mesh_slm_vocab").fetchall()
+    for r in rows:
+        if r["token"] in protected:
+            continue
+        born = _ts(r["first_seen"])
+        if born is not None and now - born < _NEWCOMER_GRACE_S:
+            continue
+        seen = _ts(r["last_seen"]) or born or 0.0
+        score = float(r["freq"]) * 0.5 ** (max(0.0, now - seen) / _EVICT_HALF_LIFE_S)
+        if best_score is None or score < best_score or (score == best_score and seen < (_ts(best["last_seen"]) or 0.0)):
+            best, best_score = r, score
+    if best is None:
+        best = cn.execute("SELECT token_id, i, j FROM mesh_slm_vocab ORDER BY freq ASC, last_seen ASC LIMIT 1").fetchone()
+    return best
+
+
+def _forget_token(cn: sqlite3.Connection, token_id: int) -> None:
+    """Remove a token with its embedding, its edges and its region records."""
+    cn.execute("DELETE FROM mesh_slm_quipu WHERE src=? OR dst=?", (token_id, token_id))
+    cn.execute("DELETE FROM mesh_slm_region_edge WHERE src=? OR dst=?", (token_id, token_id))
+    cn.execute("DELETE FROM mesh_slm_region_vocab WHERE token_id=?", (token_id,))
+    cn.execute("DELETE FROM mesh_slm_embed WHERE token_id=?", (token_id,))
+    cn.execute("DELETE FROM mesh_slm_vocab WHERE token_id=?", (token_id,))
+
+
+def forget_tokens(tokens: Iterable[str]) -> dict:
+    """Remove the named tokens from the mesh (vocab, embedding, edges, regions). Their cells become free."""
+    removed, absent = [], []
+    with _conn() as cn:
+        for tok in dict.fromkeys(str(t).lower() for t in tokens):
+            row = cn.execute("SELECT token_id FROM mesh_slm_vocab WHERE token=?", (tok,)).fetchone()
+            if row is None:
+                absent.append(tok)
+                continue
+            _forget_token(cn, int(row["token_id"]))
+            removed.append(tok)
+    return {"removed": removed, "absent": absent}
 
 
 def _upsert_token(
@@ -2453,6 +2571,57 @@ def _analog_wave_snapshot(cn: sqlite3.Connection) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 # Corpus stream — pull training text from the Brain's own state
 # ---------------------------------------------------------------------------
+def _train_generated() -> bool:
+    """Whether code-generated text also trains the mesh: entity labels and relations written by QUIPU's own
+    modules (asset_resource_mesh, system_entirety, ...), external-LLM dispatch replies and the EOQ seed text.
+    Off by default: the mesh learns from what was observed or read (mesh_corpus_feed), not from text the
+    system wrote about itself. QUIPU_TRAIN_GENERATED=1 turns it back on."""
+    return os.environ.get("QUIPU_TRAIN_GENERATED", "0") == "1"
+
+
+# ---------------------------------------------------------------------------
+# Regions: where an association was learned
+# ---------------------------------------------------------------------------
+# One vocabulary and one torus for everything, so relational distances stay comparable; each chunk's
+# tokens and bigrams are also counted under the region its source belongs to (mesh_slm_region_vocab,
+# mesh_slm_region_edge). The global mesh is unchanged by this: regions record provenance, so a region
+# can be weighed, inspected or rolled back without disturbing the shared geometry. Associations learned
+# before regions existed carry no region.
+_REGION_RULES: tuple[tuple[str, str], ...] = (
+    ("perceptopoly", "game"),
+    ("corpus_local_docs", "self"),
+    ("corpus_", "reading"),
+    ("loadopoly", "operations"), ("bakugo", "operations"), ("stockopoly", "operations"),
+    ("jobhawk", "operations"), ("supply-chain-brain", "operations"), ("hubcore", "operations"),
+    ("hub-floor", "operations"), ("market", "operations"),
+)
+
+
+def region_for_source(source: str) -> str:
+    """game | self | reading | operations | generated | unclassed, from a chunk's source tag."""
+    s = (source or "").lower()
+    if s in ("corpus_entity", "corpus_edge", "dispatch", "seed"):
+        return "generated"
+    for needle, region in _REGION_RULES:
+        if needle in s:
+            return region
+    return "unclassed"
+
+
+def region_summary() -> dict:
+    """Per region: tokens, total frequency, edges and edge samples."""
+    with _conn() as cn:
+        out: dict[str, dict] = {}
+        for r in cn.execute("SELECT region, COUNT(*) AS n, SUM(freq) AS f FROM mesh_slm_region_vocab GROUP BY region"):
+            out.setdefault(r["region"], {})["tokens"] = int(r["n"])
+            out[r["region"]]["freq"] = int(r["f"] or 0)
+        for r in cn.execute("SELECT region, COUNT(*) AS n, SUM(samples) AS s FROM mesh_slm_region_edge GROUP BY region"):
+            out.setdefault(r["region"], {})["edges"] = int(r["n"])
+            out[r["region"]]["samples"] = int(r["s"] or 0)
+        total = int(cn.execute("SELECT COUNT(*) FROM mesh_slm_quipu").fetchone()[0])
+    return {"regions": out, "global_edges": total}
+
+
 def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[tuple[str, str]]:
     """Pull training text chunks (with their source) from the mesh corpus.
 
@@ -2482,6 +2651,10 @@ def _corpus_stream(cn: sqlite3.Connection, max_chunks: int = 200) -> list[tuple[
                 chunks.append((str(txt), str(r["source"] or "")))
     except sqlite3.OperationalError:
         pass
+
+    # Below: text QUIPU's own code generated. It trains only with QUIPU_TRAIN_GENERATED=1.
+    if not _train_generated():
+        return chunks
 
     # Recent corpus entity labels
     try:
@@ -2675,12 +2848,18 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                 # arxiv->brain, fiction->entirety). Unrouted sources stay broad.
                 _axis = _axis_for_source(source)
                 target_mesh = _axis_bias(mesh, _axis) if _axis is not None else mesh
+                region = region_for_source(source)
 
                 # Step 1: vocab + embeddings
                 ids: list[int] = []
                 for tok in tokens:
                     tid = _upsert_token(cn, tok, now_iso, mesh=target_mesh)
                     ids.append(tid)
+                    cn.execute(
+                        "INSERT INTO mesh_slm_region_vocab(token_id, region, freq, last_seen) VALUES(?,?,1,?) "
+                        "ON CONFLICT(token_id, region) DO UPDATE SET freq=freq+1, last_seen=excluded.last_seen",
+                        (tid, region, now_iso),
+                    )
 
                     # Per-token wave stencil gate (Miller et al. 2026):
                     cell = _torus_cell_for_token(cn, tid)
@@ -2773,6 +2952,17 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                             "WHERE src=? AND dst=?",
                             (new_w, src, dst),
                         )
+                    # The same Hebbian step, counted in this chunk's region only.
+                    rrow = cn.execute(
+                        "SELECT weight FROM mesh_slm_region_edge WHERE src=? AND dst=? AND region=?",
+                        (src, dst, region),
+                    ).fetchone()
+                    rw = eta_q if rrow is None else float(rrow["weight"]) + eta_q * (1.0 - float(rrow["weight"]))
+                    cn.execute(
+                        "INSERT INTO mesh_slm_region_edge(src, dst, region, weight, samples) VALUES(?,?,?,?,1) "
+                        "ON CONFLICT(src, dst, region) DO UPDATE SET weight=excluded.weight, samples=samples+1",
+                        (src, dst, region, rw),
+                    )
                     n_pairs += 1
 
             rounds = int(_meta_get(cn, "rounds", 0) or 0) + 1
@@ -3819,8 +4009,8 @@ def feed_corpus(text: str, *, source: str = "", max_rows: int = _CORPUS_FEED_CAP
     Returns the number of rows in the feed after insertion (best-effort).
     """
     text = (text or "").strip()
-    if not text:
-        return 0
+    if not text or not _tokenize(text):
+        return 0                       # nothing to learn from (e.g. "{}")
     with _conn() as cn:
         cn.execute(
             "INSERT INTO mesh_corpus_feed(text, source) VALUES(?, ?)",
