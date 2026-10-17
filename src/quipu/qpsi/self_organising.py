@@ -68,19 +68,21 @@ import argparse
 import functools
 import json
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training, resonance_phase, weyl_reference
+from . import annealed_senses, coherency_depth, flux_phase, learned_prior, memristive_axes, mirror_training, pcm_cells, resonance_phase, weyl_reference
 from .memristive_axes import SomnConfig
 
 ENV: str = "QUIPU_SELF_ORGANISING"
 FLUX_ENV: str = "QUIPU_FLUX_PHASE"
 RESONANCE_ENV: str = resonance_phase.ENV        # QUIPU_RESONANCE_PHASE (refines flux_phase)
 WEYL_REF_ENV: str = weyl_reference.ENV           # QUIPU_WEYL_REFERENCE (DES A_W into the Weyl fallbacks)
+PCM_ENV: str = pcm_cells.ENV                     # QUIPU_PCM_CELLS (phase-change cells hold the axis pressures)
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
@@ -115,6 +117,7 @@ class Flags:
     annealed_senses: bool = True
     resonance_phase: bool = True        # applies only when flux_phase is on
     weyl_reference: bool = True         # DES A_W replaces mesh_slm's constant Weyl fallbacks
+    pcm_cells: bool = True              # chalcogenide cells: rADAM steps become SET/RESET decisions
 
     @classmethod
     def from_env(cls) -> "Flags":
@@ -123,7 +126,7 @@ class Flags:
         return cls(flux_phase=on(FLUX_ENV), learned_prior=on(PRIOR_ENV), somn=on(SOMN_ENV),
                    mirror_training=on(MIRROR_ENV), coherency_depth=on(PLANES_ENV),
                    annealed_senses=on(SENSES_ENV), resonance_phase=on(RESONANCE_ENV),
-                   weyl_reference=on(WEYL_REF_ENV))
+                   weyl_reference=on(WEYL_REF_ENV), pcm_cells=on(PCM_ENV))
 
 
 _FLAGS = Flags()
@@ -192,6 +195,29 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                 "events": [e.get("kind") for e in res["events"]],
                 "steps": res["steps"],
             }
+        if flags.pcm_cells and flags.somn and "somn" in out:
+            # The cellular RAM: one phase-change cell per axis, heated by the SOMN
+            # Kirchhoff currents, programmed toward the live axis value through an
+            # rADAM step scaled by the cell's programming slope (qpsi.pcm_cells).
+            try:
+                arr = pcm_cells.load_array(cn, "system_entirety")
+                try:
+                    from .. import mesh_slm
+                    wt = mesh_slm._weyl_tensor()
+                    weyl_phase = 2.0 * math.pi * min(1.0, max(0.0, float(wt[4]))) if len(wt) > 4 else 0.0
+                except Exception:
+                    weyl_phase = 0.0
+                targets = {a: float(axes.get(a, 0.0)) for a in pcm_cells.AXES if a != "entirety"}
+                targets["entirety"] = observer
+                cur = res["currents"] if flags.somn else {}
+                pcm = pcm_cells.step_array(arr, currents=cur, targets=targets, weyl_phase=weyl_phase,
+                                           now=now, cfg=pcm_cells.PcmConfig.from_env())
+                pcm_cells.record(cn, arr, pcm, now=now)
+                out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"], "x": r["x"],
+                                  "pulses": r["decision"]["pulses"], "energy_j": r["decision"]["energy_j"],
+                                  "lr_eff": r["lr_eff"]} for a, r in pcm.items()}
+            except Exception as exc:
+                out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:
             adv = learned_prior.advance_on_realisation(cn, "system_entirety", now=now)
             out["prior_advanced"] = bool(adv)
@@ -398,6 +424,23 @@ def _resonance_status() -> dict:
         return {"error": str(exc)}
 
 
+def _pcm_status() -> dict:
+    try:
+        from .. import system_entirety as se
+        with se._conn() as cn:
+            arr = pcm_cells.load_array(cn, "system_entirety")
+            last = pcm_cells.rows(cn, limit=len(pcm_cells.AXES))
+        cfg = pcm_cells.PcmConfig.from_env()
+        return {"steps": arr.steps, "last_t": arr.last_t,
+                "cells": {a: {"x": round(c.x, 6), "pressure": round(pcm_cells.pressure_of(c, cfg), 6),
+                              "t_amorph": round(c.t_amorph, 1), "writes": c.writes,
+                              "energy_j": c.energy_j, "last_action": c.last_action}
+                          for a, c in arr.cells.items()},
+                "last": last}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def _weyl_reference_status() -> dict:
     try:
         from . import weyl_reference
@@ -420,6 +463,7 @@ def status() -> dict:
         "flux": flux_phase.read_flux().to_json(),
         "resonance": _resonance_status(),
         "weyl_reference": _weyl_reference_status(),
+        "pcm": _pcm_status(),
         "somn": {"g": st.g, "m": st.m, "steps": st.steps, "last_t": st.last_t,
                  "potentiation_steps": st.potentiation_steps, "relaxation_steps": st.relaxation_steps},
         "allocation": brain_kv.kv_get_json(memristive_axes.KV_ALLOCATION, None),

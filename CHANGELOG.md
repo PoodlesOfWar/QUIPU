@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.57.0] - 2026-10-17
+
+### Added
+- `qpsi/pcm_cells.py`: chalcogenide phase-change memory cells as the cellular RAM that holds the axis pressures. Physics with sources (JMAK crystallisation, melt-quench RESET, amorphous drift ν ≈ 0.1, threshold switching, thermal RC) and its derivatives; a derivative decision model that turns an rADAM step into HOLD / SET / RESET_SET / REFRESH with Joule energy as the cost and p* as the bar for the irreversible RESET; `coupled_step` scales rADAM's learning rate by the cell's secant programming slope and writes the realised pressure back. One cell per MESH axis, driven by the SOMN currents, with the UEQGM Floquet factor on the SET rate.
+- `QUIPU_PCM_CELLS` flag in `self_organising` (default on with the SOMN); step summary and `status` gain `pcm`; log table `entirety_pcm_log`; `docs/QPSI_PCM_CELLS.md`.
+
 ## [0.56.0] - 2026-10-09
 
 ### Changed

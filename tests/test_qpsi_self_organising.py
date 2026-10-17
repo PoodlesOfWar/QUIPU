@@ -388,3 +388,27 @@ def test_the_cli_entry_point_runs_clean_under_the_flag():
                        cwd=root, env=env, capture_output=True, text=True, timeout=180)
     assert r.returncode == 0, r.stderr
     assert "found in sys.modules" not in r.stderr and "pulse" in r.stdout
+
+
+def test_pcm_cells_follow_the_somn_step_and_persist_only_their_keys(isolated):
+    from src.quipu.qpsi import pcm_cells as pc
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    pcm = a["self_organising"]["pcm"]
+    assert "error" not in pcm and set(pcm) == set(pc.AXES)
+    assert all(r["action"] in pc.ACTIONS for r in pcm.values())
+    with system_entirety._conn() as cn:
+        arr = pc.load_array(cn, "system_entirety")
+        assert arr.steps == 1 and len(pc.rows(cn)) == len(pc.AXES)
+        keys = [k for (k,) in cn.execute("SELECT key FROM brain_kv WHERE key LIKE 'entirety:pcm:%'")]
+        assert keys == [pc.KV_PREFIX + "system_entirety"]
+    st = so.status()
+    assert st["pcm"]["steps"] == 1 and "vision" in st["pcm"]["cells"]
+    so.disable()
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=True, mirror_training=False,
+                       coherency_depth=False, annealed_senses=False, resonance_phase=False,
+                       weyl_reference=False, pcm_cells=False))
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert "pcm" not in b["self_organising"]
