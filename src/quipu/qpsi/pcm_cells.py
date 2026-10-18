@@ -84,7 +84,11 @@ deadlock the optimizer and saturation does stop it.  ``coupled_step`` runs
 
 so the optimizer asks for what the cell can give, then applies the decision
 above and writes the *realised* pressure (the cell's conductance) back into
-the rADAM state.  The optimizer never carries a pressure the cell does not
+the rADAM state.  [v0.58.0: superseded for the axis array by ``ef_step`` —
+error feedback on a differential pair, lr unscaled; see the section "The
+resolution bound, the differential pair and error feedback" below.  Writing
+the realised pressure back erased the sub-resolution part of every step, which
+is what stalled the optimizer.]  The optimizer never carries a pressure the cell does not
 hold.  With a cell whose slope is nominal everywhere and no drift, this
 reduces to ``radam_step`` alone.
 
@@ -529,6 +533,169 @@ def floquet_for_axis(weyl_phase: float, axis_index: int) -> float:
     return min(1.0, max(0.0, 0.5 * (1.0 + f)))
 
 
+
+# ---------------------------------------------------------------------------
+# The resolution bound, the differential pair and error feedback (v0.58.0)
+# ---------------------------------------------------------------------------
+#
+# What held the optimizer (v0.57.0)
+#   A cell can distinguish ~1/ε levels, ε = (drift before the next read + read
+#   noise)/(G_max − G_min): about 100 levels, log2(100) ≈ 6.6 bits per write on
+#   the defaults.  An rADAM step smaller than ε carries information the cell
+#   cannot represent in one write.  v0.57.0 answered with HOLD and then set the
+#   rADAM pressure to the cell's value, so the sub-ε part was erased, not
+#   deferred: once the gradient was small every step was below ε and the
+#   optimizer stopped.  Decreases were worse: the only way down was RESET,
+#   priced by p*, so they were held until the debt grew (and lr was also cut by
+#   the slope ratio, shrinking the steps further below ε).  The bound itself is
+#   not removable — one write cannot carry more than log2(1/ε) bits — but
+#   erasing what does not fit is a choice, not the bound.
+#
+# What lets it continue
+#   1. Error feedback.  The expected location (rADAM's high-precision
+#      pressure) and the held location (the cells) are kept separately, and
+#      their difference χ = expected − held is stored, not discarded.  The
+#      cells are programmed only when |χ| ≥ ε, by the amount that fits; the
+#      remainder stays in χ.  Invariant after every step: |χ| < ε + one pulse,
+#      so the held value tracks the expected one to within one level, however
+#      small each step is.  Steps below ε are delayed, never lost: the
+#      optimizer moves on the expected location every step.
+#      (Mixed-precision training on PCM: Nandakumar, Le Gallo, Boybat,
+#      Rajendran, Sebastian & Eleftheriou, arXiv:1712.01192, Front. Neurosci.
+#      14, 406 (2020); error feedback in compressed SGD: Karimireddy et al.,
+#      ICML 2019.)
+#   2. The differential pair.  The value is held as p = p₊ − p₋ on two cells.
+#      Up is a partial SET on the + cell, down is a partial SET on the − cell:
+#      both directions are gradual, and RESET is no longer the price of every
+#      decrease.  Two devices per synapse: Burr et al., IEDM 2014.
+#   3. Refresh.  When the cell that must move has no SET headroom left (its
+#      reach over a full step is below what χ asks), both cells are RESET and
+#      the net value is re-programmed onto one of them.  This is the only
+#      RESET; it is forced by saturation, so it carries no p* bar.
+#
+# The SQL location: brain_kv entirety:pcm:<instance> stores, per axis, the
+# two cells, the expected pressure and χ.  The gap between what rADAM wants and
+# what the cells hold is therefore recorded and carried, not overwritten.
+
+
+def resolution(cell: PcmCell, cfg: PcmConfig, dt_next: float | None = None) -> float:
+    """ε in pressure units: the smallest change one write can make that survives
+    drift and read noise until the next read."""
+    dt_next = cfg.dt_next if dt_next is None else dt_next
+    lo, hi = g_bounds(cfg)
+    drift = abs(dg_reset_dt(cell.t_amorph, cfg)) * dt_next * (1.0 - cell.x)
+    return (drift + cfg.read_noise * (hi - lo)) / (hi - lo)
+
+
+def bits_per_write(cell: PcmCell, cfg: PcmConfig) -> float:
+    """log2(1/ε): the information one write to this cell can carry."""
+    return math.log2(1.0 / max(resolution(cell, cfg), 1e-12))
+
+
+@dataclass
+class DiffCell:
+    plus: PcmCell = field(default_factory=PcmCell)
+    minus: PcmCell = field(default_factory=PcmCell)
+    expected: float = 0.0          # rADAM's high-precision pressure: where the value should be
+    refreshes: int = 0
+
+    def held(self, cfg: PcmConfig) -> float:
+        """The value the cells hold: p₊ − p₋ (may be negative internally)."""
+        return pressure_of(self.plus, cfg) - pressure_of(self.minus, cfg)
+
+    def pressure(self, cfg: PcmConfig) -> float:
+        return min(1.0, max(0.0, self.held(cfg)))
+
+    def chi(self, cfg: PcmConfig) -> float:
+        return self.expected - self.held(cfg)
+
+    def to_json(self) -> dict:
+        return {"plus": self.plus.to_json(), "minus": self.minus.to_json(),
+                "expected": self.expected, "refreshes": self.refreshes}
+
+    @classmethod
+    def from_json(cls, d: Mapping | None) -> "DiffCell":
+        if not isinstance(d, Mapping):
+            return cls()
+        if "plus" not in d and "x" in d:               # a v0.57.0 single cell becomes the + side
+            c = cls(plus=PcmCell.from_json(d))
+            c.expected = c.plus.target_x
+            return c
+        return cls(plus=PcmCell.from_json(d.get("plus")), minus=PcmCell.from_json(d.get("minus")),
+                   expected=float(d.get("expected") or 0.0), refreshes=int(d.get("refreshes") or 0))
+
+
+def refresh_pair(dc: DiffCell, cfg: PcmConfig, floquet: float = 1.0) -> float:
+    """RESET both cells and re-program the net value onto one of them."""
+    net = dc.held(cfg)
+    energy = reset_pulse(dc.plus, cfg) + reset_pulse(dc.minus, cfg)
+    side = dc.plus if net >= 0.0 else dc.minus
+    target = conductance_of_pressure(abs(net), cfg)
+    lo, hi = g_bounds(cfg)
+    noise = cfg.read_noise * (hi - lo)
+    for _ in range(4 * cfg.max_set_pulses):
+        if conductance(side, cfg) >= target - noise:
+            break
+        energy += set_pulse(side, cfg, floquet)
+    for c in (dc.plus, dc.minus):
+        c.target_x = pressure_of(c, cfg)
+        c.last_action = REFRESH
+    dc.refreshes += 1
+    return energy
+
+
+def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, grad_imag: float = 0.0, *,
+            cfg: PcmConfig | None = None, lr: float = DEFAULT_LR, floquet: float = 1.0,
+            dt_since: float = 0.0, **radam_kwargs) -> tuple[float, dict]:
+    """One rADAM step on the expected location, then error-feedback programming
+    of the differential pair.  Returns (held pressure, info)."""
+    cfg = cfg or PcmConfig()
+    age(dc.plus, dt_since, cfg)
+    age(dc.minus, dt_since, cfg)
+    # rADAM moves the expected (high-precision) location, at its own lr
+    state["pressure"] = min(1.0, max(0.0, dc.expected))
+    dc.expected = radam_step(state, grad_real, grad_imag, lr=lr, **radam_kwargs)
+    held0 = dc.held(cfg)
+    chi0 = dc.expected - held0
+    side = dc.plus if chi0 > 0.0 else dc.minus
+    eps = resolution(side, cfg)
+    action, pulses, energy, reason = HOLD, 0, 0.0, ""
+    if abs(chi0) < eps:
+        reason = f"|chi| {abs(chi0):.4f} < eps {eps:.4f}: deferred in chi, not lost"
+    else:
+        reach_g, _ = reach(side, cfg, floquet)
+        lo, hi = g_bounds(cfg)
+        if reach_g / (hi - lo) < min(abs(chi0), 1.0) - eps and pressure_of(side, cfg) > 0.5:
+            energy += refresh_pair(dc, cfg, floquet)
+            action, pulses = REFRESH, 1
+            side = dc.plus if (dc.expected - dc.held(cfg)) > 0.0 else dc.minus
+            reason = "SET headroom exhausted on the moving cell: both RESET, net re-programmed"
+        want = dc.expected - dc.held(cfg)
+        if abs(want) >= resolution(side, cfg):
+            d = decide(side, pressure_of(side, cfg) + abs(want), cfg, floquet=floquet)
+            energy += d.energy_j
+            pulses += d.pulses
+            if d.action != HOLD:
+                action = SET if action == HOLD else action
+                reason = (reason + "; " if reason else "") + \
+                    f"{d.pulses} SET pulse(s) on the {'+' if side is dc.plus else '-'} cell"
+            elif not reason:
+                reason = d.reason
+    held1 = dc.held(cfg)
+    chi1 = dc.expected - held1
+    state["pressure"] = dc.expected
+    state["pcm_chi"] = chi1
+    state["pcm_held"] = held1
+    state["pcm_lr_eff"] = lr
+    state["pcm_asked"] = dc.expected
+    info = {"action": action, "pulses": pulses, "energy_j": energy, "eps": eps,
+            "bits_per_write": math.log2(1.0 / max(eps, 1e-12)),
+            "expected": dc.expected, "held": held1, "chi_before": chi0, "chi": chi1,
+            "realised": held1 - held0, "plus_x": dc.plus.x, "minus_x": dc.minus.x,
+            "refreshes": dc.refreshes, "reason": reason}
+    return min(1.0, max(0.0, held1)), info
+
+
 # ---------------------------------------------------------------------------
 # The cellular RAM: one cell per MESH axis (and any named cell set)
 # ---------------------------------------------------------------------------
@@ -538,14 +705,14 @@ AXES: tuple[str, ...] = ("vision", "touch", "smell", "body", "brain", "perceptio
 
 @dataclass
 class CellArray:
-    cells: dict[str, PcmCell] = field(default_factory=dict)
+    cells: dict[str, DiffCell] = field(default_factory=dict)
     radam: dict[str, dict] = field(default_factory=dict)
     last_t: float | None = None
     steps: int = 0
 
-    def cell(self, name: str) -> PcmCell:
+    def cell(self, name: str) -> DiffCell:
         if name not in self.cells:
-            self.cells[name] = PcmCell()
+            self.cells[name] = DiffCell()
         return self.cells[name]
 
     def to_json(self) -> dict:
@@ -557,7 +724,7 @@ class CellArray:
         a = cls()
         if isinstance(d, Mapping):
             for k, v in (d.get("cells") or {}).items():
-                a.cells[k] = PcmCell.from_json(v)
+                a.cells[k] = DiffCell.from_json(v)
             a.radam = {k: dict(v) for k, v in (d.get("radam") or {}).items() if isinstance(v, Mapping)}
             a.last_t = d.get("last_t")
             a.steps = int(d.get("steps") or 0)
@@ -579,19 +746,27 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
     total_i = sum(max(0.0, float(v)) for v in currents.values()) or 1.0
     out: dict[str, dict] = {}
     for i, a in enumerate(AXES):
-        cell = arr.cell(a)
+        dc = arr.cell(a)
         st = arr.radam.setdefault(a, {})
         share = max(0.0, float(currents.get(a, 0.0))) / total_i
         fl = floquet_for_axis(weyl_phase, i)
-        # the axis's share of the field sets how hard it is driven: scale lr by share,
-        # not the pulse current (a pulse below V_th does nothing, so current stays physical)
+        # the axis's share of the field sets how hard it is driven (lr), not the
+        # pulse current: a pulse below V_th does nothing, so current stays physical
         target = float(targets.get(a, 0.0))
-        g = float(grads[a]) if grads and a in grads else (target - pressure_of(cell, cfg))
-        p, d = coupled_step(st, cell, g, cfg=cfg, lr=DEFAULT_LR * max(share * len(AXES), 0.05),
-                            floquet=fl, dt_since=dt)
-        out[a] = {"pressure": round(p, 6), "x": round(cell.x, 6), "temp": round(cell.temp, 2),
-                  "t_amorph": round(cell.t_amorph, 3), "share": round(share, 6), "floquet": round(fl, 6),
-                  "lr_eff": round(float(st.get("pcm_lr_eff", 0.0)), 6), "decision": d.to_json()}
+        g = float(grads[a]) if grads and a in grads else (target - dc.expected)
+        p, info = ef_step(st, dc, g, cfg=cfg, lr=DEFAULT_LR * max(share * len(AXES), 0.05),
+                          floquet=fl, dt_since=dt)
+        out[a] = {"pressure": round(p, 6), "expected": round(info["expected"], 6),
+                  "chi": round(info["chi"], 6), "eps": round(info["eps"], 6),
+                  "bits_per_write": round(info["bits_per_write"], 3),
+                  "plus_x": round(dc.plus.x, 6), "minus_x": round(dc.minus.x, 6),
+                  "x": round(dc.plus.x - dc.minus.x, 6),
+                  "share": round(share, 6), "floquet": round(fl, 6),
+                  "lr_eff": round(float(st.get("pcm_lr_eff", 0.0)), 6),
+                  "decision": {"action": info["action"], "asked_dg": info["chi_before"],
+                               "realised_dg": info["realised"], "pulses": info["pulses"],
+                               "energy_j": info["energy_j"], "slope": None, "drift_next": None,
+                               "bar": None, "reason": info["reason"]}}
     arr.last_t = now
     arr.steps += 1
     return out
@@ -607,6 +782,10 @@ def ensure_tables(cn: sqlite3.Connection) -> None:
                "step INTEGER NOT NULL, axis TEXT NOT NULL, action TEXT NOT NULL, asked_dg REAL, "
                "realised_dg REAL, pulses INTEGER, energy_j REAL, slope REAL, drift_next REAL, "
                "bar REAL, x REAL, pressure REAL, reason TEXT)")
+    have = {r[1] for r in cn.execute(f"PRAGMA table_info({TABLE})")}
+    for col in ("expected", "chi", "eps"):
+        if col not in have:
+            cn.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col} REAL")
     cn.execute("CREATE TABLE IF NOT EXISTS brain_kv(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
 
 
@@ -635,15 +814,17 @@ def record(cn: sqlite3.Connection, arr: CellArray, result: Mapping[str, Mapping]
     for a, r in result.items():
         d = r["decision"]
         cn.execute(f"INSERT INTO {TABLE}(instance, at, step, axis, action, asked_dg, realised_dg, pulses, "
-                   "energy_j, slope, drift_next, bar, x, pressure, reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   "energy_j, slope, drift_next, bar, x, pressure, reason, expected, chi, eps) "
+                   "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (instance, now, arr.steps, a, d["action"], d["asked_dg"], d["realised_dg"], d["pulses"],
-                    d["energy_j"], d["slope"], d["drift_next"], d["bar"], r["x"], r["pressure"], d["reason"]))
+                    d["energy_j"], d["slope"], d["drift_next"], d["bar"], r["x"], r["pressure"], d["reason"],
+                    r.get("expected"), r.get("chi"), r.get("eps")))
 
 
 def rows(cn: sqlite3.Connection, limit: int = 64, instance: str = "system_entirety") -> list[dict]:
     ensure_tables(cn)
     cols = ["at", "step", "axis", "action", "asked_dg", "realised_dg", "pulses", "energy_j", "slope",
-            "drift_next", "bar", "x", "pressure", "reason"]
+            "drift_next", "bar", "x", "pressure", "reason", "expected", "chi", "eps"]
     q = cn.execute(f"SELECT {', '.join(cols)} FROM {TABLE} WHERE instance=? ORDER BY id DESC LIMIT ?",
                    (instance, int(limit)))
     return [dict(zip(cols, r)) for r in q.fetchall()]
@@ -653,4 +834,4 @@ __all__ = ["ENV", "KV_PREFIX", "TABLE", "ACTIONS", "HOLD", "SET", "RESET_SET", "
            "PcmConfig", "PcmCell", "Decision", "CellArray", "tau_crystallise", "dx_dt", "g_reset",
            "dg_reset_dt", "conductance", "dg_dx", "pressure_of", "conductance_of_pressure", "dT_dt",
            "c_th", "switched", "g_conducting", "age", "cool", "set_pulse", "reset_pulse", "dg_dpulse", "reach", "nominal_slope", "decide",
-           "coupled_step", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows"]
+           "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows"]

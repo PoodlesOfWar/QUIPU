@@ -213,7 +213,8 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                 pcm = pcm_cells.step_array(arr, currents=cur, targets=targets, weyl_phase=weyl_phase,
                                            now=now, cfg=pcm_cells.PcmConfig.from_env())
                 pcm_cells.record(cn, arr, pcm, now=now)
-                out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"], "x": r["x"],
+                out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"],
+                                  "expected": r["expected"], "chi": r["chi"], "eps": r["eps"],
                                   "pulses": r["decision"]["pulses"], "energy_j": r["decision"]["energy_j"],
                                   "lr_eff": r["lr_eff"]} for a, r in pcm.items()}
             except Exception as exc:
@@ -432,9 +433,12 @@ def _pcm_status() -> dict:
             last = pcm_cells.rows(cn, limit=len(pcm_cells.AXES))
         cfg = pcm_cells.PcmConfig.from_env()
         return {"steps": arr.steps, "last_t": arr.last_t,
-                "cells": {a: {"x": round(c.x, 6), "pressure": round(pcm_cells.pressure_of(c, cfg), 6),
-                              "t_amorph": round(c.t_amorph, 1), "writes": c.writes,
-                              "energy_j": c.energy_j, "last_action": c.last_action}
+                "cells": {a: {"held": round(c.pressure(cfg), 6), "expected": round(c.expected, 6),
+                              "chi": round(c.chi(cfg), 6),
+                              "eps": round(pcm_cells.resolution(c.plus if c.chi(cfg) >= 0 else c.minus, cfg), 6),
+                              "plus_x": round(c.plus.x, 6), "minus_x": round(c.minus.x, 6),
+                              "writes": c.plus.writes + c.minus.writes, "refreshes": c.refreshes,
+                              "energy_j": c.plus.energy_j + c.minus.energy_j}
                           for a, c in arr.cells.items()},
                 "last": last}
     except Exception as exc:

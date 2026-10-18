@@ -177,14 +177,16 @@ def test_step_array_drives_every_axis_from_currents_and_persists_only_its_keys()
     out = pc.step_array(arr, currents=currents, targets=targets, now=1000.0, cfg=CFG)
     assert set(out) == set(pc.AXES) and all(r["decision"]["action"] == pc.SET for r in out.values())
     out2 = pc.step_array(arr, currents=currents, targets=targets, now=1079.0, cfg=CFG)
-    assert arr.steps == 2 and all(r["pressure"] >= out[a]["pressure"] - 0.02 for a, r in out2.items())
+    assert arr.steps == 2 and all(r["pressure"] >= out[a]["pressure"] - 0.03 for a, r in out2.items())
+    assert all(abs(r["chi"]) < r["eps"] + 0.05 for r in out2.values())
     cn = sqlite3.connect(":memory:")
     pc.record(cn, arr, out2, now=1079.0)
     keys = [k for (k,) in cn.execute("SELECT key FROM brain_kv")]
     assert keys == [pc.KV_PREFIX + "system_entirety"]
     assert len(pc.rows(cn)) == len(pc.AXES)
     back = pc.load_array(cn)
-    assert back.steps == 2 and back.cells["vision"].x == pytest.approx(arr.cells["vision"].x)
+    assert back.steps == 2 and back.cells["vision"].plus.x == pytest.approx(arr.cells["vision"].plus.x)
+    assert back.cells["vision"].expected == pytest.approx(arr.cells["vision"].expected)
     with pytest.raises(PermissionError):
         pc._kv_set(cn, "entirety:radam_state:system_entirety", {})
 
@@ -195,3 +197,77 @@ def test_config_from_env_and_json(monkeypatch):
     cfg = pc.PcmConfig.from_env()
     assert cfg.drift_nu == 0.2 and cfg.max_set_pulses == 8 and isinstance(cfg.max_set_pulses, int)
     assert cfg.to_json()["t_m"] == CFG.t_m
+
+
+# ---------------------------------------------------------------------------
+# v0.58.0: the resolution bound, error feedback and the differential pair
+# ---------------------------------------------------------------------------
+
+def test_resolution_is_about_a_hundred_levels_on_the_defaults():
+    aged = pc.PcmCell(t_amorph=3600.0)
+    assert pc.resolution(aged, CFG) == pytest.approx(0.0100, abs=0.0005)
+    assert pc.bits_per_write(aged, CFG) == pytest.approx(6.64, abs=0.05)
+    assert pc.resolution(_fresh(), CFG) > pc.resolution(aged, CFG)            # fresh amorphous drifts fastest
+
+
+def test_sub_resolution_steps_are_deferred_in_chi_not_erased():
+    dc = pc.DiffCell()
+    st = {}
+    pc.ef_step(st, dc, 0.5, cfg=CFG, dt_since=79.0)
+    held0, exp0 = dc.held(CFG), dc.expected
+    # tiny gradient: each step is far below one level
+    for _ in range(30):
+        _, info = pc.ef_step(st, dc, 1e-4, cfg=CFG, dt_since=79.0, lr=0.002)
+    assert dc.expected > exp0                                                  # the optimizer kept moving
+    assert abs(dc.chi(CFG)) < pc.resolution(dc.plus, CFG) + 0.05               # held within one level + one pulse
+    assert st["pcm_chi"] == pytest.approx(dc.chi(CFG)) and st["pressure"] == dc.expected
+
+
+def test_a_decrease_is_a_set_on_the_minus_cell_not_a_reset():
+    dc = pc.DiffCell()
+    st = {}
+    for _ in range(6):
+        pc.ef_step(st, dc, 0.6 - dc.expected, cfg=CFG, dt_since=79.0)
+    minus_before, refreshes_before = dc.minus.x, dc.refreshes
+    _, info = pc.ef_step(st, dc, 0.2 - dc.expected, cfg=CFG, dt_since=79.0)
+    assert info["realised"] < 0.0 and info["action"] == pc.SET                 # down in one step,
+    assert dc.minus.x > minus_before and dc.refreshes == refreshes_before      # as a SET on the − cell, no RESET
+    lows = []
+    for _ in range(14):
+        pc.ef_step(st, dc, 0.2 - dc.expected, cfg=CFG, dt_since=79.0)
+        lows.append(dc.pressure(CFG))
+    assert min(abs(p - 0.2) for p in lows) < 0.05                              # reaches the target region
+
+
+def test_tracking_beats_the_erasing_single_cell_on_an_up_down_ramp():
+    def ramp(i):
+        return 0.1 + 0.002 * i if i < 100 else 0.3 - 0.002 * (i - 100)
+    c, st1 = pc.PcmCell(t_amorph=1.0), {}
+    dc, st2 = pc.DiffCell(), {}
+    e_old = e_new = 0.0
+    for i in range(200):
+        p1, _ = pc.coupled_step(st1, c, ramp(i) - pc.pressure_of(c, CFG), cfg=CFG, dt_since=79.0)
+        p2, _ = pc.ef_step(st2, dc, ramp(i) - dc.expected, cfg=CFG, dt_since=79.0)
+        if i >= 20:
+            e_old += abs(ramp(i) - p1)
+            e_new += abs(ramp(i) - p2)
+    assert e_new < 0.5 * e_old
+
+
+def test_refresh_resets_both_cells_and_keeps_the_net_value():
+    dc = pc.DiffCell()
+    for _ in range(40):
+        pc.set_pulse(dc.plus, CFG)
+    for _ in range(25):
+        pc.set_pulse(dc.minus, CFG)
+    net = dc.held(CFG)
+    pc.refresh_pair(dc, CFG)
+    assert dc.refreshes == 1 and min(dc.plus.x, dc.minus.x) == 0.0
+    assert dc.held(CFG) == pytest.approx(net, abs=0.05)
+
+
+def test_a_v057_single_cell_record_loads_as_the_plus_side():
+    old = {"cells": {"vision": {"x": 0.4, "temp": 300.0, "t_amorph": 10.0, "target_x": 0.39}}, "steps": 3}
+    arr = pc.CellArray.from_json(old)
+    dc = arr.cells["vision"]
+    assert dc.plus.x == 0.4 and dc.minus.x == 0.0 and dc.expected == 0.39 and arr.steps == 3

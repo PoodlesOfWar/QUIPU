@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.58.0] - 2026-10-18
+
+### Changed
+- `qpsi/pcm_cells.py`: the axis array now holds each pressure on a differential pair of cells (p = p₊ − p₋) with error feedback. rADAM steps on the expected (high-precision) location; χ = expected − held is stored and carried; the pair is programmed only when |χ| ≥ ε, the per-write resolution (~0.010, 6.6 bits on the defaults); a decrease is a SET on the − cell; RESET happens only as a refresh when the moving cell runs out of headroom. lr is no longer scaled by the programming slope. This removes the stall where sub-resolution steps were erased. `entirety_pcm_log` gains `expected`, `chi`, `eps`; the step summary and status report them.
+
 ## [0.57.0] - 2026-10-17
 
 ### Added

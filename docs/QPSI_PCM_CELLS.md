@@ -71,3 +71,46 @@ claimed. `mesh_slm.py` and `radam_optimizer.py` are not edited.
 
 翈 — the cell remembers what the current wrote and forgets at the drift rate; the
 optimizer learns only what the cell can hold.
+
+## v0.58.0 — the resolution bound, error feedback and the differential pair
+
+### What held the optimizer
+
+One write can make a change of no less than ε = (drift before the next read + read noise)
+/ (G_max − G_min) and still have it read back: about 0.010 in pressure, so ~100 levels,
+log2(100) ≈ 6.6 bits per write on the defaults (≈ 5.8 bits on a fresh amorphous cell,
+which drifts fastest). That limit is physical and stays. What v0.57.0 added on top of it
+was erasure: a step below ε was HELD and rADAM's pressure was then overwritten with the
+cell's value, so the sub-ε part of every step was thrown away. Once the gradient was small,
+every step was below ε and the optimizer stopped. Decreases were worse, because the only
+way down was RESET behind the p* bar, and lr was also cut by the slope ratio, pushing steps
+further below ε. Measured: 34 of 40 small steps held, and the cell stuck at 0.944 with a target of 0.6.
+
+### What lets it continue
+
+1. **Error feedback.** rADAM steps on the *expected* location (high precision). The cells
+   hold the *held* location. χ = expected − held is stored with them in
+   `entirety:pcm:<instance>` and in `entirety_pcm_log`, and nothing overwrites it. The cells
+   are programmed only when |χ| ≥ ε, by the amount that fits; the rest stays in χ. After
+   every step |χ| < ε plus one pulse, so the held value tracks the expected one to within
+   one level, however small the steps are. Steps below ε are delayed, not lost.
+   (Nandakumar, Le Gallo, Boybat, Rajendran, Sebastian & Eleftheriou, arXiv:1712.01192 /
+   Front. Neurosci. 14, 406 (2020); Karimireddy et al., ICML 2019.)
+2. **The differential pair.** p = p₊ − p₋ on two cells. Up is a partial SET on +, down is a
+   partial SET on −: both directions are gradual and a decrease no longer needs RESET.
+   (Two devices per synapse: Burr et al., IEDM 2014.)
+3. **Refresh.** When the cell that has to move has no SET headroom left, both cells are
+   RESET and the net value is re-programmed onto one of them. This is the only RESET. It
+   is forced by saturation, so no bar applies to it.
+4. **No slope scaling of lr.** With χ carrying the remainder, lr_eff = lr. The device's
+   granularity is absorbed by χ, not by shrinking the optimizer's steps.
+
+### Measured on the defaults
+
+| | v0.57.0 single cell | v0.58.0 pair + χ |
+|---|---|---|
+| Ramp 0.1 → 0.3 → 0.1 over 200 steps, mean \|target − held\| | 0.0265 | 0.0064 |
+| End of ramp, held vs target 0.102 | 0.059 | 0.097 |
+| \|χ\| after warm-up | not kept | < 0.026 (one level + one pulse) |
+
+`coupled_step` (single cell, slope-scaled) is kept for reference. The axis array uses `ef_step`.
