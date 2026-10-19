@@ -83,6 +83,7 @@ FLUX_ENV: str = "QUIPU_FLUX_PHASE"
 RESONANCE_ENV: str = resonance_phase.ENV        # QUIPU_RESONANCE_PHASE (refines flux_phase)
 WEYL_REF_ENV: str = weyl_reference.ENV           # QUIPU_WEYL_REFERENCE (DES A_W into the Weyl fallbacks)
 PCM_ENV: str = pcm_cells.ENV                     # QUIPU_PCM_CELLS (phase-change cells hold the axis pressures)
+PCM_SHEAR_ENV: str = "QUIPU_PCM_SHEAR"            # deepen-phase cross-axis shear coupling (default on with the cells)
 PRIOR_ENV: str = "QUIPU_LEARNED_PRIOR"
 SOMN_ENV: str = "QUIPU_SOMN"
 MIRROR_ENV: str = "QUIPU_MIRROR_TRAINING"
@@ -210,9 +211,13 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                 targets = {a: float(axes.get(a, 0.0)) for a in pcm_cells.AXES if a != "entirety"}
                 targets["entirety"] = observer
                 cur = res["currents"] if flags.somn else {}
+                deepen = str(summary.get("expansion_phase") or "") == "deepen"
                 pcm = pcm_cells.step_array(arr, currents=cur, targets=targets, weyl_phase=weyl_phase,
-                                           now=now, cfg=pcm_cells.PcmConfig.from_env())
+                                           now=now, cfg=pcm_cells.PcmConfig.from_env(), deepen=deepen,
+                                           shear=os.environ.get(PCM_SHEAR_ENV, "1").strip() != "0")
                 pcm_cells.record(cn, arr, pcm, now=now)
+                ens = pcm.pop("_ensemble", None)
+                out["pcm_shear"] = ens
                 out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"],
                                   "expected": r["expected"], "chi": r["chi"], "eps": r["eps"],
                                   "pulses": r["decision"]["pulses"], "energy_j": r["decision"]["energy_j"],

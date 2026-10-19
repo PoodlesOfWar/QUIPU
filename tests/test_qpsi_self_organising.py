@@ -412,3 +412,16 @@ def test_pcm_cells_follow_the_somn_step_and_persist_only_their_keys(isolated):
                        weyl_reference=False, pcm_cells=False))
     b = system_entirety.oscillating_expansion_step(force=True)
     assert "pcm" not in b["self_organising"]
+
+
+def test_deepen_step_carries_the_axis_shear(isolated):
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    _flux_off()
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["expansion_phase"] == "deepen"
+    s = b["self_organising"]
+    assert "error" not in s["pcm"] and s["pcm_shear"] is not None
+    assert {"u_bar", "dispersion", "psi", "counter_rotating"} <= set(s["pcm_shear"])

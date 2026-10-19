@@ -271,3 +271,75 @@ def test_a_v057_single_cell_record_loads_as_the_plus_side():
     arr = pc.CellArray.from_json(old)
     dc = arr.cells["vision"]
     assert dc.plus.x == 0.4 and dc.minus.x == 0.0 and dc.expected == 0.39 and arr.steps == 3
+
+
+# ---------------------------------------------------------------------------
+# v0.59.0: deepen-phase shear coupling across the axes
+# ---------------------------------------------------------------------------
+
+def _states(us, thetas=None):
+    """rADAM states whose velocity m̂/√v̂ equals the given u (t=1: m̂ = m/(1-β1), v̂ = v/(1-β2))."""
+    from src.quipu.radam_optimizer import DEFAULT_BETA1, DEFAULT_BETA2
+    out = {}
+    for i, (a, u) in enumerate(zip(pc.AXES, us)):
+        v_hat = 0.04
+        out[a] = {"t": 1, "m": u * (0.2 + 1e-6) * (1 - DEFAULT_BETA1), "v": v_hat * (1 - DEFAULT_BETA2),
+                  "theta": (thetas[i] if thetas else 0.0)}
+    return out
+
+
+def test_axis_velocity_is_the_normalised_adam_step():
+    assert pc.axis_velocity({}) == 0.0
+    st = _states([0.5] * 7)["vision"]
+    assert pc.axis_velocity(st) == pytest.approx(0.5, rel=1e-3)
+
+
+def test_shear_coupling_finds_the_counter_rotating_axes_and_puts_them_anti_phase():
+    us = [0.6, 0.5, 0.4, 0.3, -0.4, -0.5, 0.2]
+    c = pc.shear_coupling(_states(us, thetas=[0.3] * 7))
+    assert c["u_bar"] == pytest.approx(sum(us) / 7, rel=1e-3)
+    assert set(c["counter_rotating"]) == {"brain", "perception"}
+    assert sum(c["axes"][a]["shear"] for a in pc.AXES) == pytest.approx(0.0, abs=1e-9)
+    assert c["psi"] == pytest.approx(0.3, abs=1e-9)
+    assert c["axes"]["brain"]["phi"] == pytest.approx((0.3 + math.pi) % (2 * math.pi))
+    assert c["axes"]["vision"]["phi"] == pytest.approx(0.3)
+    for a in pc.AXES:                                                       # g_im carries the shear's sign
+        assert math.copysign(1, c["axes"][a]["g_im"]) == math.copysign(1, c["axes"][a]["shear"])
+    assert c["dispersion"] > 0.0
+
+
+def test_broaden_is_unchanged_by_the_shear_flag():
+    def run(shear):
+        arr = pc.CellArray()
+        for k in range(6):
+            pc.step_array(arr, currents={a: 1.0 for a in pc.AXES}, targets={a: 0.5 for a in pc.AXES},
+                          now=79.0 * k, cfg=CFG, deepen=False, shear=shear)
+        return {a: arr.cells[a].expected for a in pc.AXES}
+    assert run(True) == run(False)
+
+
+def test_deepen_passes_the_shear_and_records_it():
+    arr = pc.CellArray()
+    tg = {a: 0.2 + 0.08 * i for i, a in enumerate(pc.AXES)}
+    for k in range(6):
+        pc.step_array(arr, currents={a: 1.0 for a in pc.AXES}, targets=tg, now=79.0 * k, cfg=CFG)
+    out = pc.step_array(arr, currents={a: 1.0 for a in pc.AXES}, targets=tg, now=79.0 * 6, cfg=CFG, deepen=True)
+    ens = out.pop("_ensemble")
+    assert set(ens) == {"u_bar", "dispersion", "psi", "counter_rotating"}
+    assert all(out[a]["shear"] is not None and "phi" in out[a]["shear"] for a in pc.AXES)
+    off = pc.step_array(pc.CellArray(), currents={a: 1.0 for a in pc.AXES}, targets=tg, now=0.0, cfg=CFG,
+                        deepen=True, shear=False)
+    assert "_ensemble" not in off and all(off[a]["shear"] is None for a in pc.AXES)
+    cn = sqlite3.connect(":memory:")
+    pc.record(cn, arr, out, now=0.0)                                          # the ensemble row is not an axis
+    assert len(pc.rows(cn)) == len(pc.AXES)
+
+
+def test_a_negative_differential_with_a_latent_part_turns_theta_anti_phase():
+    from src.quipu.radam_optimizer import radam_step
+    st = {}
+    radam_step(st, -0.2, 0.01)
+    assert abs(st["theta"] - math.pi) < 0.1
+    st2 = {}
+    radam_step(st2, 0.2, 0.01)
+    assert st2["theta"] < 0.1

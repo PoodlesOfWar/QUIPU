@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.59.0] - 2026-10-19
+
+### Added
+- `qpsi/pcm_cells.py`: deepen-phase shear coupling across the axis rADAM states (`QUIPU_PCM_SHEAR`, default on with the cells). Each axis's latent gradient is its velocity shear against the ensemble, and its external phase is the ensemble phase, plus π for counter-rotating axes. Broaden is unchanged. The step summary gains `pcm_shear` (ensemble mean velocity, dispersion, phase, counter-rotating axes) and each axis records its shear terms.
+
+### Measured
+- Small effect on pressure: deepen tracking error 0.0386 → 0.0376 over 20 seeds. Dispersion falls by the same amount with or without the coupling. The phases turn, but Adam's √v̂ normalisation cancels most of the magnitude change, and `external_phase` acts only under the torus projection. See docs/QPSI_PCM_CELLS.md.
+
 ## [0.58.0] - 2026-10-18
 
 ### Changed

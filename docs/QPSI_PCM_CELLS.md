@@ -114,3 +114,43 @@ further below ε. Measured: 34 of 40 small steps held, and the cell stuck at 0.9
 | \|χ\| after warm-up | not kept | < 0.026 (one level + one pulse) |
 
 `coupled_step` (single cell, slope-scaled) is kept for reference. The axis array uses `ef_step`.
+
+## v0.59.0 — deepen-phase shear coupling across the axes
+
+Before this, the seven axis rADAM states were independent: each moved on its own gradient
+and nothing in one axis's step depended on another. During **deepen** (field off) the
+coupling adds a cross-axis term built from the optimizer's own states, passed through
+rADAM's existing inputs (`radam_optimizer.py` is not edited):
+
+| Term | Definition |
+|---|---|
+| velocity | uₖ = m̂ₖ / (√v̂ₖ + ε) |
+| ensemble, dispersion | ū = mean uₖ, σᵤ = std uₖ |
+| shear | sₖ = uₖ − ū |
+| counter-rotating | uₖ · ū < 0 (a negative differential against the ensemble) |
+| ensemble phase | ψ = arg Σ \|uⱼ\| e^{iθⱼ} |
+| external phase | φₖ = ψ + π if counter-rotating, else ψ |
+| latent gradient | g_im,k = sₖ · √v̂ₖ |
+
+The picture comes from the two counter-rotating disks in NGC 1068's torus (Impellizzeri et al.,
+arXiv:1908.07981). That paper measures the counter-rotation, not dispersion driving accretion.
+Using counter-rotation as a momentum-raising negative differential is the operator's model.
+
+Flags: `QUIPU_PCM_SHEAR` (default on with the cells). Broaden is unchanged, bit for bit.
+
+### Measured (20 seeds, 10 broaden + 30 deepen steps, small target drift)
+
+| | shear off | shear on |
+|---|---|---|
+| mean \|target − held\| in deepen | 0.0386 | 0.0376 (lower in 14/20 seeds, worst +6 %) |
+| SET pulses | 231 | 229 |
+| velocity dispersion, start → end of deepen | 0.181 → 0.030 | 0.181 → 0.030 |
+
+The coupling turns phases (a counter-rotating axis goes anti-phase, θ moves by ≈ π), but its
+effect on pressure is small, and it does **not** cause the fall in dispersion: that happens
+just as much without it. The reason is that the shear enters through the gradient's magnitude,
+|g| = hypot(g_re, g_im), and Adam divides by √v̂, which cancels most of a magnitude change.
+`external_phase` is recorded but acts only under the torus projection, which the axis cells do
+not use. A shear term with a strong effect on pressure would have to enter the step's
+direction (for example a cos(θₖ − φₖ) factor on the step) instead of its magnitude; that would
+be new math, not an existing rADAM input.

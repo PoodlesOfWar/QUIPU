@@ -696,6 +696,80 @@ def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, g
     return min(1.0, max(0.0, held1)), info
 
 
+
+# ---------------------------------------------------------------------------
+# Shear coupling across the axes in the deepen phase (v0.59.0)
+# ---------------------------------------------------------------------------
+#
+# Without it the seven axis rADAM states are independent: each moves on its
+# own gradient and nothing in one axis's step depends on another.  The
+# coupling below adds a cross-axis term during deepen only (field off), built
+# from the optimizer's own behaviour and passed through rADAM's existing
+# inputs; radam_optimizer.py is not edited.
+#
+#   velocity          u_k = m̂_k / (√v̂_k + ε)     the axis's normalised Adam step
+#   ensemble          ū = mean_k u_k,  σ_u = std_k u_k     (velocity dispersion)
+#   shear             s_k = u_k − ū
+#   counter-rotating  u_k · ū < 0       (a negative differential against the ensemble)
+#   ensemble phase    ψ = arg Σ_j |u_j| e^{iθ_j}
+#   external phase    φ_k = ψ + π for a counter-rotating axis, ψ otherwise
+#   latent gradient   g_im,k = s_k · √v̂_k        (shear in the axis's own gradient units)
+#
+# rADAM combines g_re + i·g_im as |g| = hypot(g_re, g_im) with the sign of
+# g_re (magnitude, into the Adam moments) and arg(g_re + i·g_im) (phase, into θ).
+# So the shear raises the magnitude of an axis's update in the direction its
+# own gradient already points, and a negative real gradient carrying a latent
+# part turns θ by close to π: the counter-rotating axis goes anti-phase.
+#
+# Source of the picture: the parsec-scale molecular torus of NGC 1068 holds two
+# disks rotating in opposite directions (Impellizzeri et al., ApJ, arXiv:1908.07981).
+# That paper measures the counter-rotation; it does not measure dispersion
+# driving accretion.  Using the counter-rotation as a negative differential that
+# raises momentum is the operator's model (2026-10-18), recorded as such.
+#
+# external_phase is passed too.  In rADAM it acts only under the torus
+# projection (use_torus=True); the axis cells run clamped, so there it is
+# recorded and has no effect on pressure.  The effect on pressure comes from
+# g_im alone.
+
+def axis_velocity(state: Mapping[str, float]) -> float:
+    """u = m̂/(√v̂ + ε) from a stored rADAM state (0 before its first step)."""
+    from ..radam_optimizer import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPS
+    t = int(state.get("t", 0) or 0)
+    if t <= 0:
+        return 0.0
+    m_hat = float(state.get("m", 0.0)) / (1.0 - DEFAULT_BETA1 ** t)
+    v_hat = float(state.get("v", 0.0)) / (1.0 - DEFAULT_BETA2 ** t)
+    return m_hat / (math.sqrt(max(v_hat, 0.0)) + DEFAULT_EPS)
+
+
+def shear_coupling(states: Mapping[str, Mapping[str, float]], axes: Sequence[str] = None) -> dict:
+    """The cross-axis shear terms for one deepen step, from the optimizer's own states."""
+    from ..radam_optimizer import DEFAULT_BETA2
+    axes = tuple(axes or AXES)
+    u = {a: axis_velocity(states.get(a, {})) for a in axes}
+    n = len(axes)
+    u_bar = sum(u.values()) / n
+    sigma = math.sqrt(sum((x - u_bar) ** 2 for x in u.values()) / n)
+    z = complex(0.0, 0.0)
+    for a in axes:
+        z += abs(u[a]) * complex(math.cos(float(states.get(a, {}).get("theta", 0.0))),
+                                 math.sin(float(states.get(a, {}).get("theta", 0.0))))
+    psi = math.atan2(z.imag, z.real) if abs(z) > 0.0 else 0.0
+    per: dict[str, dict] = {}
+    for a in axes:
+        st = states.get(a, {})
+        t = int(st.get("t", 0) or 0)
+        v_hat = float(st.get("v", 0.0)) / (1.0 - DEFAULT_BETA2 ** t) if t > 0 else 0.0
+        s_k = u[a] - u_bar
+        counter = (u[a] * u_bar) < 0.0
+        per[a] = {"u": u[a], "shear": s_k, "counter_rotating": counter,
+                  "phi": (psi + math.pi) % (2.0 * math.pi) if counter else psi % (2.0 * math.pi),
+                  "g_im": s_k * math.sqrt(max(v_hat, 0.0))}
+    return {"u_bar": u_bar, "dispersion": sigma, "psi": psi,
+            "counter_rotating": [a for a in axes if per[a]["counter_rotating"]], "axes": per}
+
+
 # ---------------------------------------------------------------------------
 # The cellular RAM: one cell per MESH axis (and any named cell set)
 # ---------------------------------------------------------------------------
@@ -733,7 +807,7 @@ class CellArray:
 
 def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mapping[str, float],
                grads: Mapping[str, float] | None = None, weyl_phase: float = 0.0, now: float,
-               cfg: PcmConfig | None = None) -> dict:
+               cfg: PcmConfig | None = None, deepen: bool = False, shear: bool = True) -> dict:
     """Advance every axis cell one Entirety step.
 
     ``currents``: SOMN Kirchhoff currents (documents per pulse) → programming
@@ -745,6 +819,8 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
     dt = 0.0 if arr.last_t is None else max(0.0, now - float(arr.last_t))
     total_i = sum(max(0.0, float(v)) for v in currents.values()) or 1.0
     out: dict[str, dict] = {}
+    # deepen: the cross-axis shear, computed once from the states before anyone steps
+    coupling = shear_coupling({a: arr.radam.get(a, {}) for a in AXES}) if (deepen and shear) else None
     for i, a in enumerate(AXES):
         dc = arr.cell(a)
         st = arr.radam.setdefault(a, {})
@@ -754,8 +830,10 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
         # pulse current: a pulse below V_th does nothing, so current stays physical
         target = float(targets.get(a, 0.0))
         g = float(grads[a]) if grads and a in grads else (target - dc.expected)
-        p, info = ef_step(st, dc, g, cfg=cfg, lr=DEFAULT_LR * max(share * len(AXES), 0.05),
-                          floquet=fl, dt_since=dt)
+        c_k = coupling["axes"][a] if coupling else None
+        p, info = ef_step(st, dc, g, c_k["g_im"] if c_k else 0.0, cfg=cfg,
+                          lr=DEFAULT_LR * max(share * len(AXES), 0.05), floquet=fl, dt_since=dt,
+                          **({"external_phase": c_k["phi"]} if c_k else {}))
         out[a] = {"pressure": round(p, 6), "expected": round(info["expected"], 6),
                   "chi": round(info["chi"], 6), "eps": round(info["eps"], 6),
                   "bits_per_write": round(info["bits_per_write"], 3),
@@ -763,12 +841,17 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
                   "x": round(dc.plus.x - dc.minus.x, 6),
                   "share": round(share, 6), "floquet": round(fl, 6),
                   "lr_eff": round(float(st.get("pcm_lr_eff", 0.0)), 6),
+                  "shear": ({k: (round(v, 6) if isinstance(v, float) else v) for k, v in c_k.items()}
+                            if c_k else None),
                   "decision": {"action": info["action"], "asked_dg": info["chi_before"],
                                "realised_dg": info["realised"], "pulses": info["pulses"],
                                "energy_j": info["energy_j"], "slope": None, "drift_next": None,
                                "bar": None, "reason": info["reason"]}}
     arr.last_t = now
     arr.steps += 1
+    if coupling:
+        out["_ensemble"] = {"u_bar": coupling["u_bar"], "dispersion": coupling["dispersion"],
+                            "psi": coupling["psi"], "counter_rotating": coupling["counter_rotating"]}
     return out
 
 
@@ -812,6 +895,8 @@ def record(cn: sqlite3.Connection, arr: CellArray, result: Mapping[str, Mapping]
     ensure_tables(cn)
     _kv_set(cn, KV_PREFIX + instance, arr.to_json())
     for a, r in result.items():
+        if a.startswith("_"):
+            continue
         d = r["decision"]
         cn.execute(f"INSERT INTO {TABLE}(instance, at, step, axis, action, asked_dg, realised_dg, pulses, "
                    "energy_j, slope, drift_next, bar, x, pressure, reason, expected, chi, eps) "
@@ -834,4 +919,4 @@ __all__ = ["ENV", "KV_PREFIX", "TABLE", "ACTIONS", "HOLD", "SET", "RESET_SET", "
            "PcmConfig", "PcmCell", "Decision", "CellArray", "tau_crystallise", "dx_dt", "g_reset",
            "dg_reset_dt", "conductance", "dg_dx", "pressure_of", "conductance_of_pressure", "dT_dt",
            "c_th", "switched", "g_conducting", "age", "cool", "set_pulse", "reset_pulse", "dg_dpulse", "reach", "nominal_slope", "decide",
-           "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows"]
+           "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "axis_velocity", "shear_coupling", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows"]
