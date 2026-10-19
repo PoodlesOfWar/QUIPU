@@ -26,6 +26,9 @@ Endpoints (all JSON unless noted):
     POST /observe             {source, text, kind?, confidence?, meta?}
     GET  /guidance?source=X   lexicon, pairs, calibration, per-source stats
     POST /feedback            {source, expected, observed?, confidence?}
+    GET  /relational          kept relational records (?source=, ?source=&entity=)
+    POST /relational          {source, relational}: keep a record without feeding any text to the mesh
+                              (a coordinator's result is generated, so it is shared, not learned)
     GET  /digest              today's learning digest (text/plain)
 
 Environment:
@@ -374,6 +377,21 @@ def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
     except Exception:
         return None
     return {"entity": entity, "schema": schema}
+
+
+def _relational_post(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST /relational: keep one relational record for a known source, the way meta.relational on /observe
+    does, but without text: nothing reaches the mesh corpus, the stats or the world model. For records a
+    coordinator synthesises from other sources' work (the Fleet Harness), which are generated and so must
+    be shared without being learned (see mesh_slm.region_for_source, 'generated')."""
+    source = _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False, "error": "unknown source; expected one of " + ", ".join(sorted(SOURCE_PROFILES))}
+    kept = _keep_relational(source, body.get("relational"))
+    if kept is None:
+        return 400, {"ok": False, "error": "relational must be an object with agent_id and schema, under "
+                                           f"{_RELATIONAL_MAX_BYTES} bytes"}
+    return 200, {"ok": True, "source": source, "kept": kept}
 
 
 def _relational(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
@@ -792,6 +810,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _observe(body)
             elif parsed.path == "/feedback":
                 code, payload = _feedback(body)
+            elif parsed.path == "/relational":
+                code, payload = _relational_post(body)
             elif parsed.path == "/anneal":
                 code, payload = 200, world_model.annealing_cycle()
             elif parsed.path == "/slm":

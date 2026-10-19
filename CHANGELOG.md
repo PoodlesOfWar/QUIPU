@@ -4,6 +4,18 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.60.0] - 2026-10-19
+
+### Added
+- **Work from hidden degrees of freedom** (`src/quipu/qpsi/hidden_work.py`), from Muruga, Ginot, Loos, …, Bechinger, *The extraction of work from hidden degrees of freedom*, Nature Physics (2026), doi:10.1038/s41567-026-03442-w (data and code doi:10.5281/zenodo.19881972, CC BY 4.0). A colloid in a viscoelastic fluid measured twice: the second measurement reaches the hidden network that one measurement cannot, and in state |10⟩ the trap extracts up to three times the energy the observable stored.
+  - The setup and findings are recorded with the source (`SOURCE`, `PUBLISHED`).
+  - Bounds: `information_bound` (eq. 1), `markov_energetic_bound` (κ/2)⟨X⟩² (eq. 9), `translation_work` for any rigid-translation protocol, `best_jump`.
+  - `memory_order_parameter` / `memory_scan`: the paper's Φ(δt) (eq. 6) for any evenly sampled signal, with a shuffled no-memory null and a z score; `second_measurement_information`; `coupled_trace`, the paper's minimal model.
+  - Validated on the paper's Raw_Data (9 h, 3.24 million frames; `bench/validate_hidden_work.py`, numpy + h5py): Φ peaks at δt = 1 s as published and is gone at 200 s; |10⟩ and |11⟩ above, |01⟩ below, |00⟩ near 0; in |10⟩ the energy rises from 0.34 to 0.68 k_BT, past equilibrium, as energy flows back from the network (`VALIDATION`).
+  - Writes only `brain_kv["entirety:hidden_work"]` (`--record`); input to no gate. 9 new tests.
+  - The Fleet Harness plan `hidden-memory` applies Φ(δt) to the fleet's probe response times.
+- **`POST /relational`** `{source, relational}` keeps a relational record the way `meta.relational` on `/observe` does, but without text: nothing reaches the mesh corpus, the per-source stats or the world model. It is for records a coordinator synthesises from other sources' work (the Fleet Harness writes its plan outcomes as `hubcore`), which are generated and so are shared through `GET /relational` without being learned. It is a mutating route behind the edge (signed like `/observe`). 3 new tests (`tests/test_relational_post.py`).
+
 ## [0.59.0] - 2026-10-19
 
 ### Added
