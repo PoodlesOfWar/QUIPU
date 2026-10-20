@@ -315,6 +315,7 @@ def test_refinement_is_the_operators_switch_and_runs_under_the_step_lock(monkeyp
         seen["max_tools"] = max_tools
         return {"actions": ["no_action"]}
     monkeypatch.setattr(sra, "run_strategy", fake)
+    monkeypatch.setattr(ES, "ensure_dst_index", lambda: True)
     monkeypatch.setenv("QUIPU_REFINEMENT_MAX_TOOLS", "3")
     assert ES.refinement() == {"actions": ["no_action"]}
     assert seen == {"locked": True, "max_tools": 3}
@@ -390,3 +391,29 @@ def test_running_as_a_module_reports_from_the_copy_the_observer_reads():
         except SystemExit as exc:
             assert exc.code == 0
     assert m.called
+
+
+def test_the_dst_index_turns_the_centrality_lookup_from_a_scan_into_a_search(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from src.quipu import mesh_slm
+    db = tmp_path / "b.sqlite"
+    cn0 = sqlite3.connect(db)
+    cn0.execute("CREATE TABLE mesh_slm_quipu(src INTEGER, dst INTEGER, weight REAL, PRIMARY KEY(src, dst))")
+    cn0.execute("CREATE INDEX idx_mesh_slm_quipu_src ON mesh_slm_quipu(src)")
+    cn0.commit()
+    plan = lambda c: " ".join(str(r[-1]) for r in c.execute("EXPLAIN QUERY PLAN SELECT src FROM mesh_slm_quipu WHERE dst=1"))
+    assert "SCAN" in plan(cn0)
+    cn0.close()
+    @contextmanager
+    def _conn():
+        c = sqlite3.connect(db)
+        try:
+            yield c
+            c.commit()
+        finally:
+            c.close()
+    monkeypatch.setattr(mesh_slm, "_conn", _conn)
+    monkeypatch.setattr(ES, "_DST_INDEX_READY", False)
+    assert ES.ensure_dst_index() and ES.ensure_dst_index()
+    cn1 = sqlite3.connect(db)
+    assert "idx_mesh_slm_quipu_dst" in plan(cn1) and "SCAN" not in plan(cn1)

@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.61.2] - 2026-10-20
+
+### Fixed
+- Forge rounds took over an hour on the live brain: `mesh_slm_quipu` had no index on `dst`, and the centrality score looks every neighbour up by `dst`. The refinement loop now creates `idx_mesh_slm_quipu_dst` once before its first cycle (`mesh_slm.py` unedited).
+
 ## [0.61.1] - 2026-10-20
 
 ### Added

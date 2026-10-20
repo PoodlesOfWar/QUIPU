@@ -152,10 +152,34 @@ def pulse() -> dict:
         return self_organising.pulse(route=True, max_seconds=_f("QUIPU_PULSE_MAX_SECONDS", 0.0) or 0.0)
 
 
+_DST_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_mesh_slm_quipu_dst ON mesh_slm_quipu(dst)"
+_DST_INDEX_READY = False
+
+
+def ensure_dst_index() -> bool:
+    """mesh_slm_quipu is indexed on src only.  concept_resonance's centrality
+    (mesh_slm._concept_centrality) looks every neighbour up by ``dst=?`` too,
+    which without this index is a full scan of the edge table per neighbour:
+    on the live brain (793k edges) one forge-round cluster took > 90 s, and a
+    round scores 40.  Created once, here, so mesh_slm.py stays unedited."""
+    global _DST_INDEX_READY
+    if _DST_INDEX_READY:
+        return True
+    from . import mesh_slm
+    with mesh_slm._conn() as cn:
+        cn.execute(_DST_INDEX_SQL)
+    _DST_INDEX_READY = True
+    return True
+
+
 def refinement() -> dict:
     """Ring 5: one systemic refinement cycle, under the step lock (it writes the brain)."""
     from . import systemic_refinement_agent as sra
     with _STEP_LOCK:
+        try:
+            ensure_dst_index()
+        except Exception as exc:                       # the cycle still runs, only slower
+            _LOG.warning("[entirety] dst index not created: %s", exc)
         return sra.run_strategy(max_tools=int(_f("QUIPU_REFINEMENT_MAX_TOOLS", 2.0)))
 
 

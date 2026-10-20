@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.61.1"
+__version__ = "0.61.2"
 __release__ = (
     "Work from hidden degrees of freedom (Muruga et al. Nature Physics 2026), POST /relational, and deepen-phase shear coupling across axis rADAM states."
 )
 __build_date__ = "2026-10-19"
 
 PHASES = {
+    "0.61.2": "refinement loop creates idx_mesh_slm_quipu_dst once before its first cycle. mesh_slm_quipu was indexed on src only; _concept_centrality looks each neighbour up by dst=? as well, a full scan of 793k edges per neighbour on the live brain, so one forge-round cluster took > 90 s and a round scores 40 (the first 0.61.0 cycle held the step lock for 10+ min). mesh_slm.py unedited.",
     "0.61.1": "observer: GET /the_other returns entirety:the_other as last published (read-only), so services outside the container (the Herald) read the stored reading instead of their own store.",
     "0.61.0": "entirety_service gains a refinement loop: systemic_refinement_agent.run_strategy every QUIPU_REFINEMENT_INTERVAL_S (default 1800) when QUIPU_REFINEMENT=1, under the step lock, max tools QUIPU_REFINEMENT_MAX_TOOLS (default 2). Before this the Ring 5 cycle ran only inside corpus_ingest with refinement on, which the pulse leaves off, so entirety:the_other (the shared understanding every ring reads, incl. the forge's 52 Hz gate and the digest) was last written 2026-10-07 at 48.31 while the live computation read 91.46 on 2026-10-20. New ACRE specialists stay held at gate 6 (specialist_gate). 1 new test.",
     "0.60.0": "Work from hidden degrees of freedom (Muruga, Ginot, Loos, ..., Bechinger, Nature Physics 2026, doi:10.1038/s41567-026-03442-w; data doi:10.5281/zenodo.19881972, CC BY 4.0) and POST /relational. qpsi/hidden_work.py records setup and findings; implements information bound (eq. 1), Markovian energetic bound (kappa/2)<X>^2 (eq. 9), rigid-translation work, memory order parameter Phi(delta t) (eq. 6) across regimes (peaking at delta t = 1.0 s), and second-measurement information. Validated on Raw_Data (9 h, 3.24M frames). Writes only entirety:hidden_work. POST /relational keeps relational records for known sources without text. 12 new tests.",
