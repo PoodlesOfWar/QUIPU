@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.61.0] - 2026-10-20
+
+### Added
+- `entirety_service` refinement loop: `systemic_refinement_agent.run_strategy` every `QUIPU_REFINEMENT_INTERVAL_S` (default 1800 s) when `QUIPU_REFINEMENT=1`, under the step lock, at most `QUIPU_REFINEMENT_MAX_TOOLS` (default 2) tools per forge round. It publishes `entirety:the_other`, runs ACRE observation and emergence (new specialists still held at gate 6), and one bounded forge round.
+
+### Fixed
+- `entirety:the_other` went stale: the refinement cycle ran only from `corpus_ingest` with refinement on, which the routed pulse leaves off. Last write 2026-10-07 (48.31 Hz) while the live computation read 91.46 Hz on 2026-10-20.
+
 ## [0.60.0] - 2026-10-19
 
 ### Added

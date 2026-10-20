@@ -291,6 +291,35 @@ def test_the_pulse_is_the_operators_switch(monkeypatch):
     assert not ES.settings()["pulse_route"]
 
 
+def test_refinement_is_the_operators_switch_and_runs_under_the_step_lock(monkeypatch):
+    monkeypatch.setenv("QUIPU_EXPANSION_INTERVAL_S", "3600")
+    monkeypatch.setenv("QUIPU_DOC_ANNEAL_MINUTES", "600")
+    monkeypatch.setattr(ES, "expansion_step", lambda: {})
+    monkeypatch.setattr(ES, "doc_annealing", lambda: {})
+    monkeypatch.delenv("QUIPU_REFINEMENT", raising=False)
+    stop = threading.Event()
+    names = [t.name for t in ES.start_background(stop)]
+    stop.set()
+    assert "entirety-refinement" not in names and "disabled" in ES.status()["loops"]["refinement"]
+    monkeypatch.setenv("QUIPU_REFINEMENT", "1")
+    monkeypatch.setenv("QUIPU_REFINEMENT_INTERVAL_S", "3600")
+    stop2 = threading.Event()
+    names = [t.name for t in ES.start_background(stop2)]
+    stop2.set()
+    assert "entirety-refinement" in names and ES.settings()["refinement_interval_s"] == 3600.0
+    # the cycle runs under the step lock and passes the operator's tool cap
+    from src.quipu import systemic_refinement_agent as sra
+    seen = {}
+    def fake(max_tools):
+        seen["locked"] = ES._STEP_LOCK.locked()
+        seen["max_tools"] = max_tools
+        return {"actions": ["no_action"]}
+    monkeypatch.setattr(sra, "run_strategy", fake)
+    monkeypatch.setenv("QUIPU_REFINEMENT_MAX_TOOLS", "3")
+    assert ES.refinement() == {"actions": ["no_action"]}
+    assert seen == {"locked": True, "max_tools": 3}
+
+
 # ---------------------------------------------------------------------------
 # Migration
 # ---------------------------------------------------------------------------

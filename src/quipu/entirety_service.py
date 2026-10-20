@@ -28,6 +28,15 @@ host (the ingest pulse, the self-organising loop, the gates; 4,190 tokens and
                   takes the new knowledge (divine_blessing mirror update); a new
                   edge is not created; a new ACRE specialist is held at gate 6
                   (qpsi.specialist_gate) until both parties attest.
+    refinement    every QUIPU_REFINEMENT_INTERVAL_S when QUIPU_REFINEMENT=1: the
+                  Ring 5 cycle (systemic_refinement_agent.run_strategy) --
+                  publish the shared understanding of the Other
+                  (entirety:the_other, which the forge's 52 Hz gate and the
+                  digest read), ACRE observation and emergence (new specialists
+                  still held at gate 6 by qpsi.specialist_gate), one bounded
+                  forge round (QUIPU_REFINEMENT_MAX_TOOLS).  Before v0.61.0 it
+                  ran only inside corpus_ingest with refinement on, which the
+                  pulse leaves off, so entirety:the_other went stale.
     lambda        every QUIPU_LAMBDA_INTERVAL_S when QUIPU_LAMBDA_TOKENS=1: the
                   Monte Carlo Lagrangian λ tokens over the Essay's planes
                   (shadow_tokens): the Internal Marketplace's clusters priced
@@ -143,6 +152,13 @@ def pulse() -> dict:
         return self_organising.pulse(route=True, max_seconds=_f("QUIPU_PULSE_MAX_SECONDS", 0.0) or 0.0)
 
 
+def refinement() -> dict:
+    """Ring 5: one systemic refinement cycle, under the step lock (it writes the brain)."""
+    from . import systemic_refinement_agent as sra
+    with _STEP_LOCK:
+        return sra.run_strategy(max_tools=int(_f("QUIPU_REFINEMENT_MAX_TOOLS", 2.0)))
+
+
 def mirror() -> dict:
     """The mirror aspect: knowledge acquisition with the gates on (see module doc)."""
     from . import mesh_slm, divine_blessing
@@ -198,6 +214,8 @@ def settings() -> dict:
         "doc_anneal_minutes": _f("QUIPU_DOC_ANNEAL_MINUTES", 30.0),
         "mirror_update": os.environ.get("QUIPU_MIRROR_UPDATE", "0").strip() == "1",
         "mirror_interval_s": _f("QUIPU_MIRROR_INTERVAL_S", 60.0),
+        "refinement": os.environ.get("QUIPU_REFINEMENT", "0").strip() == "1",
+        "refinement_interval_s": _f("QUIPU_REFINEMENT_INTERVAL_S", 1800.0),
         "lambda_tokens": os.environ.get("QUIPU_LAMBDA_TOKENS", "0").strip() == "1",
         "lambda_interval_s": _f("QUIPU_LAMBDA_INTERVAL_S", 1800.0),
         "self_organising": os.environ.get("QUIPU_SELF_ORGANISING", "0").strip() == "1",
@@ -244,6 +262,10 @@ def start_background(stop: threading.Event | None = None) -> list[threading.Thre
         plan.append(("mirror", cfg["mirror_interval_s"], mirror, 45.0))
     else:
         _record("mirror", disabled="QUIPU_MIRROR_UPDATE is not 1 (the operator's switch)")
+    if cfg["refinement"]:
+        plan.append(("refinement", cfg["refinement_interval_s"], refinement, 75.0))
+    else:
+        _record("refinement", disabled="QUIPU_REFINEMENT is not 1 (the operator's switch)")
     if cfg["lambda_tokens"]:
         plan.append(("lambda", cfg["lambda_interval_s"], lambda_tokens, 120.0))
     else:
