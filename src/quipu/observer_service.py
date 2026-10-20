@@ -766,6 +766,11 @@ class ObserverHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/lambda":
                 from . import shadow_tokens
                 self._send_json(200, shadow_tokens.latest())
+            elif parsed.path == "/the_other":
+                # The shared understanding of the Other as last published by the
+                # refinement cycle (read-only): what the forge's 52 Hz gate reads.
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest

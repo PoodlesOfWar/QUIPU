@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.61.1] - 2026-10-20
+
+### Added
+- Observer `GET /the_other`: `entirety:the_other` as last published, read-only.
+
 ## [0.61.0] - 2026-10-20
 
 ### Added

@@ -65,3 +65,20 @@ def test_observe_does_not_build_the_full_state_summary():
 
     code = [ln.split("#", 1)[0] for ln in inspect.getsource(O._observe).splitlines()]
     assert not any("state_summary(" in ln for ln in code)
+
+
+def test_the_other_route_returns_the_published_record(monkeypatch):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from src.quipu import brain_kv
+    rec = {"shared_hz": 91.46, "resonance": 0.9146, "at": "2026-10-20T13:15:00+00:00"}
+    monkeypatch.setattr(brain_kv, "kv_get_json", lambda k, d=None: rec if k == "entirety:the_other" else d)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), O.ObserverHandler)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/the_other", timeout=5) as r:
+            assert r.status == 200 and json.loads(r.read().decode()) == rec
+    finally:
+        srv.shutdown()
