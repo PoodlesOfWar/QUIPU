@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.62.0] - 2026-10-21
+
+### Added
+- `qpsi/rheology.py`: the CRAM axis array read as a viscoelastic material (storage/loss angle from the CAT amplitudes, edge weight 0.25 − β/2π, information in bits), published on every `pcm_cells.record` at `entirety:pcm:rheology:<instance>`; relative winding and crossings between axis phases.
+- Observer `GET /rheology`: the last published reading, read-only (the Herald's edge weighting reads it).
+- `pcm_cells`: per-axis `theta`, `shear_u`, `shear_g_im`, `shear_phi` in `entirety_pcm_log`; `entirety_pcm_ensemble` with the measured shear, λ_t = σ_u², Poisson weights over the seven axes and λ_STP.
+- `docs/RHEOLOGY_CRAM.md`: relationships and the live-log measurements.
+
 ## [0.61.2] - 2026-10-20
 
 ### Fixed

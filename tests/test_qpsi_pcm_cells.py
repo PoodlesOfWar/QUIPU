@@ -182,7 +182,7 @@ def test_step_array_drives_every_axis_from_currents_and_persists_only_its_keys()
     cn = sqlite3.connect(":memory:")
     pc.record(cn, arr, out2, now=1079.0)
     keys = [k for (k,) in cn.execute("SELECT key FROM brain_kv")]
-    assert keys == [pc.KV_PREFIX + "system_entirety"]
+    assert sorted(keys) == [pc.KV_PREFIX + "rheology:system_entirety", pc.KV_PREFIX + "system_entirety"]
     assert len(pc.rows(cn)) == len(pc.AXES)
     back = pc.load_array(cn)
     assert back.steps == 2 and back.cells["vision"].plus.x == pytest.approx(arr.cells["vision"].plus.x)
@@ -325,7 +325,8 @@ def test_deepen_passes_the_shear_and_records_it():
         pc.step_array(arr, currents={a: 1.0 for a in pc.AXES}, targets=tg, now=79.0 * k, cfg=CFG)
     out = pc.step_array(arr, currents={a: 1.0 for a in pc.AXES}, targets=tg, now=79.0 * 6, cfg=CFG, deepen=True)
     ens = out.pop("_ensemble")
-    assert set(ens) == {"u_bar", "dispersion", "psi", "counter_rotating"}
+    assert set(ens) == {"u_bar", "dispersion", "psi", "counter_rotating",
+                        "u", "lambda_poisson", "weights", "lambda_stp"}
     assert all(out[a]["shear"] is not None and "phi" in out[a]["shear"] for a in pc.AXES)
     off = pc.step_array(pc.CellArray(), currents={a: 1.0 for a in pc.AXES}, targets=tg, now=0.0, cfg=CFG,
                         deepen=True, shear=False)

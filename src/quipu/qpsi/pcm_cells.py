@@ -130,6 +130,7 @@ from .cat_residual import pstar
 ENV: str = "QUIPU_PCM_CELLS"
 KV_PREFIX: str = "entirety:pcm:"
 TABLE: str = "entirety_pcm_log"
+ENSEMBLE_TABLE: str = "entirety_pcm_ensemble"
 K_B: float = 8.617333262e-5          # eV/K
 
 HOLD, SET, RESET_SET, REFRESH = "hold", "set", "reset_set", "refresh"
@@ -841,6 +842,7 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
                   "x": round(dc.plus.x - dc.minus.x, 6),
                   "share": round(share, 6), "floquet": round(fl, 6),
                   "lr_eff": round(float(st.get("pcm_lr_eff", 0.0)), 6),
+                  "theta": round(float(st.get("theta", 0.0)), 6),
                   "shear": ({k: (round(v, 6) if isinstance(v, float) else v) for k, v in c_k.items()}
                             if c_k else None),
                   "decision": {"action": info["action"], "asked_dg": info["chi_before"],
@@ -850,9 +852,48 @@ def step_array(arr: CellArray, *, currents: Mapping[str, float], targets: Mappin
     arr.last_t = now
     arr.steps += 1
     if coupling:
+        u_by_axis = {a: coupling["axes"][a]["u"] for a in AXES}
+        lam = coupling["dispersion"] ** 2
+        w = poisson_weights(lam, len(AXES))
         out["_ensemble"] = {"u_bar": coupling["u_bar"], "dispersion": coupling["dispersion"],
-                            "psi": coupling["psi"], "counter_rotating": coupling["counter_rotating"]}
+                            "psi": coupling["psi"], "counter_rotating": coupling["counter_rotating"],
+                            "u": u_by_axis, "lambda_poisson": lam, "weights": w,
+                            "lambda_stp": stp_lambda(u_by_axis, w)}
     return out
+
+
+# ---------------------------------------------------------------------------
+# Poisson weighting of the axes by measured shear (v0.62.0)
+# ---------------------------------------------------------------------------
+#
+# Axis k (AXES order, k = 0..6) carries the Weyl frequency omega_k = 1 + k
+# (floquet_for_axis).  Its weight is Poisson in k with mean equal to the
+# measured shear variance: a Poisson law has mean = variance, so
+# lambda_t = sigma_u^2 from shear_coupling, truncated at k = 6 (the seventh
+# axis) and renormalised.  Small shear puts the weight on the base frequency;
+# larger shear spreads it up the Weyl ladder.  Sum_k w_k e^{i omega_k t} is
+# then the coherent-state phasor e^{it} exp(lambda (e^{it} - 1)) up to the
+# truncated tail (Glauber, Phys. Rev. 131, 2766 (1963)).
+#
+# lambda_STP is the fraction of Poisson-weighted step energy in the shear:
+# the perpendicular (noise) share of Semantic Tube Prediction's split
+# (Huang, LeCun & Balestriero, arXiv:2602.22617).
+
+def poisson_weights(lam: float, n: int = 7) -> list[float]:
+    """Poisson(k; lam) for k = 0..n-1, renormalised over the n axes."""
+    lam = max(0.0, float(lam))
+    raw = [lam ** k / math.factorial(k) for k in range(n)]
+    z = sum(raw) or 1.0
+    return [x / z for x in raw]
+
+
+def stp_lambda(u: Mapping[str, float], weights: Sequence[float], axes: Sequence[str] = None) -> float:
+    """sigma_w^2 / (u_bar_w^2 + sigma_w^2) over the Poisson-weighted axis velocities."""
+    axes = tuple(axes or AXES)
+    ub = sum(w * float(u.get(a, 0.0)) for w, a in zip(weights, axes))
+    var = sum(w * (float(u.get(a, 0.0)) - ub) ** 2 for w, a in zip(weights, axes))
+    den = ub * ub + var
+    return var / den if den > 0.0 else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -866,9 +907,15 @@ def ensure_tables(cn: sqlite3.Connection) -> None:
                "realised_dg REAL, pulses INTEGER, energy_j REAL, slope REAL, drift_next REAL, "
                "bar REAL, x REAL, pressure REAL, reason TEXT)")
     have = {r[1] for r in cn.execute(f"PRAGMA table_info({TABLE})")}
-    for col in ("expected", "chi", "eps"):
+    for col in ("expected", "chi", "eps", "theta", "shear_u", "shear_g_im", "shear_phi"):
         if col not in have:
             cn.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col} REAL")
+    # One row per deepen step that ran the shear coupling: the measured shear,
+    # the Poisson weights it sets, and lambda_STP (v0.62.0).
+    cn.execute(f"CREATE TABLE IF NOT EXISTS {ENSEMBLE_TABLE}("
+               "id INTEGER PRIMARY KEY AUTOINCREMENT, instance TEXT NOT NULL, at REAL NOT NULL, "
+               "step INTEGER NOT NULL, u_bar REAL, dispersion REAL, psi REAL, lambda_poisson REAL, "
+               "lambda_stp REAL, weights TEXT, u TEXT, counter_rotating TEXT)")
     cn.execute("CREATE TABLE IF NOT EXISTS brain_kv(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
 
 
@@ -898,12 +945,27 @@ def record(cn: sqlite3.Connection, arr: CellArray, result: Mapping[str, Mapping]
         if a.startswith("_"):
             continue
         d = r["decision"]
+        sh = r.get("shear") or {}
         cn.execute(f"INSERT INTO {TABLE}(instance, at, step, axis, action, asked_dg, realised_dg, pulses, "
-                   "energy_j, slope, drift_next, bar, x, pressure, reason, expected, chi, eps) "
-                   "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   "energy_j, slope, drift_next, bar, x, pressure, reason, expected, chi, eps, "
+                   "theta, shear_u, shear_g_im, shear_phi) "
+                   "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (instance, now, arr.steps, a, d["action"], d["asked_dg"], d["realised_dg"], d["pulses"],
                     d["energy_j"], d["slope"], d["drift_next"], d["bar"], r["x"], r["pressure"], d["reason"],
-                    r.get("expected"), r.get("chi"), r.get("eps")))
+                    r.get("expected"), r.get("chi"), r.get("eps"),
+                    r.get("theta"), sh.get("u"), sh.get("g_im"), sh.get("phi")))
+    ens = result.get("_ensemble")
+    if ens:
+        cn.execute(f"INSERT INTO {ENSEMBLE_TABLE}(instance, at, step, u_bar, dispersion, psi, lambda_poisson, "
+                   "lambda_stp, weights, u, counter_rotating) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                   (instance, now, arr.steps, ens.get("u_bar"), ens.get("dispersion"), ens.get("psi"),
+                    ens.get("lambda_poisson"), ens.get("lambda_stp"), json.dumps(ens.get("weights")),
+                    json.dumps(ens.get("u")), json.dumps(ens.get("counter_rotating"))))
+    try:
+        from . import rheology
+        rheology.publish(cn, arr, now=now, instance=instance)
+    except Exception:   # observability only: a failed reading never blocks the cells
+        pass
 
 
 def rows(cn: sqlite3.Connection, limit: int = 64, instance: str = "system_entirety") -> list[dict]:
@@ -919,4 +981,5 @@ __all__ = ["ENV", "KV_PREFIX", "TABLE", "ACTIONS", "HOLD", "SET", "RESET_SET", "
            "PcmConfig", "PcmCell", "Decision", "CellArray", "tau_crystallise", "dx_dt", "g_reset",
            "dg_reset_dt", "conductance", "dg_dx", "pressure_of", "conductance_of_pressure", "dT_dt",
            "c_th", "switched", "g_conducting", "age", "cool", "set_pulse", "reset_pulse", "dg_dpulse", "reach", "nominal_slope", "decide",
-           "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "axis_velocity", "shear_coupling", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows"]
+           "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "axis_velocity", "shear_coupling", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows",
+           "ENSEMBLE_TABLE", "poisson_weights", "stp_lambda"]

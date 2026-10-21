@@ -771,6 +771,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # refinement cycle (read-only): what the forge's 52 Hz gate reads.
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
+            elif parsed.path == "/rheology":
+                # The CRAM axis array read as a viscoelastic material, as last
+                # published by pcm_cells.record (read-only): what the Herald's
+                # edge weighting reads (qpsi/rheology.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {})
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest

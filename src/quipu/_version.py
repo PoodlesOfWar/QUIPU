@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.61.2"
+__version__ = "0.62.0"
 __release__ = (
-    "Work from hidden degrees of freedom (Muruga et al. Nature Physics 2026), POST /relational, and deepen-phase shear coupling across axis rADAM states."
+    "Rheology of the CRAM axis array (GET /rheology), Poisson weighting of the axes by measured shear, and shear/theta persistence in the cell log."
 )
-__build_date__ = "2026-10-19"
+__build_date__ = "2026-10-21"
 
 PHASES = {
+    "0.62.0": "qpsi/rheology.py reads the seven axis cells as a viscoelastic material: c_k = p_k e^{i theta_k}, beta = atan2(|Im C|, |Re C|), eta''/eta' = tan beta, loss angle pi/2 - beta, edge weight 0.25 - beta/2pi (0.125 = critical gel, Winter & Chambon 1986), bits = log2(|C|/eps_bar); held when |C| < 1e-18; optional Weyl twist acquisition residual (UEQGM v0.9.27). Published at entirety:pcm:rheology:<instance> on every pcm_cells.record and served at GET /rheology for the Herald. pcm_cells: per-axis theta/shear_u/shear_g_im/shear_phi columns, entirety_pcm_ensemble table (u_bar, dispersion, psi, lambda_t = sigma_u^2, Poisson weights over k = 0..6, lambda_STP), poisson_weights, stp_lambda. relative_winding/logged_winding between axis phases. docs/RHEOLOGY_CRAM.md. 12 new tests.",
     "0.61.2": "refinement loop creates idx_mesh_slm_quipu_dst once before its first cycle. mesh_slm_quipu was indexed on src only; _concept_centrality looks each neighbour up by dst=? as well, a full scan of 793k edges per neighbour on the live brain, so one forge-round cluster took > 90 s and a round scores 40 (the first 0.61.0 cycle held the step lock for 10+ min). mesh_slm.py unedited.",
     "0.61.1": "observer: GET /the_other returns entirety:the_other as last published (read-only), so services outside the container (the Herald) read the stored reading instead of their own store.",
     "0.61.0": "entirety_service gains a refinement loop: systemic_refinement_agent.run_strategy every QUIPU_REFINEMENT_INTERVAL_S (default 1800) when QUIPU_REFINEMENT=1, under the step lock, max tools QUIPU_REFINEMENT_MAX_TOOLS (default 2). Before this the Ring 5 cycle ran only inside corpus_ingest with refinement on, which the pulse leaves off, so entirety:the_other (the shared understanding every ring reads, incl. the forge's 52 Hz gate and the digest) was last written 2026-10-07 at 48.31 while the live computation read 91.46 on 2026-10-20. New ACRE specialists stay held at gate 6 (specialist_gate). 1 new test.",

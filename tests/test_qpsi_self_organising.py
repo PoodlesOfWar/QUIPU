@@ -403,7 +403,7 @@ def test_pcm_cells_follow_the_somn_step_and_persist_only_their_keys(isolated):
         arr = pc.load_array(cn, "system_entirety")
         assert arr.steps == 1 and len(pc.rows(cn)) == len(pc.AXES)
         keys = [k for (k,) in cn.execute("SELECT key FROM brain_kv WHERE key LIKE 'entirety:pcm:%'")]
-        assert keys == [pc.KV_PREFIX + "system_entirety"]
+        assert sorted(keys) == [pc.KV_PREFIX + "rheology:system_entirety", pc.KV_PREFIX + "system_entirety"]
     st = so.status()
     assert st["pcm"]["steps"] == 1 and "vision" in st["pcm"]["cells"]
     so.disable()
