@@ -249,6 +249,7 @@ _SPECIALIST_BIASES: dict[str, list[float]] = {
     "materials_engineering_specialist":  [0.05, 0.08, 0.30, 0.22, 0.10, 0.08, 0.04],  # smell/body neighbour of emergent_smell_*
     "quantum_physics_specialist":        [0.05, 0.05, 0.12, 0.05, 0.26, 0.24, 0.10],
     "complex_systems_specialist":        [0.10, 0.05, 0.05, 0.05, 0.15, 0.22, 0.24],
+    "relational_branding_specialist":    [0.08, 0.04, 0.02, 0.06, 0.22, 0.34, 0.24],
 }
 _NUMERIC_TOKENS = {"0","1","2","3","4","5","6","7","8","9",".",",","eoq","sqrt","demand","stock","safety","lead","hold","cost"}
 _OPT_BOOST = 0.35  # extra score for optimization-relevant tokens when in specialist mode

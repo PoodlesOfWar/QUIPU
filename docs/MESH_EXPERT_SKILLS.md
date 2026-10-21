@@ -26,6 +26,7 @@ self-model specialist born from the mesh reading its own architecture docs):
 - `materials_engineering_specialist` — smell / body (materials, chemistry)
 - `quantum_physics_specialist`       — brain / perception (abstract)
 - `complex_systems_specialist`       — perception / entirety (holistic)
+- `relational_branding_specialist`   — perception / entirety / brain (relational marketing, social perception, interactive world-building & learning acquisition from community feedback)
 - `emergent_*`                        — ACRE, from System Entirety research
 
 All specialists are always available. New ones are added by extending the biases
