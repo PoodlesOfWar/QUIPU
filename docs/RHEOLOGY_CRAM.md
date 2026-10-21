@@ -96,3 +96,29 @@ A threshold above 1.0 exceeds the cell's full range: no residual would ever
 be released. Incommensurate graphite contacts are superlubric (Dienwiebel et
 al., PRL 92, 126101 (2004)), so a twisted moiré contact sits on the last row
 unless pinned. The threshold is not wired into `ef_step`.
+
+## v0.63.0: model-sized terminal pulse
+
+The write-log overshoot (R = 1.383 on single-pulse writes) is quantization: a
+write starts at |χ| ≥ ε ≈ 0.010 but one full SET pulse moves a mid-range cell
+0.024–0.036. `set_toward` now sizes the pulse that would pass the target by
+bisection on a probe copy, so its predicted step equals what remains.
+
+Linear width scaling does not work in this model: heating takes τ_th = 10 ns
+and crystallisation is Arrhenius (E_a = 2 eV). Asked fraction → realised/asked
+with a linear width: 0.3 → 0.003, 0.5 → 0.10–0.12, 0.7 → 0.40–0.45,
+0.9 → 0.80–0.84. Solved widths are 35–48 ns.
+
+Replay of the live log's expected trajectories (4,928 rows, fresh pairs,
+Floquet factor 1 in both arms):
+
+| | Full pulses | Sized terminal pulse |
+|---|---|---|
+| Realised/asked, all writes | 1.066 | 0.990 |
+| 1-pulse writes | 1.378 | 0.999 |
+| 2–15-pulse writes | 0.986–1.097 | 0.997–1.000 |
+| 16–17-pulse writes (cap) | 0.776–0.833 | 0.855–0.880 |
+| Mean \|χ\| | 0.0082 | 0.0020 |
+| Pulses / energy | 11,441 / 35.5 nJ | 12,748 / 36.7 nJ |
+
+The rolling α_k = −ln R_k over 32 writes stays an audit metric only.

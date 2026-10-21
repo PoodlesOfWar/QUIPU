@@ -359,10 +359,86 @@ def age(cell: PcmCell, dt: float, cfg: PcmConfig) -> None:
     cool(cell, dt, cfg)
 
 
-def set_pulse(cell: PcmCell, cfg: PcmConfig, floquet: float = 1.0, current: float | None = None) -> float:
-    e = _integrate_pulse(cell, current if current is not None else cfg.i_set, cfg.t_set, cfg, floquet)
+def set_pulse(cell: PcmCell, cfg: PcmConfig, floquet: float = 1.0, current: float | None = None,
+              duration: float | None = None) -> float:
+    e = _integrate_pulse(cell, current if current is not None else cfg.i_set,
+                         cfg.t_set if duration is None else duration, cfg, floquet)
     cool(cell, 10.0 * cfg.tau_th, cfg)
     return e
+
+
+# ---------------------------------------------------------------------------
+# Program-and-verify with a model-sized terminal pulse (v0.63.0)
+# ---------------------------------------------------------------------------
+#
+# A write starts once |chi| clears eps (~0.010) but one full SET pulse moves a
+# mid-range cell 0.024-0.036, so single-pulse writes realised 1.383x what was
+# asked on the live log (1,540 of 3,521 writes, 2026-10-21).  The last pulse of
+# a write is therefore sized: when a full pulse would pass the target, its width
+# is solved on a probe copy of the cell so the predicted step equals what
+# remains.  Linear scaling (width ∝ remaining/full) does not work in this model:
+# heating takes tau_th = 10 ns and crystallisation is Arrhenius (E_a = 2 eV),
+# so a 15 ns pulse realises 0.3% of a 30% request and a 25 ns pulse ~11% of a
+# 50% one; the solved widths are 35-48 ns.  Variable-width program-and-verify
+# is the standard multilevel-PCM scheme.  QUIPU_PCM_PWM=0 restores full pulses.
+
+PWM_ENV: str = "QUIPU_PCM_PWM"
+
+
+def pwm_enabled() -> bool:
+    return os.environ.get(PWM_ENV, "1").strip() != "0"
+
+
+def pulse_dg(cell: PcmCell, cfg: PcmConfig, floquet: float = 1.0, duration: float | None = None) -> float:
+    """ΔG one SET pulse of this width would give, from a probe copy."""
+    probe = replace(cell)
+    g0 = conductance(probe, cfg)
+    set_pulse(probe, cfg, floquet, duration=duration)
+    return conductance(probe, cfg) - g0
+
+
+def pulse_width_for(cell: PcmCell, dg_want: float, cfg: PcmConfig, floquet: float = 1.0,
+                    iters: int = 24) -> float:
+    """The SET pulse width whose predicted ΔG equals dg_want (bisection on probes;
+    ΔG is monotone in width).  Capped at t_set."""
+    lo, hi = 0.0, cfg.t_set
+    if dg_want <= 0.0:
+        return 0.0
+    if pulse_dg(cell, cfg, floquet, hi) <= dg_want:
+        return hi
+    for _ in range(iters):
+        mid = 0.5 * (lo + hi)
+        if pulse_dg(cell, cfg, floquet, mid) < dg_want:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def set_toward(cell: PcmCell, g_want: float, cfg: PcmConfig, floquet: float = 1.0,
+               max_pulses: int | None = None, pwm: bool | None = None) -> tuple[float, int]:
+    """SET pulses until the cell is within read noise of g_want.  With PWM the
+    pulse that would pass the target is shortened to land on it, and is the last.
+    Returns (energy, pulses)."""
+    lo, hi = g_bounds(cfg)
+    noise = cfg.read_noise * (hi - lo)
+    max_pulses = cfg.max_set_pulses if max_pulses is None else max_pulses
+    pwm = pwm_enabled() if pwm is None else pwm
+    # Full pulses can only stop within read noise of the target; a sized pulse can
+    # land on it, so with PWM the loop runs until a tenth of the noise remains.
+    stop = 0.1 * noise if pwm else noise
+    energy, pulses = 0.0, 0
+    while pulses < max_pulses and conductance(cell, cfg) < g_want - stop:
+        width = cfg.t_set
+        if pwm:
+            rem = g_want - conductance(cell, cfg)
+            if pulse_dg(cell, cfg, floquet) > rem:
+                width = pulse_width_for(cell, rem, cfg, floquet)
+        energy += set_pulse(cell, cfg, floquet, duration=width)
+        pulses += 1
+        if width < cfg.t_set:
+            break                                   # the sized pulse is the terminal one
+    return energy, pulses
 
 
 def reset_pulse(cell: PcmCell, cfg: PcmConfig) -> float:
@@ -454,10 +530,7 @@ def decide(cell: PcmCell, p_target: float, cfg: PcmConfig, *, floquet: float = 1
     # REFRESH: target unchanged, drift carried the cell more than one slope away.
     g_prog = conductance_of_pressure(cell.target_x, cfg)
     if abs(dg) <= tol and (g_prog - g_now) > max(slope, noise) and cell.x > 0.0:
-        pulses, energy = 0, 0.0
-        while pulses < cfg.max_set_pulses and conductance(cell, cfg) < g_prog - noise:
-            energy += set_pulse(cell, cfg, floquet)
-            pulses += 1
+        energy, pulses = set_toward(cell, g_prog, cfg, floquet)
         if pulses:
             return finish(REFRESH, conductance(cell, cfg) - g_now, pulses, energy, None,
                           "drift exceeded one programming slope; re-SET toward the programmed target")
@@ -469,10 +542,7 @@ def decide(cell: PcmCell, p_target: float, cfg: PcmConfig, *, floquet: float = 1
     if dg > 0.0:
         if slope <= 0.0:
             return finish(HOLD, 0.0, 0, 0.0, None, "cell saturated: no SET slope left")
-        energy, pulses = 0.0, 0
-        while pulses < cfg.max_set_pulses and conductance(cell, cfg) < g_want - noise:
-            energy += set_pulse(cell, cfg, floquet)
-            pulses += 1
+        energy, pulses = set_toward(cell, g_want, cfg, floquet)
         cell.target_x = pressure_of(cell, cfg)          # the programmed state is what was reached
         return finish(SET, conductance(cell, cfg) - g_now, pulses, energy, None,
                       f"{pulses} partial-SET pulse(s) at slope {slope:.3g}")
@@ -494,10 +564,9 @@ def decide(cell: PcmCell, p_target: float, cfg: PcmConfig, *, floquet: float = 1
         return finish(HOLD, 0.0, 0, 0.0, bar,
                       f"asked decrease {abs(dg):.3g} does not clear the RESET bar p*={bar:.3f} (evidence {evidence:.3f})")
     energy = reset_pulse(cell, cfg)
-    pulses = 1
-    while pulses - 1 < cfg.max_set_pulses and conductance(cell, cfg) < g_want - noise:
-        energy += set_pulse(cell, cfg, floquet)
-        pulses += 1
+    e_set, n_set = set_toward(cell, g_want, cfg, floquet)
+    energy += e_set
+    pulses = 1 + n_set
     cell.target_x = pressure_of(cell, cfg)          # the programmed state is what was reached
     return finish(RESET_SET, conductance(cell, cfg) - g_now, pulses, energy, bar,
                   f"melt-quench then {pulses - 1} SET pulse(s); bar p*={bar:.3f}")
@@ -638,12 +707,7 @@ def refresh_pair(dc: DiffCell, cfg: PcmConfig, floquet: float = 1.0) -> float:
     energy = reset_pulse(dc.plus, cfg) + reset_pulse(dc.minus, cfg)
     side = dc.plus if net >= 0.0 else dc.minus
     target = conductance_of_pressure(abs(net), cfg)
-    lo, hi = g_bounds(cfg)
-    noise = cfg.read_noise * (hi - lo)
-    for _ in range(4 * cfg.max_set_pulses):
-        if conductance(side, cfg) >= target - noise:
-            break
-        energy += set_pulse(side, cfg, floquet)
+    energy += set_toward(side, target, cfg, floquet, max_pulses=4 * cfg.max_set_pulses)[0]
     for c in (dc.plus, dc.minus):
         c.target_x = pressure_of(c, cfg)
         c.last_action = REFRESH
@@ -663,6 +727,18 @@ def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, g
     state["pressure"] = min(1.0, max(0.0, dc.expected))
     radam_kwargs.setdefault("beta1", PCM_BETA1)
     dc.expected = radam_step(state, grad_real, grad_imag, lr=lr, **radam_kwargs)
+    info = program_pair(dc, cfg, floquet)
+    state["pressure"] = dc.expected
+    state["pcm_chi"] = info["chi"]
+    state["pcm_held"] = info["held"]
+    state["pcm_lr_eff"] = lr
+    state["pcm_asked"] = dc.expected
+    return min(1.0, max(0.0, info["held"])), info
+
+
+def program_pair(dc: DiffCell, cfg: PcmConfig, floquet: float = 1.0) -> dict:
+    """Error-feedback programming of the differential pair toward dc.expected
+    (the part of ef_step after the rADAM move).  Mutates dc; returns info."""
     held0 = dc.held(cfg)
     chi0 = dc.expected - held0
     side = dc.plus if chi0 > 0.0 else dc.minus
@@ -691,17 +767,11 @@ def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, g
                 reason = d.reason
     held1 = dc.held(cfg)
     chi1 = dc.expected - held1
-    state["pressure"] = dc.expected
-    state["pcm_chi"] = chi1
-    state["pcm_held"] = held1
-    state["pcm_lr_eff"] = lr
-    state["pcm_asked"] = dc.expected
-    info = {"action": action, "pulses": pulses, "energy_j": energy, "eps": eps,
+    return {"action": action, "pulses": pulses, "energy_j": energy, "eps": eps,
             "bits_per_write": math.log2(1.0 / max(eps, 1e-12)),
             "expected": dc.expected, "held": held1, "chi_before": chi0, "chi": chi1,
             "realised": held1 - held0, "plus_x": dc.plus.x, "minus_x": dc.minus.x,
             "refreshes": dc.refreshes, "reason": reason}
-    return min(1.0, max(0.0, held1)), info
 
 
 
@@ -989,4 +1059,5 @@ __all__ = ["ENV", "KV_PREFIX", "TABLE", "ACTIONS", "HOLD", "SET", "RESET_SET", "
            "dg_reset_dt", "conductance", "dg_dx", "pressure_of", "conductance_of_pressure", "dT_dt",
            "c_th", "switched", "g_conducting", "age", "cool", "set_pulse", "reset_pulse", "dg_dpulse", "reach", "nominal_slope", "decide",
            "coupled_step", "resolution", "bits_per_write", "DiffCell", "refresh_pair", "ef_step", "axis_velocity", "shear_coupling", "floquet_for_axis", "step_array", "ensure_tables", "load_array", "record", "rows",
-           "ENSEMBLE_TABLE", "poisson_weights", "stp_lambda"]
+           "ENSEMBLE_TABLE", "poisson_weights", "stp_lambda",
+           "PCM_BETA1", "PWM_ENV", "pwm_enabled", "pulse_dg", "pulse_width_for", "set_toward", "program_pair"]

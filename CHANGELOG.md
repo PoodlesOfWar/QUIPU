@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.63.0] - 2026-10-21
+
+### Changed
+- `pcm_cells`: program-and-verify with a model-sized terminal SET pulse (`set_toward`, `pulse_width_for`, `QUIPU_PCM_PWM`, default on). Replay of the live log: overall realised/asked 1.066 → 0.990, single-pulse writes 1.378 → 0.999, mean |χ| 0.0082 → 0.0020, energy +3.3%.
+- `ef_step` programming split into `program_pair`.
+
 ## [0.62.1] - 2026-10-21
 
 ### Changed

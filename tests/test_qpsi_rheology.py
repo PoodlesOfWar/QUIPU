@@ -148,3 +148,46 @@ def test_cells_step_with_published_adam_beta1():
     pc.ef_step(st, dc, 0.5, cfg=CFG)
     assert st["m"] == pytest.approx((1.0 - pc.PCM_BETA1) * 0.5)
     assert pc.PCM_BETA1 == 0.9
+
+
+# ---------------------------------------------------------------------------
+# v0.63.0: model-sized terminal SET pulse
+# ---------------------------------------------------------------------------
+
+def _cell_at(x):
+    c = pc.PcmCell(t_amorph=CFG.drift_t0)
+    while c.x < x:
+        pc.set_pulse(c, CFG)
+    return c
+
+
+def test_linear_width_scaling_undershoots_and_solved_width_lands():
+    c = _cell_at(0.3)
+    full = pc.pulse_dg(c, CFG)
+    assert pc.pulse_dg(c, CFG, duration=0.3 * CFG.t_set) < 0.05 * 0.3 * full     # 15 ns barely heats
+    w = pc.pulse_width_for(c, 0.3 * full, CFG)
+    assert 0.6 * CFG.t_set < w < CFG.t_set
+    assert pc.pulse_dg(c, CFG, duration=w) == pytest.approx(0.3 * full, rel=1e-3)
+
+
+def test_terminal_pulse_removes_single_pulse_overshoot():
+    lo, hi = pc.g_bounds(CFG)
+    for x in (0.1, 0.4, 0.7):
+        base = _cell_at(x)
+        g0 = pc.conductance(base, CFG)
+        ask = 0.4 * pc.pulse_dg(base, CFG) + CFG.read_noise * (hi - lo)       # one pulse would overshoot
+        off, on = pc.replace(base), pc.replace(base)
+        pc.set_toward(off, g0 + ask, CFG, pwm=False)
+        pc.set_toward(on, g0 + ask, CFG, pwm=True)
+        r_off = (pc.conductance(off, CFG) - g0) / ask
+        r_on = (pc.conductance(on, CFG) - g0) / ask
+        assert r_off > 1.15 and r_on == pytest.approx(1.0, abs=1e-3)
+
+
+def test_pwm_switch_restores_full_pulses(monkeypatch):
+    monkeypatch.setenv("QUIPU_PCM_PWM", "0")
+    assert not pc.pwm_enabled()
+    c = _cell_at(0.3)
+    g0 = pc.conductance(c, CFG)
+    e, n = pc.set_toward(c, g0 + 1e-6 + 0.02 * (pc.g_bounds(CFG)[1] - pc.g_bounds(CFG)[0]), CFG)
+    assert n == 1 and e == pytest.approx(CFG.i_set ** 2 / CFG.g_on * CFG.t_set, rel=0.5)
