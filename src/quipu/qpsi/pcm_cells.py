@@ -131,6 +131,12 @@ ENV: str = "QUIPU_PCM_CELLS"
 KV_PREFIX: str = "entirety:pcm:"
 TABLE: str = "entirety_pcm_log"
 ENSEMBLE_TABLE: str = "entirety_pcm_ensemble"
+# First-moment decay for the axis cells' rADAM states: the published Adam
+# default (Kingma & Ba, "Adam: A Method for Stochastic Optimization", ICLR
+# 2015, arXiv:1412.6980, Algorithm 1: beta1 = 0.9, beta2 = 0.999).
+# radam_optimizer.DEFAULT_BETA1 stays 0.85 for the brain_body_signals path it
+# was matched to; the cells pass this one (v0.62.1).
+PCM_BETA1: float = 0.9
 K_B: float = 8.617333262e-5          # eV/K
 
 HOLD, SET, RESET_SET, REFRESH = "hold", "set", "reset_set", "refresh"
@@ -655,6 +661,7 @@ def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, g
     age(dc.minus, dt_since, cfg)
     # rADAM moves the expected (high-precision) location, at its own lr
     state["pressure"] = min(1.0, max(0.0, dc.expected))
+    radam_kwargs.setdefault("beta1", PCM_BETA1)
     dc.expected = radam_step(state, grad_real, grad_imag, lr=lr, **radam_kwargs)
     held0 = dc.held(cfg)
     chi0 = dc.expected - held0
@@ -735,11 +742,11 @@ def ef_step(state: MutableMapping[str, float], dc: DiffCell, grad_real: float, g
 
 def axis_velocity(state: Mapping[str, float]) -> float:
     """u = m̂/(√v̂ + ε) from a stored rADAM state (0 before its first step)."""
-    from ..radam_optimizer import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPS
+    from ..radam_optimizer import DEFAULT_BETA2, DEFAULT_EPS
     t = int(state.get("t", 0) or 0)
     if t <= 0:
         return 0.0
-    m_hat = float(state.get("m", 0.0)) / (1.0 - DEFAULT_BETA1 ** t)
+    m_hat = float(state.get("m", 0.0)) / (1.0 - PCM_BETA1 ** t)
     v_hat = float(state.get("v", 0.0)) / (1.0 - DEFAULT_BETA2 ** t)
     return m_hat / (math.sqrt(max(v_hat, 0.0)) + DEFAULT_EPS)
 

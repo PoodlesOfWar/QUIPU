@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.62.0"
+__version__ = "0.62.1"
 __release__ = (
     "Rheology of the CRAM axis array (GET /rheology), Poisson weighting of the axes by measured shear, and shear/theta persistence in the cell log."
 )
 __build_date__ = "2026-10-21"
 
 PHASES = {
+    "0.62.1": "Axis cells use beta1 = 0.9 (Kingma & Ba 2015, PCM_BETA1; DEFAULT_BETA1 unchanged for brain_body_signals). rheology: fractional order alpha = 2*delta_G/pi and loss factor sin(alpha*pi/2) in the reading (Mainardi 2010), g_ratio = |C| over its EMA baseline, viscoelastic_weyl_phase(k, g_ratio, alpha_W, alpha) = sqrt(pi(2k+1)) g_ratio alpha_W sin(alpha*pi/2) (alpha_W Bistritzer-MacDonald, an input), capstan_threshold(floor, mu, wrap) = floor*e^(mu*wrap), not wired into writes. 4 new tests.",
     "0.62.0": "qpsi/rheology.py reads the seven axis cells as a viscoelastic material: c_k = p_k e^{i theta_k}, beta = atan2(|Im C|, |Re C|), eta''/eta' = tan beta, loss angle pi/2 - beta, edge weight 0.25 - beta/2pi (0.125 = critical gel, Winter & Chambon 1986), bits = log2(|C|/eps_bar); held when |C| < 1e-18; optional Weyl twist acquisition residual (UEQGM v0.9.27). Published at entirety:pcm:rheology:<instance> on every pcm_cells.record and served at GET /rheology for the Herald. pcm_cells: per-axis theta/shear_u/shear_g_im/shear_phi columns, entirety_pcm_ensemble table (u_bar, dispersion, psi, lambda_t = sigma_u^2, Poisson weights over k = 0..6, lambda_STP), poisson_weights, stp_lambda. relative_winding/logged_winding between axis phases. docs/RHEOLOGY_CRAM.md. 12 new tests.",
     "0.61.2": "refinement loop creates idx_mesh_slm_quipu_dst once before its first cycle. mesh_slm_quipu was indexed on src only; _concept_centrality looks each neighbour up by dst=? as well, a full scan of 793k edges per neighbour on the live brain, so one forge-round cluster took > 90 s and a round scores 40 (the first 0.61.0 cycle held the step lock for 10+ min). mesh_slm.py unedited.",
     "0.61.1": "observer: GET /the_other returns entirety:the_other as last published (read-only), so services outside the container (the Herald) read the stored reading instead of their own store.",

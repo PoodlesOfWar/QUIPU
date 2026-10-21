@@ -279,11 +279,11 @@ def test_a_v057_single_cell_record_loads_as_the_plus_side():
 
 def _states(us, thetas=None):
     """rADAM states whose velocity m̂/√v̂ equals the given u (t=1: m̂ = m/(1-β1), v̂ = v/(1-β2))."""
-    from src.quipu.radam_optimizer import DEFAULT_BETA1, DEFAULT_BETA2
+    from src.quipu.radam_optimizer import DEFAULT_BETA2
     out = {}
     for i, (a, u) in enumerate(zip(pc.AXES, us)):
         v_hat = 0.04
-        out[a] = {"t": 1, "m": u * (0.2 + 1e-6) * (1 - DEFAULT_BETA1), "v": v_hat * (1 - DEFAULT_BETA2),
+        out[a] = {"t": 1, "m": u * (0.2 + 1e-6) * (1 - pc.PCM_BETA1), "v": v_hat * (1 - DEFAULT_BETA2),
                   "theta": (thetas[i] if thetas else 0.0)}
     return out
 

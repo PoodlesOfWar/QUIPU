@@ -56,3 +56,43 @@ of d through π). Winding classes on the torus: `STP_TORUS_QUIPU.md` §2.1.
   does not persist.
 - Current snapshot: σ_u² = λ_t = 0.0344, weights 0.966 / 0.033 / 0.0006 on
   k = 0, 1, 2; λ_STP = 0.037.
+
+## v0.62.1 additions
+
+**β₁ for the cells.** The axis cells' rADAM states use β₁ = 0.9, the published
+Adam default (Kingma & Ba, ICLR 2015, Algorithm 1). `radam_optimizer.DEFAULT_BETA1`
+stays 0.85 for the `brain_body_signals` path it was matched to. Perceptopoly's
+vendored copy (Herald cells) still uses 0.85.
+
+**Fractional order.** The reading reports α = 2δ_G/π, the order of a
+fractional Kelvin–Voigt element G₀[1 + (iωτ₀)^α] whose phase tends to απ/2
+(Mainardi 2010), and the loss factor sin(απ/2) = sin δ_G. This α is the order
+of a fractional dissipation operator; it is not the α of the exponential
+D(x,t) in UEQGM v0.9.27, which measured −0.031 from the write log.
+
+**Viscoelastic Weyl phase.** `viscoelastic_weyl_phase(k, g_ratio, α_W, α)` =
+√(π(2k+1)) · (|G₀|/G_ref) · α_W · sin(απ/2). The reading supplies α and
+g_ratio = |C|/⟨|C|⟩ (equilibrium-baseline reference, EMA with decay 0.999).
+α_W is the Bistritzer–MacDonald coupling w/(ħv_F k_θ) (PNAS 108, 12233
+(2011)) and needs a bilayer twist angle, which the cells do not have: it is an
+input. Two names collide here: the θ in α_W is the bilayer twist; the θ(x,t)
+of UEQGM's G* is the local twist sourced by φ_W = 2πΨ₄, the Newman–Penrose
+Weyl scalar from `tidal_weyl`, which is a different object from the Dirac
+velocity in α_W.
+
+**Capstan hold.** `capstan_threshold(floor, μ, Θ)` = floor · e^{μΘ}
+(Euler–Eytelwein). For the overhand knot (trefoil, crossing number 3) the
+supplied wraps are 2.5π loose, 3π geometric, 4π tight. With floor = ε_cell =
+0.01:
+
+| μ | 2.5π | 3π | 4π |
+|---|---|---|---|
+| 0.40 (cotton/camelid) | 0.231 | 0.434 | 1.524 |
+| 0.25 (synthetic) | 0.071 | 0.106 | 0.231 |
+| 0.12 (pinned nanoribbon) | 0.026 | 0.031 | 0.045 |
+| 0.005 (superlubric graphite) | 0.0104 | 0.0105 | 0.0106 |
+
+A threshold above 1.0 exceeds the cell's full range: no residual would ever
+be released. Incommensurate graphite contacts are superlubric (Dienwiebel et
+al., PRL 92, 126101 (2004)), so a twisted moiré contact sits on the last row
+unless pinned. The threshold is not wired into `ef_step`.

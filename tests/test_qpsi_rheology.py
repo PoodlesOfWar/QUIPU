@@ -115,3 +115,36 @@ def test_logged_winding_reads_theta_from_the_log():
         pc.record(cn, arr, out, now=79.0 * k)
     w = rh.logged_winding(cn, "vision", "touch")
     assert w["steps"] == 7
+
+
+# ---------------------------------------------------------------------------
+# v0.62.1: fractional order, viscoelastic Weyl phase, capstan hold, beta1
+# ---------------------------------------------------------------------------
+
+def test_fractional_order_from_loss_angle():
+    assert rh.fractional_order(math.pi / 4) == pytest.approx(0.5)           # the critical gel
+    assert rh.fractional_order(0.0) == 0.0 and rh.fractional_order(math.pi) == 1.0
+    r = rh.reading(_programmed(math.pi / 4), CFG)
+    assert r["fractional_order"] == pytest.approx(0.5)
+    assert r["loss_factor"] == pytest.approx(math.sin(math.pi / 4))
+    assert r["g_ratio"] == pytest.approx(1.0)                                # first reading is its own reference
+
+
+def test_viscoelastic_weyl_phase_is_dimensionless_product():
+    v = rh.viscoelastic_weyl_phase(1, 1.0, 0.586, 0.5)
+    assert v == pytest.approx(math.sqrt(3 * math.pi) * 0.586 * math.sin(math.pi / 4))
+    with pytest.raises(ValueError):
+        rh.viscoelastic_weyl_phase(-1, 1.0, 0.586, 0.5)
+
+
+def test_capstan_threshold_matches_euler_eytelwein():
+    assert rh.capstan_threshold(1.0, 0.40, 4 * math.pi) == pytest.approx(math.exp(0.4 * 4 * math.pi))
+    assert rh.capstan_threshold(0.01, 0.40, 4 * math.pi) > 1.0              # above the cell's full range
+
+
+def test_cells_step_with_published_adam_beta1():
+    st = {}
+    dc = pc.DiffCell()
+    pc.ef_step(st, dc, 0.5, cfg=CFG)
+    assert st["m"] == pytest.approx((1.0 - pc.PCM_BETA1) * 0.5)
+    assert pc.PCM_BETA1 == 0.9

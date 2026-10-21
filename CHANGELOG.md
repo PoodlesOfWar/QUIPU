@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.62.1] - 2026-10-21
+
+### Changed
+- Axis cells' rADAM states use β₁ = 0.9, the published Adam default (`PCM_BETA1`); `DEFAULT_BETA1` stays 0.85 elsewhere.
+
+### Added
+- `rheology`: fractional order and loss factor in the reading, `g_ratio`, `viscoelastic_weyl_phase`, `capstan_threshold` (computed, not wired into writes).
+
 ## [0.62.0] - 2026-10-21
 
 ### Added

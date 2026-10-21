@@ -58,6 +58,39 @@ KV_KEY: str = pc.KV_PREFIX + "rheology:"
 EPS0: float = 1e-18
 
 
+REF_DECAY: float = 0.999
+
+
+def fractional_order(loss_angle: float) -> float:
+    """Order α of a fractional Kelvin–Voigt element with this loss angle.
+
+    G*(ω) = G₀[1 + (iωτ₀)^α] has phase → απ/2 for ωτ₀ ≫ 1 (Mainardi,
+    Fractional Calculus and Waves in Linear Viscoelasticity, 2010), so
+    α = 2δ_G/π, in [0, 1] for a passive material.
+    """
+    return max(0.0, min(1.0, 2.0 * float(loss_angle) / math.pi))
+
+
+def viscoelastic_weyl_phase(k: int, g_ratio: float, alpha_w: float, order: float) -> float:
+    """δφ_Weyl^visco = √(π(2k+1)) · (|G₀|/G_ref) · α_W · sin(απ/2), dimensionless.
+
+    α_W is the Bistritzer–MacDonald coupling w/(ħ v_F k_θ) (PNAS 108, 12233
+    (2011)); α is the fractional order of the damping.  The twist angle in
+    α_W/θ cancels against the θ it multiplies.
+    """
+    if k < 0:
+        raise ValueError("branch k must be >= 0 for a passive material")
+    return math.sqrt(math.pi * (2 * k + 1)) * float(g_ratio) * float(alpha_w) * math.sin(float(order) * math.pi / 2.0)
+
+
+def capstan_threshold(floor: float, mu: float, wrap: float) -> float:
+    """Euler–Eytelwein hold: floor · e^{μΘ}.  For a knot, Θ is the total contact
+    wrap (overhand / trefoil, c = 3: 3π geometric, 4π tight).  Applied to a
+    cell, floor is ε_cell; a value above the cell's full range means no write
+    can ever release the residual."""
+    return float(floor) * math.exp(float(mu) * float(wrap))
+
+
 def axis_weights(axes: Sequence[str] = pc.AXES) -> list[float]:
     raw = [float(SENSE_WEIGHTS.get(a, 1.0 / 6.0)) for a in axes]
     z = sum(raw) or 1.0
@@ -83,7 +116,14 @@ def reading(arr: "pc.CellArray", cfg: Optional["pc.PcmConfig"] = None, *,
     held = mag < EPS0 and isinstance(prev, Mapping) and prev.get("beta") is not None
     beta = float(prev["beta"]) if held else math.atan2(abs(C.imag), abs(C.real))
     loss = 0.5 * math.pi - beta
+    # Equilibrium-modulus reference (Christensen): |C| against its own slow
+    # baseline, an EMA with Adam's second-moment decay (window ~1000 steps).
+    ref_prev = float(prev.get("magnitude_ref")) if isinstance(prev, Mapping) and prev.get("magnitude_ref") else 0.0
+    ref = mag if ref_prev <= 0.0 else REF_DECAY * ref_prev + (1.0 - REF_DECAY) * mag
+    order = fractional_order(loss)
     out = {"beta": beta, "loss_angle": loss, "edge_weight": 0.25 - beta / (2.0 * math.pi),
+           "fractional_order": order, "loss_factor": math.sin(order * math.pi / 2.0),
+           "magnitude_ref": ref, "g_ratio": (mag / ref) if ref > 0.0 else None,
            "eta_ratio": (math.tan(beta) if beta < 0.5 * math.pi - 1e-12 else None),
            "magnitude": mag, "re": C.real, "im": C.imag, "eps_bar": eps_bar,
            "bits": max(0.0, math.log2(mag / eps_bar)) if mag > 0.0 and eps_bar > 0.0 else 0.0,
@@ -140,4 +180,5 @@ def logged_winding(cn: sqlite3.Connection, a: str, b: str, *, instance: str = "s
     return relative_winding([r[0] for r in rows], [r[1] for r in rows])
 
 
-__all__ = ["KV_KEY", "EPS0", "axis_weights", "reading", "publish", "relative_winding", "logged_winding"]
+__all__ = ["KV_KEY", "EPS0", "REF_DECAY", "fractional_order", "viscoelastic_weyl_phase", "capstan_threshold",
+           "axis_weights", "reading", "publish", "relative_winding", "logged_winding"]
