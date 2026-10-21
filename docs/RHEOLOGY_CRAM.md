@@ -122,3 +122,27 @@ Floquet factor 1 in both arms):
 | Pulses / energy | 11,441 / 35.5 nJ | 12,748 / 36.7 nJ |
 
 The rolling α_k = −ln R_k over 32 writes stays an audit metric only.
+
+## v0.64.0: per-axis readings and the knot hold
+
+**Herald edges on the CAT axes** (Perceptopoly `herald_cram.NODE_AXIS`):
+
+| Axis | Nodes |
+|---|---|
+| vision | analog_cognition_waves |
+| touch | dynamic_localization, guarded_row_locks |
+| smell | non_markovian_memory |
+| body | companion_society_mesh, grand_exchange_market |
+| brain | topological_network_entropy, infodynamic_compression |
+| perception | wireguard_ed25519_gateway, gard_shard_reserve |
+| entirety | unitary_ledger_conservation, sqrt_minus_one_orthogonality, entropic_gravity_geometry |
+
+thermodynamic_erasure has no axis yet. An edge reads its endpoint's axis; an
+edge across two axes combines them by bits; bibliography-to-bibliography edges
+read the ensemble value. Per axis: β_k = atan2(|sin θ_k|, |cos θ_k|),
+w_r,k = 0.25 − β_k/2π, bits_k = log2(p_k/ε_k).
+
+**Knot hold.** On the observation record only. Each publish advances the
+relative winding W and crossings of all 21 axis pairs and records
+hold_factor = e^{μ·2π|W|}, hold_threshold = ε̄·hold_factor and would_freeze
+(threshold ≥ 1). μ = `QUIPU_KNOT_MU` (default 0.2). It is never applied to χ.

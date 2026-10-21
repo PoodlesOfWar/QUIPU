@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.64.0] - 2026-10-21
+
+### Added
+- `rheology`: per-axis readings for the Herald's edge-to-axis map; the knot hold on the observation record (pairwise relative winding, crossings, capstan factor and the threshold it would impose; `QUIPU_KNOT_MU`, default 0.2). The hold is never applied to χ.
+
 ## [0.63.0] - 2026-10-21
 
 ### Changed

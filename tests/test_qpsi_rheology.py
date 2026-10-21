@@ -191,3 +191,31 @@ def test_pwm_switch_restores_full_pulses(monkeypatch):
     g0 = pc.conductance(c, CFG)
     e, n = pc.set_toward(c, g0 + 1e-6 + 0.02 * (pc.g_bounds(CFG)[1] - pc.g_bounds(CFG)[0]), CFG)
     assert n == 1 and e == pytest.approx(CFG.i_set ** 2 / CFG.g_on * CFG.t_set, rel=0.5)
+
+
+# ---------------------------------------------------------------------------
+# v0.64.0: per-axis readings and the knot hold on the observation record
+# ---------------------------------------------------------------------------
+
+def test_axis_readings_follow_each_axis_phase():
+    arr = _programmed(0.0)
+    arr.radam["smell"] = {"theta": math.pi / 2}
+    ax = rh.reading(arr, CFG)["axes"]
+    assert ax["vision"]["edge_weight"] == pytest.approx(0.25)
+    assert ax["smell"]["edge_weight"] == pytest.approx(0.0, abs=1e-9)
+    assert all(v["bits"] > 0.0 for v in ax.values())
+
+
+def test_pairs_accumulate_relative_winding_across_publishes():
+    cn = sqlite3.connect(":memory:")
+    pc.ensure_tables(cn)
+    arr = _programmed(0.0)
+    n = 40
+    for i in range(n + 1):
+        arr.radam["touch"] = {"theta": 2.0 * math.pi * i / n}          # one full turn against vision
+        r = rh.publish(cn, arr, now=float(i))
+    p = r["pairs"]["vision|touch"]
+    assert p["winding"] == pytest.approx(-1.0, abs=1e-6) and p["crossings"] == 1
+    assert p["hold_factor"] == pytest.approx(math.exp(0.2 * 2 * math.pi))
+    assert r["pairs"]["vision|smell"]["winding"] == pytest.approx(0.0)
+    assert not p["would_freeze"]

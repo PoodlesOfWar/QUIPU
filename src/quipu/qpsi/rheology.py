@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 from typing import Mapping, Optional, Sequence
 
@@ -131,6 +132,68 @@ def reading(arr: "pc.CellArray", cfg: Optional["pc.PcmConfig"] = None, *,
     if weyl_twist is not None:
         out["weyl_twist"] = float(weyl_twist)
         out["acquisition"] = float(weyl_twist) - loss
+    out["axes"] = axis_readings(arr, cfg)
+    return out
+
+
+def axis_readings(arr: "pc.CellArray", cfg: "pc.PcmConfig") -> dict:
+    """Per-axis reading from c_k = p_k e^{iθ_k} alone: β_k = atan2(|sin θ_k|, |cos θ_k|),
+    w_r,k = 0.25 − β_k/2π, bits_k = log2(p_k/ε_k).  The Herald reads these per edge
+    through its node → CAT-axis map (v0.64.0)."""
+    out = {}
+    for a in pc.AXES:
+        dc = arr.cells.get(a)
+        p = dc.pressure(cfg) if dc is not None else 0.0
+        eps = pc.resolution(dc.plus, cfg) if dc is not None else 1.0
+        th = float((arr.radam.get(a) or {}).get("theta", 0.0))
+        beta = math.atan2(abs(math.sin(th)), abs(math.cos(th)))
+        out[a] = {"theta": th, "beta": beta, "edge_weight": 0.25 - beta / (2.0 * math.pi),
+                  "bits": max(0.0, math.log2(p / eps)) if p > 0.0 and eps > 0.0 else 0.0}
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Knot hold on the observation record (v0.64.0)
+# ---------------------------------------------------------------------------
+#
+# Ruling (2026-10-21): the capstan hold belongs on the observation record, never
+# on the cell residual — wired into χ it widens the write deadband by e^{μΘ} and
+# freezes the cells.  Each publish advances the relative winding of every axis
+# pair from the previous reading's phases (one cell cannot wrap on itself) and
+# records the Euler–Eytelwein factor e^{μ·2π|W|} and the threshold ε̄·e^{μΘ} it
+# would impose.  μ from QUIPU_KNOT_MU (default 0.2, the operator's value).
+
+KNOT_MU_ENV: str = "QUIPU_KNOT_MU"
+
+
+def knot_mu() -> float:
+    try:
+        return max(0.0, float(os.environ.get(KNOT_MU_ENV, "") or 0.2))
+    except ValueError:
+        return 0.2
+
+
+def advance_pairs(prev: Optional[Mapping], axes_now: Mapping[str, Mapping], eps_bar: float) -> dict:
+    """Update the cumulative relative winding and crossings of each axis pair."""
+    prev_pairs = (prev or {}).get("pairs") or {}
+    prev_axes = (prev or {}).get("axes") or {}
+    mu = knot_mu()
+    out = {}
+    names = list(pc.AXES)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            key = f"{a}|{b}"
+            p = prev_pairs.get(key) or {}
+            w, n = float(p.get("winding", 0.0)), int(p.get("crossings", 0))
+            if a in prev_axes and b in prev_axes:
+                d0 = float(prev_axes[a]["theta"]) - float(prev_axes[b]["theta"])
+                d1 = float(axes_now[a]["theta"]) - float(axes_now[b]["theta"])
+                r = relative_winding([d0, d1], [0.0, 0.0])
+                w += r["winding"]
+                n += r["crossings"]
+            factor = math.exp(mu * 2.0 * math.pi * abs(w))
+            out[key] = {"winding": w, "crossings": n, "hold_factor": factor,
+                        "hold_threshold": eps_bar * factor, "would_freeze": eps_bar * factor >= 1.0}
     return out
 
 
@@ -145,6 +208,8 @@ def publish(cn: sqlite3.Connection, arr: "pc.CellArray", *, now: float,
         except (TypeError, ValueError):
             prev = None
     r = reading(arr, prev=prev, weyl_twist=weyl_twist)
+    r["pairs"] = advance_pairs(prev, r["axes"], r["eps_bar"])
+    r["knot_mu"] = knot_mu()
     r["at"] = now
     pc._kv_set(cn, KV_KEY + instance, r)
     return r
@@ -180,5 +245,6 @@ def logged_winding(cn: sqlite3.Connection, a: str, b: str, *, instance: str = "s
     return relative_winding([r[0] for r in rows], [r[1] for r in rows])
 
 
-__all__ = ["KV_KEY", "EPS0", "REF_DECAY", "fractional_order", "viscoelastic_weyl_phase", "capstan_threshold",
+__all__ = ["KV_KEY", "EPS0", "REF_DECAY", "KNOT_MU_ENV", "knot_mu", "axis_readings", "advance_pairs",
+           "fractional_order", "viscoelastic_weyl_phase", "capstan_threshold",
            "axis_weights", "reading", "publish", "relative_winding", "logged_winding"]
