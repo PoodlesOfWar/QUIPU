@@ -4,6 +4,15 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.65.0] - 2026-10-22
+
+### Added
+- `qpsi/relational_shear.py`: the shearing λ measured in each axis's relational time (an axis's clock advances only by the resolvable quanta its cell actually wrote), feeding the shadow tokens' scenario noise. The clamp's withheld excess, weighted by the Poisson weight and the relational rate, selects an outlier axis whose energy joins the feed. A continuity controller keeps the emission crossing (at least one token per plane per run) and resolvable (SNR ≥ 1), moving the gain only inside the operator's doors. Shadow tokens that recur in two or more sessions under the same outlier axis are returned as proposals, never edges.
+- `docs/QPSI_RELATIONAL_SHEAR.md`; `tests/test_qpsi_relational_shear.py` (7 tests).
+
+### Not changed
+- `mesh_slm.py`, `shadow_tokens.py`, `pcm_cells.py`: no edits. The module is not wired into the Entirety step.
+
 ## [0.64.0] - 2026-10-21
 
 ### Added
