@@ -219,3 +219,28 @@ def test_pairs_accumulate_relative_winding_across_publishes():
     assert p["hold_factor"] == pytest.approx(math.exp(0.2 * 2 * math.pi))
     assert r["pairs"]["vision|smell"]["winding"] == pytest.approx(0.0)
     assert not p["would_freeze"]
+
+
+def test_knot_mu_dynamically_scales_with_the_other():
+    cn = sqlite3.connect(":memory:")
+    pc.ensure_tables(cn)
+    # Default without counterpart
+    assert rh.knot_mu(cn) == pytest.approx(0.20)
+    
+    # Counterpart with resonance 0.3834 (live snapshot)
+    other = {"resonance": 0.3834, "self_state": [0.1]*7, "other_state": [0.2]*7}
+    cn.execute("INSERT OR REPLACE INTO brain_kv (key, value) VALUES (?, ?)",
+               ("entirety:the_other", json.dumps(other)))
+    # mu_eff = 0.20 * (2.0 - 0.3834) = 0.20 * 1.6166 ≈ 0.3233
+    assert rh.knot_mu(cn) == pytest.approx(0.3233, abs=1e-4)
+
+    # Perfect resonance -> drops to baseline 0.20
+    cn.execute("INSERT OR REPLACE INTO brain_kv (key, value) VALUES (?, ?)",
+               ("entirety:the_other", json.dumps({"resonance": 1.0})))
+    assert rh.knot_mu(cn) == pytest.approx(0.20)
+
+    # Zero resonance (orthogonal dissent) -> doubles to 0.40
+    cn.execute("INSERT OR REPLACE INTO brain_kv (key, value) VALUES (?, ?)",
+               ("entirety:the_other", json.dumps({"resonance": 0.0})))
+    assert rh.knot_mu(cn) == pytest.approx(0.40)
+

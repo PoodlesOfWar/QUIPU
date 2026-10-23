@@ -166,18 +166,34 @@ def axis_readings(arr: "pc.CellArray", cfg: "pc.PcmConfig") -> dict:
 KNOT_MU_ENV: str = "QUIPU_KNOT_MU"
 
 
-def knot_mu() -> float:
+def knot_mu(cn: Optional[sqlite3.Connection] = None) -> float:
     try:
-        return max(0.0, float(os.environ.get(KNOT_MU_ENV, "") or 0.2))
+        base = max(0.0, float(os.environ.get(KNOT_MU_ENV, "") or 0.2))
     except ValueError:
-        return 0.2
+        base = 0.2
+    if cn is None:
+        return base
+    try:
+        row = cn.execute("SELECT value FROM brain_kv WHERE key=?", ("entirety:the_other",)).fetchone()
+        if not row:
+            return base
+        data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+        if not isinstance(data, dict):
+            return base
+        res = float(data.get("resonance", 1.0))
+        # UEQGM Born-rule fidelity modulation from the Other: mu_eff = mu_0 * (2 - resonance)
+        return round(base * max(0.5, min(2.0, 2.0 - res)), 4)
+    except Exception:
+        return base
 
 
-def advance_pairs(prev: Optional[Mapping], axes_now: Mapping[str, Mapping], eps_bar: float) -> dict:
+def advance_pairs(prev: Optional[Mapping], axes_now: Mapping[str, Mapping], eps_bar: float,
+                  mu: Optional[float] = None) -> dict:
     """Update the cumulative relative winding and crossings of each axis pair."""
     prev_pairs = (prev or {}).get("pairs") or {}
     prev_axes = (prev or {}).get("axes") or {}
-    mu = knot_mu()
+    if mu is None:
+        mu = knot_mu()
     out = {}
     names = list(pc.AXES)
     for i, a in enumerate(names):
@@ -207,9 +223,10 @@ def publish(cn: sqlite3.Connection, arr: "pc.CellArray", *, now: float,
             prev = json.loads(row[0])
         except (TypeError, ValueError):
             prev = None
+    mu = knot_mu(cn)
     r = reading(arr, prev=prev, weyl_twist=weyl_twist)
-    r["pairs"] = advance_pairs(prev, r["axes"], r["eps_bar"])
-    r["knot_mu"] = knot_mu()
+    r["pairs"] = advance_pairs(prev, r["axes"], r["eps_bar"], mu=mu)
+    r["knot_mu"] = mu
     r["at"] = now
     pc._kv_set(cn, KV_KEY + instance, r)
     return r
@@ -245,6 +262,7 @@ def logged_winding(cn: sqlite3.Connection, a: str, b: str, *, instance: str = "s
     return relative_winding([r[0] for r in rows], [r[1] for r in rows])
 
 
-__all__ = ["KV_KEY", "EPS0", "REF_DECAY", "KNOT_MU_ENV", "knot_mu", "axis_readings", "advance_pairs",
+__all__ = ["KV_KEY", "EPS0", "REF_DECAY", "KNOT_MU_ENV", "knot_mu",
+           "axis_readings", "advance_pairs",
            "fractional_order", "viscoelastic_weyl_phase", "capstan_threshold",
            "axis_weights", "reading", "publish", "relative_winding", "logged_winding"]
