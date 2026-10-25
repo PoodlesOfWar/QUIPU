@@ -56,8 +56,14 @@ What this is not
   law of nature. The mesh is not a fluid; this gives its connectivity a flow to be
   read through, nothing more.
 * This is the **two-dimensional** problem, for which global existence and
-  smoothness are classical (Ladyzhenskaya, 1969). It says nothing about the
-  three-dimensional regularity question.
+  smoothness are classical (Ladyzhenskaya, 1969), so nothing here can blow up.
+  The three-dimensional question is separate: see ``navier_stokes_3d`` and
+  ``docs/NAVIER_STOKES_3D.md`` (a 3-D solver, an instrument that forecasts when a
+  grid loses a collapsing flow, and an account of what is and is not established
+  about the 2026 forced-blow-up announcement). This module is no progress on it.
+* Under-resolution is acted on, not just flagged: :func:`simulate_resolved` refines
+  the grid until two successive grids agree. That cures a numerical shortfall in a
+  flow that can be resolved; it cannot help a flow whose scales collapse.
 """
 from __future__ import annotations
 

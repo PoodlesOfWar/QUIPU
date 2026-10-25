@@ -82,12 +82,14 @@ default (`zero_nyquist=True`); inside the solver the dealiasing mask removes it 
 | Incompressible | `max|∇·u|` | 2 × 10⁻¹⁵ |
 | Order | error ratio on halving `dt` | 16.3, 16.5 |
 
-77 tests, about 8 s, no network. Test quality was checked by **mutation**: 34 deliberate
+98 tests, about 10 s, no network. Test quality was checked by **mutation**: 46 deliberate
 bugs (flipped signs, wrong RK4 weights, dropped forcing, the 2/3 rule off by one, the
-read-only guard removed, …) were applied one at a time. **All 34 are caught.** The first
-run caught 29 and showed 5 gaps; each was closed with a test that fails for the
-specific bug (default Nyquist handling, the divergence diagnostic, the CFL step, the
-blob width, time bookkeeping). A sixth mutant — the post-step mask — was *equivalent*
+read-only guard removed, …) were applied one at a time. **All 46 are caught** (34 for
+the solver and mesh coupling, 12 for `simulate_resolved`). The first run of the 34 caught 29 and
+showed 5 gaps; each was closed with a test that fails for the specific bug (default Nyquist
+handling, the divergence diagnostic, the CFL step, the blob width, time bookkeeping). The
+first run of the 12 caught 9; the 3 survivors (tail test not required, enstrophy ignored in
+the grid comparison, a flow at rest counted as changed) were closed the same way. A sixth mutant — the post-step mask — was *equivalent*
 (the update cannot leave the band), so the redundant line was removed and the invariant
 is tested instead.
 
@@ -133,6 +135,45 @@ check `diagnostics()["resolved"]` — a result with `resolved == False` is not a
 converged answer. (An earlier version of this comment quoted a single figure without its
 amplitude; it was re-measured and corrected.)
 
+## When one grid is not enough: `simulate_resolved`
+
+`simulate_from_mesh` says whether a grid resolved the flow; it cannot do anything when it
+did not. `simulate_resolved` walks a grid ladder (default 64, 96, 128, 192) and stops at the
+first grid where
+
+1. the top spectral shell is negligible (`is_resolved()`), **and**
+2. energy and enstrophy agree with the previous grid to `conv_tol` (default 1e-4).
+
+Condition 1 alone is evidence from one grid; condition 2 makes it a comparison between two.
+The mesh is read **once**, at its own 64×64, and resampled band-limited to each rung, so every
+rung sees the same forcing even if the mesh is trained meanwhile (a test counts the SELECTs).
+A structureless mesh drives no flow and is converged at the first grid. If the ladder runs
+out, the finest result comes back with `converged == False` (or `NavierStokesMeshError` with
+`strict=True`). The grid must start at ≥ 64 so the forcing is never coarser than the mesh
+defines it.
+
+Measured on the amplitude-2 case that `simulate_from_mesh` could only flag (4-token
+reference mesh, ν = 0.02, α = 0.2, t = 40):
+
+| n | top-shell enstrophy | resolved | energy |
+|---|---|---|---|
+| 64 | 1.7 × 10⁻⁶ | no | 1.576912 |
+| **96** | **1.1 × 10⁻⁸** | **yes** | **1.576904** |
+| 128 | 1.3 × 10⁻¹¹ | yes | 1.576904 |
+| 192 | 8.9 × 10⁻¹⁹ | yes | 1.576904 |
+
+The coarse grid's energy was already within 5 × 10⁻⁶ of the converged value, so the 10⁻⁶
+tail tolerance is conservative; it is a resolution test, not an error bound. The 192 run
+took four minutes; refinement costs roughly n³ (n² points × n steps).
+
+For a *point-source* forcing (blob radius 0) the ladder has to climb further: 64, 96 and 128
+all fail the tail test (3.0 × 10⁻², 1.3 × 10⁻², 8.8 × 10⁻⁶ at t = 2) and 192 passes
+(2.7 × 10⁻⁹).
+
+This cures **numerical** under-resolution of a 2-D flow, which cannot blow up. A flow whose
+scales collapse in finite time would defeat every finite ladder; that is a different problem,
+and [NAVIER_STOKES_3D.md](NAVIER_STOKES_3D.md) has the instrument that watches for it.
+
 ## One-way and read-only
 
 Nothing flows from the fluid back to the mesh: no training signal, learning rate or
@@ -156,7 +197,9 @@ d["resolved"], d["imaginary_residue"], d["max_divergence"], d["energy"]
 ```
 
 `simulate_from_mesh(t_end, *, cn=None, n=64, nu=1e-2, drag=0.1, amplitude=1.0,
-blob_radius=2.0, dt=None, cfl=0.5)`. `drag` is a linear (Ekman) friction that lets a
+blob_radius=2.0, dt=None, cfl=0.5)`.
+`simulate_resolved(t_end, *, cn=None, ladder=(64, 96, 128, 192), …, conv_tol=1e-4, strict=False)`
+takes the same physics arguments and returns the per-grid record in `out["runs"]`. `drag` is a linear (Ekman) friction that lets a
 forced flow settle instead of accumulating energy without bound; set it to 0 to remove it.
 
 ## What this is not
@@ -165,7 +208,12 @@ forced flow settle instead of accumulating energy without bound; set it to 0 to 
   nature. The mesh is not a fluid; this gives its connectivity a flow to be read through,
   and the flow's energy, enstrophy and spectrum are diagnostics *of that choice*.
 * **Two dimensions only.** Global existence and smoothness for 2-D Navier–Stokes are
-  classical (Ladyzhenskaya, 1969). Nothing here bears on the three-dimensional regularity
-  problem, and nothing here should be read as progress on it.
-* **Resolution is checked, not guaranteed** (see above).
+  classical (Ladyzhenskaya, 1969), so nothing in this module can blow up. The three-dimensional
+  question is a different problem; see [NAVIER_STOKES_3D.md](NAVIER_STOKES_3D.md) for the 3-D
+  solver, for what is and is not established about the 2026 forced-blow-up announcement
+  (announced and machine-checked by its authors, disputed by an independent audit, not
+  independently built here), and for why the unforced equation is untouched by it. Nothing
+  in this module is progress on any of it.
+* **Resolution is checked, and now acted on, but not guaranteed.** `simulate_resolved`
+  refines until two grids agree; if the ladder is too short it says `converged == False`.
 * **No version bump.** This adds a module; it changes no existing file.
