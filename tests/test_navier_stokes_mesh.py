@@ -24,6 +24,7 @@ from src.quipu.navier_stokes_mesh import (
     mesh_forcing_field,
     resample_field,
     simulate_from_mesh,
+    simulate_resolved,
     spectral_derivative,
     wavenumbers,
 )
@@ -648,3 +649,122 @@ def test_the_mesh_driven_flow_settles_to_a_resolved_divergence_free_state(tmp_pa
     assert abs(s.energy() - e_before) / e_before < 1e-3          # near steady state
     assert d["max_divergence"] < 1e-11 and d["imaginary_residue"] < 1e-12
     assert d["resolved"] and np.all(np.isfinite(s.vorticity()))
+
+
+# ═══════════════════════════ refining until the answer is resolved ══════════
+
+_FLOW = dict(nu=0.02, drag=0.2)       # t_end=2 keeps every rung to ~20 steps
+
+
+def test_a_point_source_mesh_is_refined_until_resolved_and_stable(tmp_path, monkeypatch):
+    """A raw point-source forcing leaves ~3e-2 of the enstrophy at the grid scale on
+    64×64. The ladder must climb, rung by rung, to a grid where the tail is negligible
+    and two successive grids agree."""
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, blob_radius=0.0, ladder=(64, 96, 128, 192, 256), **_FLOW)
+    runs = out["runs"]
+    assert out["converged"] and out["n_final"] == runs[-1]["n"] == 192
+    assert [r["n"] for r in runs] == [64, 96, 128, 192]
+    assert not any(r["resolved"] for r in runs[:-1]) and runs[-1]["resolved"]
+    assert runs[0]["tail_fraction"] > 1e-2 and runs[-1]["tail_fraction"] < 1e-6
+    assert runs[0]["change_vs_previous"] == math.inf
+    assert runs[-1]["change_vs_previous"] <= 1e-4
+    assert out["diagnostics"]["resolved"] and out["solver"].n == 192
+
+
+def test_a_smoothed_mesh_needs_one_comparison_grid_not_a_blind_accept(tmp_path, monkeypatch):
+    """The default blob is unresolved at 64 for this flow and resolved at 96, but
+    "resolved" on one grid is not accepted until a second grid agrees."""
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, **_FLOW)
+    assert [r["n"] for r in out["runs"]] == [64, 96]
+    assert out["runs"][0]["resolved"] is False and out["runs"][1]["resolved"] is True
+    assert out["converged"] and out["runs"][1]["change_vs_previous"] < 1e-4
+
+
+def test_agreement_between_grids_is_required_not_just_a_small_tail(tmp_path, monkeypatch):
+    """With a tolerance no real pair of grids can meet, the ladder must report
+    non-convergence even though the tail test passes."""
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, ladder=(64, 96), conv_tol=1e-30, **_FLOW)
+    assert out["runs"][-1]["resolved"] and not out["converged"]
+
+
+def test_a_ladder_that_runs_out_says_so_and_strict_raises(tmp_path, monkeypatch):
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, blob_radius=0.0, ladder=(64, 96), **_FLOW)
+    assert not out["converged"] and out["n_final"] == 96 and len(out["runs"]) == 2
+    with pytest.raises(NavierStokesMeshError, match="not converged"):
+        simulate_resolved(2.0, blob_radius=0.0, ladder=(64, 96), strict=True, **_FLOW)
+
+
+def test_an_empty_mesh_is_converged_at_the_first_grid_with_no_second_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("SCB_DB_PATH", str(tmp_path / "absent.sqlite"))
+    out = simulate_resolved(1.0, **_FLOW)
+    assert out["forcing_source"] == "empty" and out["converged"]
+    assert [r["n"] for r in out["runs"]] == [64] and out["diagnostics"]["energy"] == 0.0
+
+
+def test_the_mesh_is_read_once_for_the_whole_ladder_and_never_written(tmp_path, monkeypatch):
+    """Every rung must see the same forcing even if the mesh is trained meanwhile,
+    so the whole ladder costs exactly one pair of SELECTs."""
+    mesh_slm = _seed_mesh(tmp_path, monkeypatch)
+    before = _table_checksum(mesh_slm)
+    statements: list[str] = []
+
+    class Spy:
+        def __init__(self, cn):
+            self._cn = cn
+
+        def execute(self, sql, *a):
+            statements.append(" ".join(sql.split()))
+            return self._cn.execute(sql, *a)
+
+    with mesh_slm._conn() as cn:
+        out = simulate_resolved(2.0, cn=Spy(cn), blob_radius=0.0, ladder=(64, 96, 128), **_FLOW)
+    assert len(out["runs"]) == 3
+    assert len(statements) == 2 and all(q.upper().startswith("SELECT") for q in statements)
+    assert _table_checksum(mesh_slm) == before
+
+
+@pytest.mark.parametrize("ladder", [
+    [], [96, 64], [64, 64, 96], [32, 64], [64.0, 96], [True, 96], [64, 96.5],
+])
+def test_bad_ladders_are_refused(ladder):
+    with pytest.raises(NavierStokesMeshError):
+        simulate_resolved(1.0, ladder=ladder)
+
+
+@pytest.mark.parametrize("tol", [0.0, -1e-3, float("nan"), float("inf")])
+def test_bad_convergence_tolerance_is_refused(tol):
+    with pytest.raises(NavierStokesMeshError):
+        simulate_resolved(1.0, conv_tol=tol)
+
+
+def test_a_generator_ladder_is_read_once_correctly(tmp_path, monkeypatch):
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, ladder=(n for n in (64, 96)), **_FLOW)
+    assert [r["n"] for r in out["runs"]] == [64, 96]
+
+
+def test_agreement_between_two_grids_means_both_energy_and_enstrophy():
+    same_energy = nsm._grid_change({"energy": 1.0, "enstrophy": 2.0}, {"energy": 1.0, "enstrophy": 2.5})
+    assert same_energy == pytest.approx(0.2)                       # enstrophy alone is enough to disagree
+    same_enstrophy = nsm._grid_change({"energy": 1.0, "enstrophy": 2.0}, {"energy": 1.5, "enstrophy": 2.0})
+    assert same_enstrophy == pytest.approx(1 / 3)
+    assert nsm._grid_change({"energy": 0.0, "enstrophy": 0.0}, {"energy": 0.0, "enstrophy": 0.0}) == 0.0
+
+
+def test_a_flow_at_rest_on_two_grids_has_not_changed():
+    assert nsm._relative_change(0.0, 0.0) == 0.0
+    assert nsm._relative_change(3.0, 3.0) == 0.0 and nsm._relative_change(1.0, 0.0) == 1.0
+
+
+def test_a_loose_tolerance_does_not_accept_agreement_on_an_unresolved_grid(tmp_path, monkeypatch):
+    """128 agrees with 96 to 2e-4 but its tail is still 9e-6; with conv_tol=1e-3 the
+    agreement test passes, so only the tail test keeps the ladder climbing to 192."""
+    _seed_mesh(tmp_path, monkeypatch)
+    out = simulate_resolved(2.0, blob_radius=0.0, ladder=(64, 96, 128, 192), conv_tol=1e-3, **_FLOW)
+    r = {run["n"]: run for run in out["runs"]}
+    assert r[128]["change_vs_previous"] <= 1e-3 and not r[128]["resolved"]
+    assert out["n_final"] == 192 and out["converged"]

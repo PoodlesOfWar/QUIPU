@@ -516,8 +516,116 @@ def simulate_from_mesh(
     }
 
 
+#: Grids :func:`simulate_resolved` tries, in order. Every one is at least the mesh's
+#: own 64, so the forcing is never coarser than the mesh defines it.
+DEFAULT_GRID_LADDER: tuple[int, ...] = (64, 96, 128, 192)
+
+
+def _relative_change(a: float, b: float) -> float:
+    scale = max(abs(a), abs(b))
+    return 0.0 if scale == 0.0 else abs(a - b) / scale
+
+
+def _grid_change(current: Mapping[str, Any], previous: Mapping[str, Any]) -> float:
+    """How far two grids' answers differ: the larger relative change of energy and
+    enstrophy (enstrophy weights the small scales, where grids disagree first)."""
+    return max(
+        _relative_change(current["energy"], previous["energy"]),
+        _relative_change(current["enstrophy"], previous["enstrophy"]),
+    )
+
+
+def simulate_resolved(
+    t_end: float,
+    *,
+    cn: Any = None,
+    ladder: Iterable[int] = DEFAULT_GRID_LADDER,
+    nu: float = 1e-2,
+    drag: float = 0.1,
+    amplitude: float = 1.0,
+    blob_radius: float = DEFAULT_BLOB_RADIUS,
+    dt: float | None = None,
+    cfl: float = 0.5,
+    conv_tol: float = 1e-4,
+    strict: bool = False,
+) -> dict[str, Any]:
+    """Refine the grid until the answer is resolved *and* has stopped changing.
+
+    :func:`simulate_from_mesh` reports whether one grid resolved the flow but cannot
+    do anything about it when it did not (stronger forcing needs a finer grid). This
+    walks ``ladder`` and stops at the first grid where
+
+    * the top spectral shell is negligible (``is_resolved()``), **and**
+    * energy and enstrophy agree with the previous grid to ``conv_tol`` (relative).
+
+    The first condition alone is evidence from one grid; the second makes it a
+    comparison between two. The mesh is read **once** (at its own 64×64 resolution)
+    and resampled band-limited to each grid, so every rung sees the same forcing even
+    if the mesh is being trained meanwhile. A mesh with no structure drives no flow;
+    that is converged at the first grid without a second run.
+
+    If the ladder runs out, the finest grid's result is returned with
+    ``converged == False`` (or :class:`NavierStokesMeshError` is raised if ``strict``).
+    This cures *numerical* under-resolution only. A flow whose scales collapse in
+    finite time would defeat every finite ladder; see ``navier_stokes_3d`` for the
+    diagnostic that watches for that.
+    """
+    given = list(ladder)
+    if not given or not all(isinstance(n, int) and not isinstance(n, bool) for n in given) or given != sorted(set(given)):
+        raise NavierStokesMeshError("ladder must be a non-empty, strictly increasing sequence of integer grid sizes")
+    rungs = given
+    if rungs[0] < MESH_TORUS_N:
+        raise NavierStokesMeshError(f"ladder must start at ≥ {MESH_TORUS_N}, the mesh's own grid")
+    if not (np.isfinite(conv_tol) and conv_tol > 0.0):
+        raise NavierStokesMeshError("conv_tol must be finite and > 0")
+
+    base = mesh_forcing_field(cn, n=MESH_TORUS_N, amplitude=amplitude, blob_radius=blob_radius)
+    runs: list[dict[str, Any]] = []
+    previous: dict[str, Any] | None = None
+    solver: SpectralNS2D | None = None
+    converged = False
+    for n in rungs:
+        field = base.field if n == MESH_TORUS_N else resample_field(base.field, n)
+        solver = SpectralNS2D(n, nu=nu, drag=drag, forcing=field)
+        solver.run(t_end, dt=dt, cfl=cfl)
+        d = solver.diagnostics()
+        change = math.inf if previous is None else _grid_change(d, previous)
+        runs.append({
+            "n": n,
+            "resolved": d["resolved"],
+            "tail_fraction": d["tail_fraction"],
+            "energy": d["energy"],
+            "enstrophy": d["enstrophy"],
+            "change_vs_previous": change,
+        })
+        if base.source == "empty" and d["resolved"]:
+            converged = True          # nothing drives the flow: there is nothing to refine
+        else:
+            converged = bool(d["resolved"]) and change <= conv_tol
+        if converged:
+            break
+        previous = d
+    assert solver is not None
+    if strict and not converged:
+        raise NavierStokesMeshError(
+            f"not converged on grids {rungs}: last tail_fraction={runs[-1]['tail_fraction']:.2e}, "
+            f"change_vs_previous={runs[-1]['change_vs_previous']:.2e}"
+        )
+    return {
+        "forcing_source": base.source,
+        "n_tokens": base.n_tokens,
+        "n_edges": base.n_edges,
+        "converged": converged,
+        "n_final": rungs[len(runs) - 1],
+        "runs": runs,
+        "diagnostics": solver.diagnostics(),
+        "solver": solver,
+    }
+
+
 __all__ = [
     "DEFAULT_BLOB_RADIUS",
+    "DEFAULT_GRID_LADDER",
     "DEFAULT_N",
     "IMAGINARY_UNIT",
     "MESH_TORUS_N",
@@ -530,6 +638,7 @@ __all__ = [
     "mesh_forcing_field",
     "resample_field",
     "simulate_from_mesh",
+    "simulate_resolved",
     "spectral_derivative",
     "wavenumbers",
 ]
