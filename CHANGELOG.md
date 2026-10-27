@@ -4,6 +4,21 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.66.0] - 2026-10-27
+
+### Added
+- `qpsi/viscous_interaction.py`: multidimensional incompressible Navier–Stokes solver ($\partial\mathbf{u}/\partial t + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu\nabla^2\mathbf{u} + \mathbf{f}$, $\nabla\cdot\mathbf{u}=0$ via periodic-torus Jacobi Helmholtz–Hodge pressure projection) and Viscous Neural Network (VNN) nonlinear semantic-graph evolution ($dZ/dt = -\nu_s L_G Z - \kappa_s N_G(Z) + F_{\mathrm{sem}}(Z,t)$), bridged through `TypedViscousCoupler` without conflating physical spatial dimensions with the 7-D semantic manifold.
+- `qpsi/mc_decision_pruning.py`: Monte Carlo scenario sampling, $\mathrm{CVaR}_\beta$ tail-risk and epistemic uncertainty objective $J(a) = \mathbb{E}[C(a)] + \lambda\,\mathrm{CVaR}_\beta(C(a)) + \zeta U(a)$, uncertainty-bound edge screening, Greedy-Dijkstra shortest-path optimization, and 7-D centroidal deviation check ($\inf - 1 < 4p$). Wired into `quipu_minimal.mc_dijkstra_route`.
+- `qpsi/semantic_distillation.py`: 5-term teacher–student objective $\mathcal{L} = \alpha\mathcal{L}_{\mathrm{CE}} + \beta T^2\mathcal{L}_{\mathrm{KL}} + \gamma\mathcal{L}_{\mathrm{consistency}} + \eta\mathcal{L}_{\mathrm{complexity}} + \xi\mathcal{L}_{\mathrm{abstention}}$ preserving rADAM and 5-float Newman–Penrose Weyl scalar compression, plus comparative SLM-MESH shadow evaluation with uncertainty-gated abstention fallback.
+- `qpsi/vnn_bathymetry.py`: v0.33 standalone bathymetry and vertical-dynamics extension (`BathymetricGrid` bilinear interpolation, depth-dependent exponential current attenuation $\mathbf{U}(z)=\mathbf{U}_0 e^{-z/L}$, added-mass + quadratic-drag vertical descent solver, 2-D Exner sediment-continuity update, `HistoricalBathymetryAdapter` 6-feature VNN bathymetric vector) and temporal-spatial physics-constrained reconstruction framework (`TemporalSpatialState` $\mathbf{S}(t)$, `ShadowMonteCarloReconstructor`, `BayesianEvidenceUpdater`, GeoJSON/CSV exporter, and integrated *Helena Sloman* 1850 & Pompeii–Vesuvius 79 CE reconstruction cases).
+- `geospatial_relation.attach_bathymetry_features`: attaches the 6-feature VNN bathymetric summary to `SpatialMaterialProcessor` entities while preserving the separation of `system_entirety.py`, `mesh_entirety.py`, and `geospatial_relation.py`.
+- `observer_service`: `GET /bathymetry` (read-only snapshot from `entirety:vnn:bathymetry` or synthetic v0.33 fallback) and signed `POST /bathymetry` edge evaluation route.
+- Julia protocol peers: `julia/viscous_mc_distillation_model.jl` and `julia/vnn_bathymetry_model.jl`.
+- Documentation & tests: `docs/VISCOUS_MC_DISTILLATION_PLAN.md`, `docs/VNN_BATHYMETRY_RECONSTRUCTION_SPEC.md`, `tests/test_viscous_mc_distillation.py` (7 tests), and `tests/test_vnn_bathymetry_reconstruction.py` (7 tests).
+
+### Not changed
+- `mesh_slm.py`: 0-line diff.
+
 ## [0.65.0] - 2026-10-22
 
 ### Added

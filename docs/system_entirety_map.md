@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
-> **Version**: 0.61.2  
-> **Annealed**: 2026-10-21T01:06:13.201226+00:00  
-> **Map revision**: v395 · fingerprint `caa741b1ea78d4cc`  
+> **Version**: 0.65.0  
+> **Annealed**: 2026-10-27T03:17:33.279063+00:00  
+> **Map revision**: v397 · fingerprint `a8629c2c8f930455`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,29 +31,29 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-10-21T01:06:13.201226+00:00`
+> Snapshot at annealing time `2026-10-27T03:17:33.279063+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
 | Sense | Value |
 |---|---|
-| vision | 17.7% |
-| touch | 20.5% |
-| smell | 65.6% |
-| body | 19.8% |
-| brain | 38.8% |
-| perception | 69.0% |
+| vision | 6.0% |
+| touch | 39.6% |
+| smell | 42.9% |
+| body | 9.8% |
+| brain | 65.1% |
+| perception | 94.9% |
 
-**Observer tangent** (7th-D orthogonal excitation): 25.9%  
-**7-D magnitude**: 1.1116
+**Observer tangent** (7th-D orthogonal excitation): 36.0%  
+**7-D magnitude**: 1.3445
 
 ### 2.2 Material Bifurcation
 
 | Metric | Value |
 |---|---|
-| Physical realization | 39.3% |
-| Nodal bifurcation | 37.0% |
-| Mesh density | 67.5% |
+| Physical realization | 37.3% |
+| Nodal bifurcation | 34.7% |
+| Mesh density | 63.7% |
 | Topology | `mesh` |
 | Material eligible | yes |
 
@@ -61,7 +61,7 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Transaction drive | 31.0% |
+| Transaction drive | 34.3% |
 | Transaction kind | `n/a` |
 
 ### 2.4 UEQGM Runtime
@@ -90,25 +90,27 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 | Metric | Value |
 |---|---|
 | Vocab size | 4182 / 4096 (102.1%) |
-| Quipu edges (GNN) | 904077 |
-| Training rounds | 41184 |
-| Last loss | 4.801646750379883e-07 |
-| 8th-D MESH field | 0.9528 |
-| Last STP embed gap | 1.576881 |
-| Last STP torus gap | 1.524325 |
+| Quipu edges (GNN) | 1016148 |
+| Training rounds | 49790 |
+| Last loss | 0.35538541584942823 |
+| 8th-D MESH field | 0.9511 |
+| Last STP embed gap | 0.38198 |
+| Last STP torus gap | 1.462868 |
 
 **STP P1 trend** (loss plateau while the geodesic gap keeps falling):
 
 | Series | Slope | P1 |
 |---|---|---|
-| loss | 0.0006330000000000001 | plateaued: True |
-| STP embed gap | 0.12942730000000013 | False |
-| STP torus gap | 0.04331930000000006 | False |
+| loss | -0.19543584999999997 | plateaued: False |
+| STP embed gap | 0.09938009999999986 | False |
+| STP torus gap | 0.013839549999999923 | False |
 
 ---
 
 ## 4. Structural Changelog
 
+- **2026-10-27T02:57:39.023084+00:00** map v396 (0.61.2) — hash `37269963307d7024`
+- **2026-10-21T01:06:13.201226+00:00** map v395 (0.61.2) — hash `caa741b1ea78d4cc`
 - **2026-10-20T13:04:50.951564+00:00** map v394 (0.61.2) — hash `35b40d3a3a488ff3`
 - **2026-10-20T12:47:36.811422+00:00** map v393 (0.61.0) — hash `06494a6b16280618`
 - **2026-10-16T22:55:47.349048+00:00** map v392 (0.58.0) — hash `48a6e62c4296d7ce`
@@ -119,8 +121,6 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 - **2026-10-07T00:32:36.457975+00:00** map v387 (0.52.1) — hash `caea59c228071f48`
 - **2026-10-07T00:26:13.784196+00:00** map v386 (0.52.0) — hash `374e16363b21228d`
 - **2026-10-06T17:15:33.168135+00:00** map v385 (0.51.1) — hash `efa0b98e354f6296`
-- **2026-10-06T15:43:20.685822+00:00** map v384 (0.51.1) — hash `3b990b6c6f67d79b`
-- **2026-10-06T12:40:13.780686+00:00** map v383 (0.51.1) — hash `efa0b98e354f6296`
 
 ---
 

@@ -777,6 +777,24 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # edge weighting reads (qpsi/rheology.py).
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {})
+            elif parsed.path == "/bathymetry":
+                from . import brain_kv
+                from .qpsi import vnn_bathymetry
+                saved = brain_kv.kv_get_json(vnn_bathymetry.KV_VNN_BATHYMETRY_LATEST, None)
+                if not saved:
+                    checks = vnn_bathymetry.run_v033_synthetic_checks()
+                    grid = vnn_bathymetry.BathymetricGrid.sloped_shelf()
+                    hist_grid, _ = vnn_bathymetry.reconstruct_historical_bathymetry(grid, t_historical=1850.0)
+                    feat = vnn_bathymetry.extract_bathymetric_features(
+                        500.0, 500.0, grid, hist_grid, sediment_flux_x=0.01, sediment_flux_y=-0.005
+                    )
+                    saved = {
+                        "ok": True,
+                        "version": "quipu-vnn-bathymetry-v0.33",
+                        "bathymetry_features": feat.to_dict(),
+                        "v033_synthetic_checks": checks,
+                    }
+                self._send_json(200, saved)
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -835,6 +853,33 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _lambda_clusters(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
+            elif parsed.path == "/bathymetry":
+                from . import brain_kv
+                from .qpsi import vnn_bathymetry
+                grid = vnn_bathymetry.BathymetricGrid.uniform(
+                    depth_m=float(body.get("modern_depth_m", 100.0))
+                )
+                hist_grid, _ = vnn_bathymetry.reconstruct_historical_bathymetry(
+                    grid, t_historical=float(body.get("t_historical", 1850.0))
+                )
+                feat = vnn_bathymetry.extract_bathymetric_features(
+                    float(body.get("x", 500.0)),
+                    float(body.get("y", 500.0)),
+                    grid,
+                    hist_grid,
+                    sediment_flux_x=float(body.get("sediment_flux_x", 0.0)),
+                    sediment_flux_y=float(body.get("sediment_flux_y", 0.0)),
+                )
+                checks = vnn_bathymetry.run_v033_synthetic_checks()
+                rec = {
+                    "ok": True,
+                    "version": "quipu-vnn-bathymetry-v0.33",
+                    "bathymetry_features": feat.to_dict(),
+                    "v033_synthetic_checks": checks,
+                    "at": time.time(),
+                }
+                brain_kv.kv_set_json(vnn_bathymetry.KV_VNN_BATHYMETRY_LATEST, rec)
+                code, payload = 200, rec
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
             if decision is not None:

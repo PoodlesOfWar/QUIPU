@@ -441,6 +441,29 @@ def greedy_route(
     }
 
 
+def mc_pruned_dijkstra_route(
+    cn: sqlite3.Connection,
+    src: int,
+    dst: int,
+    *,
+    observer: float | None = None,
+    greedy_next_hop: bool = True,
+    max_nodes: int = _MAX_DIJKSTRA_NODES,
+    allowed_nodes: set[int] | None = None,
+) -> dict:
+    """Monte Carlo CVaR decision pruning followed by Dijkstra / greedy-Dijkstra routing."""
+    from .qpsi import mc_decision_pruning as _mcp
+
+    obs = _observer_bias() if observer is None else _finite01(observer)
+    if greedy_next_hop:
+        return _mcp.mc_greedy_dijkstra_route(
+            cn, src, dst, observer=obs, allowed_nodes=allowed_nodes
+        )
+    return _mcp.mc_dijkstra_route(
+        cn, src, dst, observer=obs, max_nodes=max_nodes, allowed_nodes=allowed_nodes
+    )
+
+
 # ---------------------------------------------------------------------------
 # Phase A — entangled key-pair scoring
 # ---------------------------------------------------------------------------
