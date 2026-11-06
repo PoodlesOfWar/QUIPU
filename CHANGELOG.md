@@ -22,6 +22,9 @@ truth for the version number is `src/quipu/_version.py`.
 - `qpsi/self_organising.after_step`: publishes the bond-shear chain right after `pcm_cells.record` (own try/except, never blocks the cells).
 - `ueqgm_engine` tags/keywords gain `viscous`, `trefoil`, `chirality`, `muonic`, `textile`.
 
+- `.github/workflows/tests.yml`: CI runs `pytest` on every pull request and push to `main` (Python 3.12, `requirements.txt`).
+- `tests/test_gard_shard_model.py`: the hub-assets wiring test skips when the sibling `Loadopoly-Portal` checkout and `Launch-Loadopoly.ps1` are absent instead of failing.
+
 ### Not changed
 - Julia protocol peers: no change — every coupling is confined to `train_round` and `brain_kv` readings (the v0.31.0 precedent).
 - `mesh_slm_vocab` / `mesh_slm_quipu` schemas, eviction, regions, gates: untouched. The bond-shear chain writes no mesh table and no χ.
