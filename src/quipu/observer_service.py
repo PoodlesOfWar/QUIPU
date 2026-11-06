@@ -342,6 +342,20 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "temperature_bias": float(last_osc.get("temperature", 0.7)),
         },
         "supernova_gate": _supernova_gate_payload(),
+        "bond_shear": _bond_shear_payload(),
+    }
+
+
+def _bond_shear_payload() -> dict[str, Any]:
+    """Yield and shear ratio of the last published LiTaSb bond-shear chain."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {}
+    except Exception:
+        rec = {}
+    return {
+        "yield": float(rec.get("yield", 0.0) or 0.0),
+        "shear_ratio": float(rec.get("shear_ratio", 0.0) or 0.0),
+        "litasb_rupture_nn": float((rec.get("rupture") or {}).get("litasb_nn", 0.0) or 0.0),
     }
 
 
@@ -802,6 +816,13 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # refinement cycle (read-only): what the forge's 52 Hz gate reads.
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
+            elif parsed.path == "/bond_shear":
+                # The LiTaSb bond-rupture force as a multiplanar shear on the
+                # exciton-polariton condensate into the PC/CR-39 optics and
+                # asphalt pyrolysis, as last published by the self-organising
+                # step (read-only; qpsi/bond_shear.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {})
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last
                 # published by pcm_cells.record (read-only): what the Herald's
