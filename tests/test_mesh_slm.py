@@ -711,3 +711,104 @@ def test_coupling_kill_switches_restore_legacy(isolated_slm_db, monkeypatch):
     assert summary["ac_multiplier"] == 1.0
     assert summary["stencil_gain_mean"] == 1.0
 
+
+
+# ---------------------------------------------------------------------------
+# v0.67.0 — viscous decay merger wiring
+# ---------------------------------------------------------------------------
+
+def _full_field(slm, amplitude=1.0):
+    cells = {(i, j): amplitude for i in range(slm._TORUS_N) for j in range(slm._TORUS_N)}
+    return {"amplitude": cells, "chirality": {k: 0.0 for k in cells},
+            "peaks": [{"idx": 1, "amplitude": amplitude, "age": 0}], "a": 0.35, "b": 0.0,
+            "delta_star": 0.0, "psi2": 0.5, "textile_fraction": 0.0, "half_life_ratio": 1.0,
+            "chiral_balance": 0.0}
+
+
+def test_proximity_is_legacy_at_zero_drag_and_deepens_with_drag(isolated_slm_db, monkeypatch):
+    slm = isolated_slm_db
+    a, b = (0, 0), (16, 16)
+    legacy = max(0.0, 1.0 - slm._torus_dist(a, b) / float(slm._TORUS_N))
+    slm._DRAG_STATE.update(gamma=0.0, b=0.0, ts=0.0)
+    assert slm._proximity(a, b) == pytest.approx(legacy)
+    assert slm._proximity(a, b, gamma=1.0) > legacy
+    monkeypatch.setenv("QUIPU_VISCOUS_MERGER", "0")
+    assert slm._proximity(a, b, gamma=1.0) == pytest.approx(legacy)      # kill-switch → legacy kernel
+    assert slm._proximity(a, a, gamma=1.0) == 1.0
+
+
+def test_drag_depth_reads_the_synaptic_wash(isolated_slm_db, monkeypatch):
+    slm = isolated_slm_db
+    with slm._conn() as cn:
+        cn.execute("CREATE TABLE IF NOT EXISTS brain_kv(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
+        cn.execute("INSERT OR REPLACE INTO brain_kv(key, value) VALUES(?, ?)",
+                   ("temporal_spatiality_rhythm", json.dumps({"gradient": 0.4, "coherence": 0.75})))
+        assert slm._drag_depth(cn, force=True) == (pytest.approx(0.4), pytest.approx(0.25))
+        monkeypatch.setenv("QUIPU_VISCOUS_MERGER", "off")
+        assert slm._drag_depth(cn, force=True) == (0.0, 0.0)
+
+
+def test_viscous_knot_field_none_without_history_and_populated_with_peaks(isolated_slm_db):
+    slm = isolated_slm_db
+    with slm._conn() as cn:
+        assert slm._viscous_knot_field(cn, 0.3, 0.2) is None
+        slm._meta_set(cn, "holographic_entropy_history", [0.10, 0.50, 0.20, 0.30, 0.90, 0.40, 0.41, 0.20])
+        knot = slm._viscous_knot_field(cn, 0.3, 0.2)
+    assert knot is not None
+    assert knot["peaks"] and knot["amplitude"]
+    assert all(0.0 <= v <= 1.0 for v in knot["amplitude"].values())
+    assert all(-1.0 <= v <= 1.0 for v in knot["chirality"].values())
+    assert knot["a"] == pytest.approx(0.35 * 1.3) and knot["b"] == pytest.approx(0.15 * 0.2)
+    assert 0.0 < knot["textile_fraction"] < 1.0
+    assert 0.0 <= knot["chiral_balance"] <= 1.0
+
+
+def test_train_round_strengthens_tokens_on_the_field_when_the_gate_is_open(isolated_slm_db, monkeypatch):
+    slm = isolated_slm_db
+    monkeypatch.setattr(slm, "_viscous_knot_field", lambda cn, g, b: _full_field(slm, 1.0))
+    monkeypatch.setattr(slm, "_supernova_gate_value", lambda: 1.0)
+    slm._LAST_TRAIN_TS = 0.0
+    summary = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert summary["status"] == "ok"
+    assert summary["knot_gain_mean"] == pytest.approx(1.0 + slm._KNOT_GAIN_MAX)
+    assert summary["supernova_gate"] == 1.0
+    assert summary["knot_field_cells"] == slm._TORUS_N ** 2
+    assert summary["vn_peak_count"] == 1
+    assert summary["decay_textile_fraction"] == 0.0
+    state = slm.state_summary()
+    assert state["last_knot_gain_mean"] == pytest.approx(1.0 + slm._KNOT_GAIN_MAX)
+    assert state["last_supernova_gate"] == 1.0
+    assert state["last_vn_peak_count"] == 1
+    with slm._conn() as cn:
+        assert len(slm._meta_get(cn, "holographic_entropy_history", [])) >= 1
+        assert slm._meta_get(cn, "knot_gain_history", [])[-1] == pytest.approx(1.0 + slm._KNOT_GAIN_MAX)
+
+
+def test_train_round_is_a_no_op_with_the_gate_closed_or_the_merger_off(isolated_slm_db, monkeypatch):
+    slm = isolated_slm_db
+    monkeypatch.setattr(slm, "_viscous_knot_field", lambda cn, g, b: _full_field(slm, 1.0))
+    monkeypatch.setattr(slm, "_supernova_gate_value", lambda: 0.0)
+    slm._LAST_TRAIN_TS = 0.0
+    closed = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert closed["knot_gain_mean"] == 1.0 and closed["supernova_gate"] == 0.0
+    monkeypatch.setattr(slm, "_supernova_gate_value", lambda: 1.0)
+    monkeypatch.setenv("QUIPU_VISCOUS_MERGER", "0")
+    slm._LAST_TRAIN_TS = 0.0
+    off = slm.train_round(max_seconds=10.0, max_chunks=50)
+    assert off["knot_gain_mean"] == 1.0 and off["supernova_gate"] == 0.0
+    assert off["drag_gamma"] == 0.0 and off["knot_field_cells"] == 0
+
+
+def test_viscous_merger_trend_shapes(isolated_slm_db):
+    slm = isolated_slm_db
+    empty = slm.viscous_merger_trend(window=4)
+    assert empty["insufficient_data"] is True and empty["merger_signature"] is False
+    assert empty["mean_knot_gain"] is None
+    with slm._conn() as cn:
+        slm._meta_set(cn, "knot_gain_history", [1.0] * 4 + [1.05] * 4)
+        slm._meta_set(cn, "last_decay_textile_fraction", 0.3)
+    t = slm.viscous_merger_trend(window=4)
+    assert t["merger_signature"] is True
+    assert t["mean_knot_gain"] == pytest.approx(1.05)
+    assert t["knot_gain_slope"] == pytest.approx(0.05)
+    assert t["last_decay_textile_fraction"] == 0.3
