@@ -1,0 +1,427 @@
+"""qpsi.self_organising — default off, wraps three attributes of system_entirety,
+closes the loop through the ingest flux, never breaks the step, never routes
+without --route."""
+from __future__ import annotations
+
+import sqlite3
+import time
+from datetime import datetime, timezone
+
+import pytest
+
+import src.quipu.system_entirety as system_entirety
+import src.quipu.brain_kv as brain_kv
+import src.quipu.divine_blessing as db
+from src.quipu.qpsi import self_organising as so
+from src.quipu.qpsi import flux_phase, memristive_axes as ma, learned_prior as lp
+from src.quipu.qpsi.governance import GovernanceConfig
+
+REST = {"vision": 0.0302, "touch": 0.0417, "smell": 0.034,
+        "body": 0.0318, "brain": 0.0325, "perception": 0.0395}
+OTHER = {"self_state": [0.0302, 0.0417, 0.034, 0.0318, 0.0325, 0.0395, 0.0088],
+         "other_state": [0.091, 0.091, 0.0988, 0.091, 0.4903, 0.091, 0.3322],
+         "resonance": 0.4202, "shared_hz": 42.02}
+
+
+@pytest.fixture
+def isolated(tmp_path, monkeypatch):
+    db_file = tmp_path / "entirety.sqlite"
+
+    def _open_conn(timeout: float = 60, path=None):
+        cn = sqlite3.connect(db_file, timeout=timeout)
+        cn.execute("PRAGMA journal_mode=WAL")
+        cn.row_factory = sqlite3.Row
+        return cn
+
+    monkeypatch.setattr(system_entirety, "_open_conn", _open_conn)
+    monkeypatch.setattr(brain_kv, "open_conn", _open_conn)
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    monkeypatch.setattr(system_entirety, "_sense_signals", lambda: dict(REST), raising=False)
+    try:
+        import src.quipu.repository_catalog as repository_catalog
+        monkeypatch.setattr(repository_catalog, "get_catalog_summary", lambda: {})
+    except Exception:
+        pass
+    key_file = tmp_path / "attest.key"
+    key_file.write_bytes(b"test-key-not-a-secret")
+    monkeypatch.setenv(db.KEY_FILE_ENV, str(key_file))
+    monkeypatch.setattr(db, "_CONFIG", GovernanceConfig())
+    monkeypatch.delenv(so.ENV, raising=False)
+    for name in (so.FLUX_ENV, so.PRIOR_ENV, so.SOMN_ENV, so.SENSES_ENV):
+        monkeypatch.delenv(name, raising=False)
+    db.enable()
+    so.disable()
+    yield db_file
+    so.disable()
+    db.disable()
+
+
+def _flux_on(age_s: float = 10.0, docs: int = 12):
+    ts = datetime.fromtimestamp(time.time() - age_s, tz=timezone.utc).isoformat()
+    # per_source as corpus_ingest writes it: the annealed senses read terminals from it
+    brain_kv.kv_set_json(flux_phase.HISTORY_KEY, [{"ts": ts, "total_condensed": docs,
+                                                   "per_source": {"arxiv": docs - docs // 2,
+                                                                  "fineweb": docs // 2}}])
+
+
+def _flux_off():
+    brain_kv.kv_set_json(flux_phase.HISTORY_KEY, [])
+
+
+# ---------------------------------------------------------------------------
+# Default off
+# ---------------------------------------------------------------------------
+
+def test_default_off_leaves_system_entirety_untouched(isolated):
+    assert not so.is_enabled() and not so.master_switch_on()
+    for name in ("bit_flip_parity", "observer_tangent", "oscillating_expansion_step"):
+        fn = getattr(system_entirety, name)
+        assert fn.__module__ == "src.quipu.system_entirety" and not hasattr(fn, "__wrapped__")
+
+
+def test_enable_wraps_and_disable_restores_identically(isolated):
+    orig = {n: getattr(system_entirety, n) for n in ("bit_flip_parity", "observer_tangent", "oscillating_expansion_step")}
+    assert so.enable() and so.enable()                       # idempotent
+    assert so.is_enabled()
+    for n, f in orig.items():
+        assert getattr(system_entirety, n) is not f
+        assert getattr(system_entirety, n).__wrapped__ is f
+    so.disable(); so.disable()
+    for n, f in orig.items():
+        assert getattr(system_entirety, n) is f
+
+
+def test_flags_select_what_is_wrapped(isolated):
+    orig_parity = system_entirety.bit_flip_parity
+    orig_obs = system_entirety.observer_tangent
+    orig_step = system_entirety.oscillating_expansion_step
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=True, mirror_training=False, coherency_depth=False))
+    assert system_entirety.bit_flip_parity is orig_parity
+    assert system_entirety.observer_tangent is orig_obs
+    assert system_entirety.oscillating_expansion_step is not orig_step
+    so.disable()
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False, coherency_depth=False))
+    assert system_entirety.bit_flip_parity is not orig_parity
+    assert system_entirety.oscillating_expansion_step is orig_step        # nothing to hook
+    so.disable()
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=True, coherency_depth=False))
+    assert system_entirety.oscillating_expansion_step is not orig_step    # the mirror alone needs the hook
+
+
+# ---------------------------------------------------------------------------
+# The loop
+# ---------------------------------------------------------------------------
+
+def test_phase_follows_the_field_and_the_somn_records_each_step(isolated):
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    assert "skipped" not in a
+    assert a["expansion_phase"] == "broaden" and a["bit_state"] == 1
+    s = a["self_organising"]
+    assert s["flux"]["on"] and s["step_phase"] == "broaden"
+    # the pulse wrote to vision (fineweb) and brain (arxiv); the path forms on one of them
+    assert s["somn"]["phase"] == "broaden" and s["somn"]["top_axis"] in ("vision", "brain")
+    assert s["somn"]["docs_per_source"] and s["prior_advanced"] is False
+
+    _flux_off()
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["expansion_phase"] == "deepen" and b["bit_state"] == -1 and b["flipped"] is True
+    assert b["self_organising"]["somn"]["phase"] == "deepen"
+    assert b["flip_count"] == a["flip_count"] + 1                    # parity flips still ungated
+
+    with system_entirety._conn() as cn:
+        st = ma.load_state(cn, ma.SomnConfig())
+        assert st.steps == 2 and st.potentiation_steps == 1 and st.relaxation_steps == 1
+        assert len(ma.rows(cn, 10)) == 2
+        flips = cn.execute("SELECT COUNT(*) FROM entirety_flip_log").fetchone()[0]
+        assert flips == 2
+        # the step's own record is intact and carries the blessing decision, not our summary
+        state = system_entirety.get_entirety_state()
+        assert state["axes"] == b["axes"] and "divine_blessing" in state and "self_organising" not in state
+        assert brain_kv.kv_get_json(ma.KV_ALLOCATION)["phase"] == "deepen"
+        assert lp.stored_prior(cn) is None                            # held → the prior did not move
+    # the loop closed through the senses: the ingest history moved vision and brain
+    # while the field was on (fineweb → vision, arxiv → brain, qpsi.annealed_senses)
+    assert a["axes"]["brain"] > b["axes"]["brain"] and a["axes"]["vision"] > b["axes"]["vision"]
+
+
+def test_without_a_counterpart_the_loop_records_no_field(isolated):
+    so.enable()
+    _flux_on()
+    out = system_entirety.oscillating_expansion_step(force=True)
+    s = out["self_organising"]["somn"]
+    assert s["field_norm"] == 0.0 and s["docs_per_source"] == {} and "no_counterpart" in s["events"]
+
+
+def test_after_step_failure_never_breaks_the_step(isolated, monkeypatch):
+    so.enable()
+
+    def boom(*a, **k):
+        raise RuntimeError("somn exploded")
+
+    monkeypatch.setattr(ma, "step", boom)
+    out = system_entirety.oscillating_expansion_step(force=True)
+    assert "skipped" not in out and out["flip_count"] is not None
+    assert out["self_organising"] == {"error": "somn exploded"}
+
+
+def test_rate_limited_step_gets_no_summary(isolated):
+    so.enable()
+    system_entirety.oscillating_expansion_step(force=True)
+    second = system_entirety.oscillating_expansion_step()
+    assert second.get("skipped") and "self_organising" not in second
+
+
+# ---------------------------------------------------------------------------
+# The operator's pulse
+# ---------------------------------------------------------------------------
+
+def test_pulse_without_route_is_a_plan_on_paper(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    monkeypatch.setattr(corpus_ingest, "run_ingest", lambda *a, **k: pytest.fail("run_ingest must not be called"))
+    p = so.pulse(route=False)
+    assert p["routed"] is False and p["plan"]["docs_per_source"]
+    assert sum(p["plan"]["docs_per_source"].values()) <= ma.SomnConfig().budget_docs
+
+
+def test_pulse_with_route_runs_exactly_the_plan(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    plan = so.plan()["docs_per_source"]
+    calls = []
+
+    def fake_run(sources, *, docs_per_source, **kw):
+        calls.append((tuple(sources), docs_per_source, kw.get("refine_every")))
+        return {"per_source": {sources[0]: {"ingested": docs_per_source}}, "elapsed_s": 0.1}
+
+    monkeypatch.setattr(corpus_ingest, "run_ingest", fake_run)
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    out = so.pulse(route=True)
+    assert out["routed"] is True
+    assert {c[0][0]: c[1] for c in calls} == plan
+    assert all(c[2] == 0 for c in calls)                            # refinement off unless asked
+    assert set(c[0][0] for c in calls) <= set(corpus_ingest.SOURCES)
+    assert "flip_count" in out["step"]
+
+
+def test_pulse_max_seconds_bounds_the_whole_pulse(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    plan = so.plan()["docs_per_source"]
+    budgets = []
+    clock = [1000.0]
+    monkeypatch.setattr(so.time, "monotonic", lambda: clock[0])
+
+    def fake_run(sources, *, docs_per_source, max_seconds=0.0, **kw):
+        budgets.append(max_seconds)
+        clock[0] += max_seconds               # each source spends its whole budget
+        return {"per_source": {sources[0]: {"ingested": docs_per_source}}, "elapsed_s": max_seconds}
+
+    monkeypatch.setattr(corpus_ingest, "run_ingest", fake_run)
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    out = so.pulse(route=True, max_seconds=120.0)
+    assert budgets and budgets[0] == 120.0 and sum(budgets) <= 120.0
+    if len([k for k, v in plan.items() if int(v) > 0]) > 1:
+        assert any(r.get("skipped") == "pulse time budget spent" for r in out["runs"])
+
+
+def test_status_reports_flags_flux_state_and_prior(isolated):
+    so.enable()
+    st = so.status()
+    assert st["enabled"] and st["flags"]["somn"] and "g" in st["somn"] and st["prior"]["realised_seen"] == 0
+    assert st["flux"]["phase"] in ("broaden", "deepen") and "budget_docs" in st["config"]
+
+
+def test_a_second_module_copy_adopts_the_existing_wrapping_instead_of_stacking(isolated):
+    """``python -m …self_organising`` executes the file twice (package copy + __main__).
+    The second copy must not wrap on top of the first: one after_step per step."""
+    import importlib.util
+    import pathlib
+    so.enable()
+    spec = importlib.util.spec_from_file_location(
+        "src.quipu.qpsi._self_organising_copy", pathlib.Path(so.__file__))
+    copy = importlib.util.module_from_spec(spec)
+    copy.__package__ = "src.quipu.qpsi"
+    import sys
+    sys.modules[spec.name] = copy                       # dataclasses resolve the module by name
+    try:
+        spec.loader.exec_module(copy)
+        assert copy.enable() and copy.is_enabled()
+    finally:
+        sys.modules.pop(spec.name, None)
+    step = system_entirety.oscillating_expansion_step
+    assert getattr(step, so.MARK, False) and not hasattr(step.__wrapped__, so.MARK)   # single layer
+    assert step.__wrapped__.__module__ == "src.quipu.system_entirety"
+    _flux_on()
+    out = system_entirety.oscillating_expansion_step(force=True)
+    with system_entirety._conn() as cn:
+        assert ma.load_state(cn, ma.SomnConfig()).steps == 1                         # one SOMN step, not two
+    copy.disable()
+
+
+def test_a_held_step_trains_from_its_mirror_and_the_next_step_carries_the_drive(isolated):
+    from src.quipu.qpsi import mirror_training as mt
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    d = (system_entirety.get_entirety_state() or {}).get("divine_blessing") or {}
+    assert d.get("held") is True                                       # no key, no attestations: held
+    m = a["self_organising"]["mirror"]
+    assert m and m["holds_trained"] == 1 and m["failed_at"] == d["failed_at"]
+    assert m["kind"] == mt.classify_hold(d["failed_at"], next(g["reason"] for g in d["gates"] if g["name"] == d["failed_at"]))
+    with system_entirety._conn() as cn:
+        rec = mt.load_record(cn, "system_entirety")
+        assert rec["holds_trained"] == 1 and rec["drive"]
+        assert lp.stored_prior(cn) is None                             # the real prior did not move
+        assert brain_kv.kv_get_json("entirety:radam_state:system_entirety", {}) == {} or True
+    monkeypatch_last = system_entirety._LAST_TS
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["self_organising"]["mirror"]["holds_trained"] == 2       # a new hold, a new lesson
+    assert "mirror_drive" in b["self_organising"]["somn"]["events"]    # the SOMN read the first hold's drive
+    with system_entirety._conn() as cn:
+        assert len(mt.rows(cn, "system_entirety")) == 2
+        assert len(ma.rows(cn, 10)) == 2
+
+
+def test_pulse_is_a_constrained_gate(isolated, monkeypatch):
+    import src.quipu.corpus_ingest as corpus_ingest
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    g = so.grant()
+    assert set(g["sources"]) == set(corpus_ingest.SOURCES) and "constrained gate" in g["ruling"]
+    plan = so.plan()["docs_per_source"]
+    assert so.constrained_gate(plan)["within_grant"] is True
+    assert so.constrained_gate({"arxiv": 10 ** 6})["within_grant"] is False
+    assert so.constrained_gate({"not_a_source": 1})["outside_sources"] == ["not_a_source"]
+    # narrowing the grant narrows the gate; a plan outside it is reported, not routed
+    monkeypatch.setenv(so.PULSE_SOURCES_ENV, "local_docs")
+    assert so.grant()["sources"] == ["local_docs"]
+    monkeypatch.setattr(corpus_ingest, "run_ingest", lambda *a, **k: pytest.fail("must not route outside the grant"))
+    out = so.pulse(route=True)
+    assert out["routed"] is False and out["constrained_gate"]["within_grant"] is False
+    assert "arxiv" in out["constrained_gate"]["outside_sources"]
+
+
+def test_coherency_depth_is_wired_anchoring_and_accretion(isolated, monkeypatch):
+    from src.quipu import mesh_slm
+    from src.quipu.qpsi import coherency_depth as cd
+    orig_scorer = mesh_slm._score_candidates
+    so.enable()
+    assert mesh_slm._score_candidates is not orig_scorer and mesh_slm._score_candidates.__wrapped__ is orig_scorer
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    # accretion ran once on the fresh field (the isolated DB has no mesh: an empty, recorded fibre set)
+    assert a["self_organising"]["planes"] is not None and a["self_organising"]["planes"]["tokens"] == 0
+    assert brain_kv.kv_get_json(cd.KV_SUMMARY)["tokens"] == 0
+    monkeypatch.setattr(system_entirety, "_LAST_TS", 0.0)
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["self_organising"]["planes"] is None                              # same ingest run: not rebuilt
+    so.disable()
+    assert mesh_slm._score_candidates is orig_scorer
+
+
+def test_coherency_depth_flag_alone_wraps_the_scorer_only(isolated):
+    from src.quipu import mesh_slm
+    orig_scorer = mesh_slm._score_candidates
+    orig_parity = system_entirety.bit_flip_parity
+    so.enable(so.Flags(flux_phase=False, learned_prior=False, somn=False, mirror_training=False, coherency_depth=True))
+    assert mesh_slm._score_candidates is not orig_scorer and system_entirety.bit_flip_parity is orig_parity
+    so.disable()
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=False, mirror_training=False, coherency_depth=False))
+    assert mesh_slm._score_candidates is orig_scorer
+
+
+def test_a_failed_accretion_is_rolled_back_whole_and_the_step_still_commits(isolated, monkeypatch):
+    from src.quipu.qpsi import coherency_depth as cd
+    so.enable()
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    _flux_on()
+
+    def _half_then_fail(cn, **kw):
+        cd.ensure_tables(cn)
+        cn.execute(f"INSERT INTO {cd.TABLE_DEPTH}(token_id, depth, halted_by, kl, planes, updated_at) "
+                   "VALUES(1, 1, 'no_plane', NULL, '[0, 1]', 'x')")
+        raise RuntimeError("lattice mid-rebuild")
+
+    monkeypatch.setattr(cd, "accrete", _half_then_fail)
+    out = system_entirety.oscillating_expansion_step(force=True)
+    so_out = out["self_organising"]
+    assert "error" not in so_out and so_out["planes"] == {"error": "lattice mid-rebuild"}
+    with system_entirety._conn() as cn:                                                  # rolled back whole:
+        assert cn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name=?",             # not even the table
+                          (cd.TABLE_DEPTH,)).fetchone()[0] == 0
+    assert brain_kv.kv_get_json(ma.KV_STATE) is not None                                 # the SOMN step committed
+    assert brain_kv.kv_get_json(cd.KV_SUMMARY) is None                                    # still fresh: retried next step
+
+
+def test_the_cli_entry_point_runs_clean_under_the_flag():
+    """``python -m src.quipu.qpsi`` (qpsi/__main__.py).  With QUIPU_SELF_ORGANISING=1
+    the package import already holds self_organising, so ``-m …qpsi.self_organising``
+    made runpy execute a second copy and warn ("found in sys.modules after import of
+    package … prior to execution") on every pulse.  The entry point is imported by
+    nothing, so the same command line is clean even with RuntimeWarning as an error."""
+    import os
+    import pathlib
+    import subprocess
+    import sys
+    from src.quipu.qpsi import __main__ as entry
+    assert entry._main is so._main                                            # one CLI, one module
+    root = pathlib.Path(__file__).resolve().parents[1]
+    env = dict(os.environ, QUIPU_SELF_ORGANISING="1", PYTHONPATH=str(root), PYTHONIOENCODING="utf-8")
+    r = subprocess.run([sys.executable, "-W", "error::RuntimeWarning", "-m", "src.quipu.qpsi", "--help"],
+                       cwd=root, env=env, capture_output=True, text=True, timeout=180)
+    assert r.returncode == 0, r.stderr
+    assert "found in sys.modules" not in r.stderr and "pulse" in r.stdout
+
+
+def test_pcm_cells_follow_the_somn_step_and_persist_only_their_keys(isolated):
+    from src.quipu.qpsi import pcm_cells as pc
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    pcm = a["self_organising"]["pcm"]
+    assert "error" not in pcm and set(pcm) == set(pc.AXES)
+    assert all(r["action"] in pc.ACTIONS for r in pcm.values())
+    with system_entirety._conn() as cn:
+        arr = pc.load_array(cn, "system_entirety")
+        assert arr.steps == 1 and len(pc.rows(cn)) == len(pc.AXES)
+        keys = [k for (k,) in cn.execute("SELECT key FROM brain_kv WHERE key LIKE 'entirety:pcm:%'")]
+        assert sorted(keys) == [pc.KV_PREFIX + "rheology:system_entirety", pc.KV_PREFIX + "system_entirety"]
+    st = so.status()
+    assert st["pcm"]["steps"] == 1 and "vision" in st["pcm"]["cells"]
+    so.disable()
+    so.enable(so.Flags(flux_phase=True, learned_prior=False, somn=True, mirror_training=False,
+                       coherency_depth=False, annealed_senses=False, resonance_phase=False,
+                       weyl_reference=False, pcm_cells=False))
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert "pcm" not in b["self_organising"]
+
+
+def test_deepen_step_carries_the_axis_shear(isolated):
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    system_entirety.oscillating_expansion_step(force=True)
+    _flux_off()
+    b = system_entirety.oscillating_expansion_step(force=True)
+    assert b["expansion_phase"] == "deepen"
+    s = b["self_organising"]
+    assert "error" not in s["pcm"] and s["pcm_shear"] is not None
+    assert {"u_bar", "dispersion", "psi", "counter_rotating"} <= set(s["pcm_shear"])

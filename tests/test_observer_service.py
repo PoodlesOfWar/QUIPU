@@ -89,3 +89,37 @@ def test_observe_and_guidance_oscillation_coupling():
     assert guidance["oscillation"]["coherence"] == 0.88
     assert guidance["oscillation"]["temperature_bias"] == 0.35
 
+
+def test_observer_world_model_transition_route():
+    # Test step transition
+    code, res = observer_service._world_model_transition({
+        "state": {
+            "inventory": 200.0,
+            "demand_rate": 40.0,
+        },
+        "action": {
+            "order_quantity": 40.0,
+            "demand_multiplier": 1.5,
+        },
+    })
+    assert code == 200
+    assert res["ok"] is True
+    assert res["mode"] == "step"
+    # Available: 200. Demand: 40 * 1.5 = 60. Fulfilled: 60. Next inv: 140.
+    assert res["predicted_state"]["inventory"] == 140.0
+    assert res["predicted_state"]["flux"] == 60.0
+
+    # Test rollout simulation
+    code, res = observer_service._world_model_transition({
+        "state": {"inventory": 100.0, "demand_rate": 20.0},
+        "actions": [
+            {"order_quantity": 20.0},
+            {"order_quantity": 20.0},
+        ],
+    })
+    assert code == 200
+    assert res["ok"] is True
+    assert res["mode"] == "rollout"
+    assert len(res["trajectory"]) == 3
+
+

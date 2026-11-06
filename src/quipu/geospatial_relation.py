@@ -487,6 +487,101 @@ def tick_geospatial_relation(
     }
 
 
+def attach_bathymetry_features(
+    cn: sqlite3.Connection,
+    entity_id: str,
+    bathymetry_features: dict[str, float] | Any,
+    *,
+    now: str | None = None,
+    cost_class: str = "bathymetric_sea",
+    flip_count: int | None = None,
+    planck_floor: float = 1e-4,
+) -> dict[str, Any]:
+    """Attach the 6-feature VNN bathymetric vector (`modern_depth_m`,
+    `historical_depth_m`, `depth_uncertainty_m`, `sediment_flux_x`,
+    `sediment_flux_y`, `seabed_slope`) to a `SpatialMaterialProcessor` node
+    without overwriting any 7-D semantic embeddings.
+
+    Implements the Planck displacement gate from `System_Entirety_Nodes_Edges_Planck_Pompeii.md`:
+    `samples` increments only when physical/bathymetric displacement exceeds
+    `planck_floor`; sub-Planck observations refresh `last_seen` as a heartbeat.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc).isoformat()
+    if hasattr(bathymetry_features, "to_dict"):
+        bathy_dict = dict(bathymetry_features.to_dict())
+    else:
+        bathy_dict = {str(k): float(v) for k, v in dict(bathymetry_features).items()}
+
+    row = cn.execute(
+        "SELECT props_json, samples FROM corpus_entity WHERE entity_id=? AND entity_type=?",
+        (entity_id, SPATIAL_MATERIAL_PROCESSOR),
+    ).fetchone()
+    existing: dict[str, Any] = {}
+    old_samples = 0
+    if row:
+        old_samples = int(row[1] or 0)
+        if row[0]:
+            try:
+                existing = json.loads(row[0])
+            except Exception:
+                existing = {}
+
+    old_bathy = existing.get("vnn_bathymetry") or {}
+    disp = 0.0
+    if old_bathy:
+        for k, v in bathy_dict.items():
+            disp = max(disp, abs(float(v) - float(old_bathy.get(k, 0.0))))
+    else:
+        disp = 1.0  # initial materialization exceeds Planck floor
+
+    displaced = disp >= float(planck_floor)
+    actualized = dict(existing.get("actualized_space") or {"frame_id": ACTUALIZED_SPACE_FRAME})
+    actualized["cost_class"] = str(cost_class)
+    if displaced and flip_count is not None:
+        actualized["flip_count_at_displacement"] = int(flip_count)
+
+    props: dict[str, Any] = {
+        **existing,
+        "entity_id": entity_id,
+        "entity_type": SPATIAL_MATERIAL_PROCESSOR,
+        "actualized_space": actualized,
+        "vnn_bathymetry": bathy_dict,
+        "cost_class": str(cost_class),
+        "planck_displaced": bool(displaced),
+        "updated_at": now,
+    }
+    if displaced and flip_count is not None:
+        props["flip_count_at_displacement"] = int(flip_count)
+
+    if row is None:
+        cn.execute(
+            "INSERT INTO corpus_entity(entity_id, entity_type, label, props_json, "
+            " first_seen, last_seen, samples) VALUES(?,?,?,?,?,?,1)",
+            (
+                entity_id,
+                SPATIAL_MATERIAL_PROCESSOR,
+                f"SpatialMaterialProcessor {entity_id}",
+                json.dumps(props, default=str),
+                now,
+                now,
+            ),
+        )
+    elif displaced:
+        cn.execute(
+            "UPDATE corpus_entity SET props_json=?, last_seen=?, samples=? "
+            "WHERE entity_id=? AND entity_type=?",
+            (json.dumps(props, default=str), now, old_samples + 1, entity_id, SPATIAL_MATERIAL_PROCESSOR),
+        )
+    else:
+        # Heartbeat only: refresh last_seen without inflating samples
+        cn.execute(
+            "UPDATE corpus_entity SET last_seen=? WHERE entity_id=? AND entity_type=?",
+            (now, entity_id, SPATIAL_MATERIAL_PROCESSOR),
+        )
+    return props
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
@@ -585,4 +680,5 @@ __all__ = [
     "couple_anchors_to_torus",
     "strengthen_peer_mesh",
     "tick_geospatial_relation",
+    "attach_bathymetry_features",
 ]

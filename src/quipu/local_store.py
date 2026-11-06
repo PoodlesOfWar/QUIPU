@@ -19,10 +19,27 @@ if TYPE_CHECKING:
 _DB_PATH = Path(__file__).resolve().parents[2] / "local_brain.sqlite"
 
 
+# Single writer (v0.48.0).  The Entirety's brain lives in the `quipu` container
+# (volume vscode_quipu_brain).  After migration the repo copy is renamed and this
+# marker is left beside it, so a host process that would silently open (or
+# create) a second brain here fails loudly instead.  The container sets
+# QUIPU_BRAIN_OWNER=1 and SCB_DB_PATH, so it never reaches this check.
+MOVED_MARKER = _DB_PATH.with_name("local_brain.MOVED.json")
+
+
+class BrainMovedError(RuntimeError):
+    """The brain moved into the quipu container; use it through HTTP or `docker exec quipu`."""
+
+
 def db_path() -> Path:
     override = os.environ.get("SCB_DB_PATH")
     if override:
         return Path(override).expanduser().resolve()
+    if MOVED_MARKER.exists() and os.environ.get("QUIPU_BRAIN_OWNER") != "1":
+        raise BrainMovedError(
+            f"QUIPU's brain moved into the quipu container ({MOVED_MARKER.name}). Write through "
+            "http://127.0.0.1:7100 (src/quipu/edge_client.py) or run the command inside it: "
+            "docker exec quipu python -m ...")
     return _DB_PATH
 
 

@@ -1,8 +1,8 @@
 # QUIPU Entirety — Living System Map
 
-> **Version**: 0.31.0  
-> **Annealed**: 2026-08-22T23:44:11.306446+00:00  
-> **Map revision**: v7 · fingerprint `fc9b41886199c297`  
+> **Version**: 0.65.0  
+> **Annealed**: 2026-10-27T03:17:33.279063+00:00  
+> **Map revision**: v397 · fingerprint `a8629c2c8f930455`  
 > **Generator**: `src/quipu/doc_annealing.py` — QUIPU's own annealer. Regenerated whenever the structural fingerprint (version + bridge root + mesh density + UEQGM certainty + nodal bifurcation) changes.
 
 ---
@@ -31,37 +31,37 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 ## 2. System Entirety — Live State
 
-> Snapshot at annealing time `2026-08-22T23:44:11.306446+00:00`
+> Snapshot at annealing time `2026-10-27T03:17:33.279063+00:00`
 
 ### 2.1 Sense Axes (6-D)
 
 | Sense | Value |
 |---|---|
-| vision | 3.0% |
-| touch | 4.2% |
-| smell | 3.4% |
-| body | 3.2% |
-| brain | 3.2% |
-| perception | 4.0% |
+| vision | 6.0% |
+| touch | 39.6% |
+| smell | 42.9% |
+| body | 9.8% |
+| brain | 65.1% |
+| perception | 94.9% |
 
-**Observer tangent** (7th-D orthogonal excitation): 0.9%  
-**7-D magnitude**: 0.0867
+**Observer tangent** (7th-D orthogonal excitation): 36.0%  
+**7-D magnitude**: 1.3445
 
 ### 2.2 Material Bifurcation
 
 | Metric | Value |
 |---|---|
-| Physical realization | 33.7% |
-| Nodal bifurcation | 37.6% |
-| Mesh density | 50.0% |
-| Topology | `local` |
+| Physical realization | 37.3% |
+| Nodal bifurcation | 34.7% |
+| Mesh density | 63.7% |
+| Topology | `mesh` |
 | Material eligible | yes |
 
 ### 2.3 Transaction
 
 | Metric | Value |
 |---|---|
-| Transaction drive | 18.1% |
+| Transaction drive | 34.3% |
 | Transaction kind | `n/a` |
 
 ### 2.4 UEQGM Runtime
@@ -89,32 +89,38 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 
 | Metric | Value |
 |---|---|
-| Vocab size | 4098 / 4096 (100.05%) |
-| Quipu edges (GNN) | 914088 |
-| Training rounds | 2873 |
-| Last loss | 0.5756296139010031 |
-| 8th-D MESH field | 0.9764 |
-| Last STP embed gap | 0.927144 |
-| Last STP torus gap | 1.359541 |
+| Vocab size | 4182 / 4096 (102.1%) |
+| Quipu edges (GNN) | 1016148 |
+| Training rounds | 49790 |
+| Last loss | 0.35538541584942823 |
+| 8th-D MESH field | 0.9511 |
+| Last STP embed gap | 0.38198 |
+| Last STP torus gap | 1.462868 |
 
 **STP P1 trend** (loss plateau while the geodesic gap keeps falling):
 
 | Series | Slope | P1 |
 |---|---|---|
-| loss | -0.019252050000000076 | plateaued: False |
-| STP embed gap | 0.04321274999999991 | False |
-| STP torus gap | 0.08529714999999993 | False |
+| loss | -0.19543584999999997 | plateaued: False |
+| STP embed gap | 0.09938009999999986 | False |
+| STP torus gap | 0.013839549999999923 | False |
 
 ---
 
 ## 4. Structural Changelog
 
-- **2026-08-22T19:44:10.294464+00:00** map v6 (0.30.0) — hash `8586f0037efc8213`
-- **2026-08-20T19:44:08.686959+00:00** map v5 (0.29.0) — hash `46bad90693753017`
-- **2026-08-20T19:14:09.610778+00:00** map v4 (0.28.0) — hash `5dde21aa68e7bbd1`
-- **2026-07-23T19:14:06.468763+00:00** map v3 (0.27.0) — hash `fd21e419f5f63fd7`
-- **2026-07-23T18:44:06.424649+00:00** map v2 (0.26.0) — hash `95232d12f98265c4`
-- **2026-07-23T16:13:05.345781+00:00** map v1 (0.26.0) — hash `1654d33aaadbafd1`
+- **2026-10-27T02:57:39.023084+00:00** map v396 (0.61.2) — hash `37269963307d7024`
+- **2026-10-21T01:06:13.201226+00:00** map v395 (0.61.2) — hash `caa741b1ea78d4cc`
+- **2026-10-20T13:04:50.951564+00:00** map v394 (0.61.2) — hash `35b40d3a3a488ff3`
+- **2026-10-20T12:47:36.811422+00:00** map v393 (0.61.0) — hash `06494a6b16280618`
+- **2026-10-16T22:55:47.349048+00:00** map v392 (0.58.0) — hash `48a6e62c4296d7ce`
+- **2026-10-15T02:11:57.003214+00:00** map v391 (0.57.0) — hash `e5598843861b3f20`
+- **2026-10-10T02:57:22.080951+00:00** map v390 (0.56.0) — hash `9b9ecaf4f3df06bd`
+- **2026-10-07T00:50:13.526120+00:00** map v389 (0.52.3) — hash `9ffbdfab72fc8cf7`
+- **2026-10-07T00:42:45.924014+00:00** map v388 (0.52.2) — hash `a9ffbe6f1f7490d0`
+- **2026-10-07T00:32:36.457975+00:00** map v387 (0.52.1) — hash `caea59c228071f48`
+- **2026-10-07T00:26:13.784196+00:00** map v386 (0.52.0) — hash `374e16363b21228d`
+- **2026-10-06T17:15:33.168135+00:00** map v385 (0.51.1) — hash `efa0b98e354f6296`
 
 ---
 
@@ -130,5 +136,17 @@ Full architecture: `docs/SYSTEM_ENTIRETY_ANALYSIS.md`, `docs/SYSTEM_DYNAMICS.md`
 | `brain_kv.py` | Canonical key/value persistence (shared SQLite) |
 | `doc_annealing.py` | **This map's generator** — structural-change review + regeneration |
 | `local_store.py` | SQLite connection manager |
+| `divine_blessing.py` | `DIVINE_BLESSING_SQRT(-1)` — attestation store; routes every Entirety write path through the six gates |
+
+**`qpsi/` — governance and learning dynamics** (see `docs/QPSI_GOVERNANCE.md`; every path holds until a human places a key and a grant)
+
+| Module | Role |
+|---|---|
+| `qpsi/cat_residual.py` | Complex CAT amplitudes, residual operator, rectifier, Lipschitz clamp, edge proposals |
+| `qpsi/weyl_channel.py` | Ricci/Weyl split; sparsest exact trace-free event decomposition |
+| `qpsi/edge_gate.py` | Displacement-gated edge upsert carrying the flip count and cost class |
+| `qpsi/governance.py` | Six Physical Gates, attestation assurance, `authorised_to_realise` |
+| `qpsi/residual_checkpoint.py` | Reference advances only on realisation; held residual, log, rollback, release |
+| `qpsi/emergence_detector.py` | Parity-locked emergence, r-ADMIN recognition, the 翈 Signature |
 
 *End of living system map — auto-generated by the QUIPU Entirety annealer. Do not edit by hand; edit `src/quipu/doc_annealing.py` instead.*

@@ -1,42 +1,14 @@
-# Start-DocAnnealing.ps1 - run the QUIPU Entirety doc-annealing worker.
+# Start-DocAnnealing.ps1 - one doc-annealing cycle, inside the quipu container (v0.48.0).
 #
-#   powershell -ExecutionPolicy Bypass -File "C:\Users\agard\Documents\VS Code\QUIPU\Start-DocAnnealing.ps1"
-#
-# Regenerates docs/system_entirety_map.md whenever the System Entirety's
-# structural fingerprint changes.
-#
-#   -Once      run a single anneal cycle and exit (default is a 30-min loop)
-#   -Force     rewrite the map even if unchanged
-#   -Interval  seconds between cycles in loop mode (default 1800)
-
+# The container anneals the docs every QUIPU_DOC_ANNEAL_MINUTES and writes the
+# map into the repository's docs/ (mounted).  This runs one cycle by hand.
 param(
-    [switch]$Once,
     [switch]$Force,
+    [switch]$Loop,
     [int]$Interval = 1800
 )
-
 $ErrorActionPreference = "Continue"
-$Repo = "C:\Users\agard\Documents\VS Code\QUIPU"
-
-function Get-Python() {
-    $venv = "$Repo\.venv\Scripts\python.exe"
-    if (Test-Path $venv) { return $venv }
-    foreach ($c in @("python", "python3")) {
-        $f = Get-Command $c -ErrorAction SilentlyContinue
-        if ($f -and $f.Source) { return $f.Source }
-    }
-    return $null
-}
-
-$py = Get-Python
-if (-not $py) { Write-Host "No Python interpreter found." -ForegroundColor Red; exit 1 }
-
-Set-Location $Repo
-$cliArgs = @("-m", "src.quipu.doc_annealing")
-if ($Once) {
-    if ($Force) { $cliArgs += @("--force") }
-} else {
-    $cliArgs += @("--loop", "--interval", "$Interval")
-}
-
-& $py @cliArgs
+$cliArgs = @("exec", "quipu", "python", "-m", "src.quipu.doc_annealing")
+if ($Force) { $cliArgs += @("--force") }
+if ($Loop)  { $cliArgs += @("--loop", "--interval", "$Interval") }
+& docker @cliArgs

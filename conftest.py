@@ -1,10 +1,20 @@
 """pytest conftest for QUIPU - local-only, no live DB, no LLM endpoints."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# The operator's runtime switch must not change what the tests see. With
+# QUIPU_SELF_ORGANISING=1 in the shell (as on the host that runs the observer),
+# importing src.quipu wraps system_entirety.bit_flip_parity and
+# temporal_spatiality._sense_signals before any test is collected, so tests of
+# the unwrapped functions read the wrapped ones. Tests that exercise the loop
+# enable it themselves (self_organising.enable(Flags(...))) or set the variable
+# for a subprocess.
+os.environ["QUIPU_SELF_ORGANISING"] = "0"
 
 # Path bootstrap: make `from src.quipu import ...` work from the repo root.
 _ROOT = Path(__file__).resolve().parent

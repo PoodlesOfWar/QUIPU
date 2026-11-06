@@ -1483,7 +1483,15 @@ def oscillating_expansion_step(*, force: bool = False) -> dict:
         if phase == "deepen":
             def _dispatch_bg():
                 try:
-                    from .daily_dispatch import send_daily_dispatch
+                    try:
+                        from .daily_dispatch import send_daily_dispatch
+                    except (ImportError, ModuleNotFoundError):
+                        try:
+                            from src.brain.daily_dispatch import send_daily_dispatch
+                        except (ImportError, ModuleNotFoundError):
+                            send_daily_dispatch = None
+                    if send_daily_dispatch is None:
+                        return
                     result = send_daily_dispatch() or {}
                     sent = bool(result.get("sent"))
                     reason = str(result.get("reason") or "unknown")

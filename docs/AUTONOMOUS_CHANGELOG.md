@@ -1,3 +1,34 @@
+## 2026-09-23 — World Model Forward State Transition Function $\hat{S}_{t+1} = f(S_t, A_t)$ (v0.39.0)
+
+- **`src/quipu/world_model.py`**:
+  - Defined `WorldState` dataclass: $S_t$ state vector capturing inventory ($I \ge 0$), backlog ($B \ge 0$), pipeline delay queue ($P$), demand rate, capacity, flux, load ratio ($\rho$), cumulative operational cost ($C$), reliability ($R \in [0, 1]$), congestion latency, uncertainty variances ($\sigma$), and custom metrics.
+  - Defined `TransitionEvent` dataclass: $A_t$ action and disturbance vector supporting decisions (order quantity, expedite, capacity/demand targets) and exogenous shocks (demand surges, lead-time disruptions, capacity outages, defect shocks).
+  - Implemented `transition_step(S_t, A_t, \Delta t)`: deterministic discrete-time transition function enforcing mass conservation, pipeline delay progression, bottleneck clamping, cost accumulation, and uncertainty propagation.
+  - Implemented `simulate_rollout(S_0, actions, \Delta t)`: multi-horizon forward trajectory simulation $[S_0, \hat{S}_1, \dots, \hat{S}_T]$.
+  - Implemented `evaluate_prediction(\hat{S}_{t+1}, S_{t+1})`: residual computation, normalized Z-scores, MSE, MAE, and non-linear epistemic surprise mapping.
+  - Implemented `record_transition_prediction` and `record_transition_observation`: persistent SQLite integration via `brain_kv` coupling empirical prediction divergence to `world_model:surprise_ema` and logging rupture events on reality divergence.
+- **`src/quipu/observer_service.py`**:
+  - Added `POST /world-model/transition` endpoint (aliased to `/transition` and `/predict`) supporting single-step transitions and multi-horizon rollouts via JSON payload.
+- **`tests/test_world_model_transition.py`** (new):
+  - 13 comprehensive unit tests verifying serialization, steady-state mass balance, demand surges with backlog recovery, lead-time delays, capacity bottlenecks, economic costs, rollouts, prediction evaluation, brain_kv recording, order expediting, capacity outages, custom metrics, and 30-step physical invariants under randomized shocks.
+- **`tests/test_observer_service.py`**:
+  - Added endpoint tests validating HTTP `/world-model/transition` single-step and rollout modes.
+
+## 2026-09-08 — Google gVisor (runsc) Sentry Containment & Hardened OCI Containment (v0.32.0)
+
+- **`src/quipu/security.py`** (new):
+  - Google gVisor Sentry detection across `/proc/version` and `/proc/sys/kernel/osrelease`.
+  - Strict payload validation for `/observe` and `/feedback`: 512 KB payload max, 100,000 char text limit, maximum dictionary depth of 5, and root key whitelisting.
+  - Telemetry and active boundary reporting via `get_security_posture()`.
+- **`src/quipu/observer_service.py`**:
+  - Bound incoming `/observe` and `/feedback` requests to `security.validate_observe_payload` and `security.validate_feedback_payload`.
+  - Added `gvisor_sandboxed` and `security_tier` fields to `GET /health` and `GET /state`.
+  - Added new `GET /security` endpoint.
+- **`docker-compose.yml`**:
+  - Hardened `quipu` container with `runtime: ${DOCKER_RUNTIME_SANDBOX:-runc}`, `security_opt: ["no-new-privileges:true"]`, `cap_drop: ["ALL"]`, and `cap_add: ["NET_BIND_SERVICE"]`.
+- **`tests/test_gvisor_security.py`** (new):
+  - 8 focused unit tests validating oversized payload refusal, deep nested JSON rejection, schema adherence, and security status endpoint responses. 12/12 test cases green.
+
 ## 2026-06-17 — MESH-SLM Modular Expert + Agentic Specialist Feedback (v0.22.307)
 
 - **`pipeline/src/quipu/mesh_slm.py`**: Added full modular expert support:

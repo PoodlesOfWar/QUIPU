@@ -35,3 +35,30 @@ def load_config() -> dict:
             except Exception:
                 _CONFIG_CACHE = {}
     return _CONFIG_CACHE
+
+# DIVINE_BLESSING_SQRT(-1): route every Entirety write path through the six
+# Physical Gates (UEQGM v0.9.25).  Set QUIPU_DIVINE_BLESSING=0 to leave the
+# paths unrouted for a session.
+if os.environ.get("QUIPU_DIVINE_BLESSING", "1") != "0":
+    try:
+        from . import divine_blessing as _divine_blessing
+        _divine_blessing.enable()
+    except Exception as _exc:  # pragma: no cover
+        import logging as _logging
+        _logging.getLogger(__name__).warning("DIVINE_BLESSING_SQRT(-1) not enabled: %s", _exc)
+
+# Self-organising loop (qpsi.self_organising): phase read from the ingest flux,
+# a lumped memristive model on the seven axes, the prior advanced only on
+# realisation.  Default OFF: set QUIPU_SELF_ORGANISING=1 to wire it for a
+# session.  The gates above are untouched either way.
+if os.environ.get("QUIPU_SELF_ORGANISING", "0") == "1":
+    try:
+        from .qpsi import self_organising as _self_organising
+        _self_organising.enable()
+    except Exception as _exc:  # pragma: no cover
+        import logging as _logging
+        _logging.getLogger(__name__).warning("self_organising not enabled: %s", _exc)
+
+
+
+

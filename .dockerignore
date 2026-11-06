@@ -6,7 +6,6 @@ local_brain.sqlite
 local_brain.sqlite-*
 tests
 bench
-docs
 julia
 gui
 *.ps1
@@ -14,3 +13,8 @@ Todays Learning.txt
 LEARNINGS.md
 CHANGELOG.md
 RELEASE_NOTES.md
+_to_delete
+*.sqlite
+*.sqlite-*
+*.bundle
+*.bak

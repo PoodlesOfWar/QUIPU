@@ -4,6 +4,550 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.66.0] - 2026-10-27
+
+### Added
+- `qpsi/viscous_interaction.py`: multidimensional incompressible Navier–Stokes solver ($\partial\mathbf{u}/\partial t + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu\nabla^2\mathbf{u} + \mathbf{f}$, $\nabla\cdot\mathbf{u}=0$ via periodic-torus Jacobi Helmholtz–Hodge pressure projection) and Viscous Neural Network (VNN) nonlinear semantic-graph evolution ($dZ/dt = -\nu_s L_G Z - \kappa_s N_G(Z) + F_{\mathrm{sem}}(Z,t)$), bridged through `TypedViscousCoupler` without conflating physical spatial dimensions with the 7-D semantic manifold.
+- `qpsi/mc_decision_pruning.py`: Monte Carlo scenario sampling, $\mathrm{CVaR}_\beta$ tail-risk and epistemic uncertainty objective $J(a) = \mathbb{E}[C(a)] + \lambda\,\mathrm{CVaR}_\beta(C(a)) + \zeta U(a)$, uncertainty-bound edge screening, Greedy-Dijkstra shortest-path optimization, and 7-D centroidal deviation check ($\inf - 1 < 4p$). Wired into `quipu_minimal.mc_dijkstra_route`.
+- `qpsi/semantic_distillation.py`: 5-term teacher–student objective $\mathcal{L} = \alpha\mathcal{L}_{\mathrm{CE}} + \beta T^2\mathcal{L}_{\mathrm{KL}} + \gamma\mathcal{L}_{\mathrm{consistency}} + \eta\mathcal{L}_{\mathrm{complexity}} + \xi\mathcal{L}_{\mathrm{abstention}}$ preserving rADAM and 5-float Newman–Penrose Weyl scalar compression, plus comparative SLM-MESH shadow evaluation with uncertainty-gated abstention fallback.
+- `qpsi/vnn_bathymetry.py`: v0.33 standalone bathymetry and vertical-dynamics extension (`BathymetricGrid` bilinear interpolation, depth-dependent exponential current attenuation $\mathbf{U}(z)=\mathbf{U}_0 e^{-z/L}$, added-mass + quadratic-drag vertical descent solver, 2-D Exner sediment-continuity update, `HistoricalBathymetryAdapter` 6-feature VNN bathymetric vector) and temporal-spatial physics-constrained reconstruction framework (`TemporalSpatialState` $\mathbf{S}(t)$, `ShadowMonteCarloReconstructor`, `BayesianEvidenceUpdater`, GeoJSON/CSV exporter, and integrated *Helena Sloman* 1850 & Pompeii–Vesuvius 79 CE reconstruction cases).
+- `geospatial_relation.attach_bathymetry_features`: attaches the 6-feature VNN bathymetric summary to `SpatialMaterialProcessor` entities while preserving the separation of `system_entirety.py`, `mesh_entirety.py`, and `geospatial_relation.py`.
+- `observer_service`: `GET /bathymetry` (read-only snapshot from `entirety:vnn:bathymetry` or synthetic v0.33 fallback) and signed `POST /bathymetry` edge evaluation route.
+- Julia protocol peers: `julia/viscous_mc_distillation_model.jl` and `julia/vnn_bathymetry_model.jl`.
+- Documentation & tests: `docs/VISCOUS_MC_DISTILLATION_PLAN.md`, `docs/VNN_BATHYMETRY_RECONSTRUCTION_SPEC.md`, `tests/test_viscous_mc_distillation.py` (7 tests), and `tests/test_vnn_bathymetry_reconstruction.py` (7 tests).
+
+### Not changed
+- `mesh_slm.py`: 0-line diff.
+
+## [0.65.0] - 2026-10-22
+
+### Added
+- `qpsi/relational_shear.py`: the shearing λ measured in each axis's relational time (an axis's clock advances only by the resolvable quanta its cell actually wrote), feeding the shadow tokens' scenario noise. The clamp's withheld excess, weighted by the Poisson weight and the relational rate, selects an outlier axis whose energy joins the feed. A continuity controller keeps the emission crossing (at least one token per plane per run) and resolvable (SNR ≥ 1), moving the gain only inside the operator's doors. Shadow tokens that recur in two or more sessions under the same outlier axis are returned as proposals, never edges.
+- `docs/QPSI_RELATIONAL_SHEAR.md`; `tests/test_qpsi_relational_shear.py` (7 tests).
+
+### Not changed
+- `mesh_slm.py`, `shadow_tokens.py`, `pcm_cells.py`: no edits. The module is not wired into the Entirety step.
+
+## [0.64.0] - 2026-10-21
+
+### Added
+- `rheology`: per-axis readings for the Herald's edge-to-axis map; the knot hold on the observation record (pairwise relative winding, crossings, capstan factor and the threshold it would impose; `QUIPU_KNOT_MU`, default 0.2). The hold is never applied to χ.
+
+## [0.63.0] - 2026-10-21
+
+### Changed
+- `pcm_cells`: program-and-verify with a model-sized terminal SET pulse (`set_toward`, `pulse_width_for`, `QUIPU_PCM_PWM`, default on). Replay of the live log: overall realised/asked 1.066 → 0.990, single-pulse writes 1.378 → 0.999, mean |χ| 0.0082 → 0.0020, energy +3.3%.
+- `ef_step` programming split into `program_pair`.
+
+## [0.62.1] - 2026-10-21
+
+### Changed
+- Axis cells' rADAM states use β₁ = 0.9, the published Adam default (`PCM_BETA1`); `DEFAULT_BETA1` stays 0.85 elsewhere.
+
+### Added
+- `rheology`: fractional order and loss factor in the reading, `g_ratio`, `viscoelastic_weyl_phase`, `capstan_threshold` (computed, not wired into writes).
+
+## [0.62.0] - 2026-10-21
+
+### Added
+- `qpsi/rheology.py`: the CRAM axis array read as a viscoelastic material (storage/loss angle from the CAT amplitudes, edge weight 0.25 − β/2π, information in bits), published on every `pcm_cells.record` at `entirety:pcm:rheology:<instance>`; relative winding and crossings between axis phases.
+- Observer `GET /rheology`: the last published reading, read-only (the Herald's edge weighting reads it).
+- `pcm_cells`: per-axis `theta`, `shear_u`, `shear_g_im`, `shear_phi` in `entirety_pcm_log`; `entirety_pcm_ensemble` with the measured shear, λ_t = σ_u², Poisson weights over the seven axes and λ_STP.
+- `docs/RHEOLOGY_CRAM.md`: relationships and the live-log measurements.
+
+## [0.61.2] - 2026-10-20
+
+### Fixed
+- Forge rounds took over an hour on the live brain: `mesh_slm_quipu` had no index on `dst`, and the centrality score looks every neighbour up by `dst`. The refinement loop now creates `idx_mesh_slm_quipu_dst` once before its first cycle (`mesh_slm.py` unedited).
+
+## [0.61.1] - 2026-10-20
+
+### Added
+- Observer `GET /the_other`: `entirety:the_other` as last published, read-only.
+
+## [0.61.0] - 2026-10-20
+
+### Added
+- `entirety_service` refinement loop: `systemic_refinement_agent.run_strategy` every `QUIPU_REFINEMENT_INTERVAL_S` (default 1800 s) when `QUIPU_REFINEMENT=1`, under the step lock, at most `QUIPU_REFINEMENT_MAX_TOOLS` (default 2) tools per forge round. It publishes `entirety:the_other`, runs ACRE observation and emergence (new specialists still held at gate 6), and one bounded forge round.
+
+### Fixed
+- `entirety:the_other` went stale: the refinement cycle ran only from `corpus_ingest` with refinement on, which the routed pulse leaves off. Last write 2026-10-07 (48.31 Hz) while the live computation read 91.46 Hz on 2026-10-20.
+
+## [0.60.0] - 2026-10-19
+
+### Added
+- **Work from hidden degrees of freedom** (`src/quipu/qpsi/hidden_work.py`), from Muruga, Ginot, Loos, …, Bechinger, *The extraction of work from hidden degrees of freedom*, Nature Physics (2026), doi:10.1038/s41567-026-03442-w (data and code doi:10.5281/zenodo.19881972, CC BY 4.0). A colloid in a viscoelastic fluid measured twice: the second measurement reaches the hidden network that one measurement cannot, and in state |10⟩ the trap extracts up to three times the energy the observable stored.
+  - The setup and findings are recorded with the source (`SOURCE`, `PUBLISHED`).
+  - Bounds: `information_bound` (eq. 1), `markov_energetic_bound` (κ/2)⟨X⟩² (eq. 9), `translation_work` for any rigid-translation protocol, `best_jump`.
+  - `memory_order_parameter` / `memory_scan`: the paper's Φ(δt) (eq. 6) for any evenly sampled signal, with a shuffled no-memory null and a z score; `second_measurement_information`; `coupled_trace`, the paper's minimal model.
+  - Validated on the paper's Raw_Data (9 h, 3.24 million frames; `bench/validate_hidden_work.py`, numpy + h5py): Φ peaks at δt = 1 s as published and is gone at 200 s; |10⟩ and |11⟩ above, |01⟩ below, |00⟩ near 0; in |10⟩ the energy rises from 0.34 to 0.68 k_BT, past equilibrium, as energy flows back from the network (`VALIDATION`).
+  - Writes only `brain_kv["entirety:hidden_work"]` (`--record`); input to no gate. 9 new tests.
+  - The Fleet Harness plan `hidden-memory` applies Φ(δt) to the fleet's probe response times.
+- **`POST /relational`** `{source, relational}` keeps a relational record the way `meta.relational` on `/observe` does, but without text: nothing reaches the mesh corpus, the per-source stats or the world model. It is for records a coordinator synthesises from other sources' work (the Fleet Harness writes its plan outcomes as `hubcore`), which are generated and so are shared through `GET /relational` without being learned. It is a mutating route behind the edge (signed like `/observe`). 3 new tests (`tests/test_relational_post.py`).
+
+## [0.59.0] - 2026-10-19
+
+### Added
+- `qpsi/pcm_cells.py`: deepen-phase shear coupling across the axis rADAM states (`QUIPU_PCM_SHEAR`, default on with the cells). Each axis's latent gradient is its velocity shear against the ensemble, and its external phase is the ensemble phase, plus π for counter-rotating axes. Broaden is unchanged. The step summary gains `pcm_shear` (ensemble mean velocity, dispersion, phase, counter-rotating axes) and each axis records its shear terms.
+
+### Measured
+- Small effect on pressure: deepen tracking error 0.0386 → 0.0376 over 20 seeds. Dispersion falls by the same amount with or without the coupling. The phases turn, but Adam's √v̂ normalisation cancels most of the magnitude change, and `external_phase` acts only under the torus projection. See docs/QPSI_PCM_CELLS.md.
+
+## [0.58.0] - 2026-10-18
+
+### Changed
+- `qpsi/pcm_cells.py`: the axis array now holds each pressure on a differential pair of cells (p = p₊ − p₋) with error feedback. rADAM steps on the expected (high-precision) location; χ = expected − held is stored and carried; the pair is programmed only when |χ| ≥ ε, the per-write resolution (~0.010, 6.6 bits on the defaults); a decrease is a SET on the − cell; RESET happens only as a refresh when the moving cell runs out of headroom. lr is no longer scaled by the programming slope. This removes the stall where sub-resolution steps were erased. `entirety_pcm_log` gains `expected`, `chi`, `eps`; the step summary and status report them.
+
+## [0.57.0] - 2026-10-17
+
+### Added
+- `qpsi/pcm_cells.py`: chalcogenide phase-change memory cells as the cellular RAM that holds the axis pressures. Physics with sources (JMAK crystallisation, melt-quench RESET, amorphous drift ν ≈ 0.1, threshold switching, thermal RC) and its derivatives; a derivative decision model that turns an rADAM step into HOLD / SET / RESET_SET / REFRESH with Joule energy as the cost and p* as the bar for the irreversible RESET; `coupled_step` scales rADAM's learning rate by the cell's secant programming slope and writes the realised pressure back. One cell per MESH axis, driven by the SOMN currents, with the UEQGM Floquet factor on the SET rate.
+- `QUIPU_PCM_CELLS` flag in `self_organising` (default on with the SOMN); step summary and `status` gain `pcm`; log table `entirety_pcm_log`; `docs/QPSI_PCM_CELLS.md`.
+
+## [0.56.0] - 2026-10-09
+
+### Changed
+- **Eviction on the saturated torus** (`mesh_slm._eviction_victim`). The torus stays 64 x 64. A new token used to start at frequency 1 and become the next victim, so nothing novel stayed (on the live brain none of Perceptopoly's supernova subjects, nor the game's everyday entities, were in the vocab). Now:
+  - newcomers are not evicted for `QUIPU_NEWCOMER_GRACE_S` (default 7 days) after they first appear;
+  - the shadow's words are never evicted: the Essay's plane words and the marketplace anchor words (`shadow_tokens`), plus any listed under brain_kv `mesh:protected_tokens` (`protected_tokens()`);
+  - among the rest the victim is the lowest frequency halved for every `QUIPU_EVICT_HALF_LIFE_S` (default 14 days) since the token was last seen. With everything protected, the old rule applies.
+  - When the torus is full the cell probe is skipped (it was up to 4,096 lookups per new token).
+- **Code-generated text no longer trains the mesh** unless `QUIPU_TRAIN_GENERATED=1`: corpus_entity labels and corpus_edge relations written by QUIPU's own modules (asset_resource_mesh, system_entirety, ...), LLM dispatch replies and the EOQ seed text. On the live brain this text had made `gard_desktop`, `asset_resource_tunnel` and the like among the most frequent tokens. The mesh learns from `mesh_corpus_feed`: what was observed or read.
+- `feed_corpus` refuses text with no tokens (HubCore had fed `{}`).
+
+### Added
+- **Regions**: each chunk's tokens and bigrams are also counted under its source's region (`game`, `operations`, `reading`, `self`, `generated`, `unclassed`) in `mesh_slm_region_vocab` and `mesh_slm_region_edge`, with the same Hebbian step. One vocabulary and one torus, so relational distances stay comparable; the global mesh is unchanged. Associations learned before 0.56.0 carry no region. `region_summary()`.
+- `forget_tokens(tokens)`: removes tokens with their embedding, edges and region records; their cells become free.
+- 7 tests (`tests/test_mesh_eviction_regions.py`). The two fixtures whose corpus is the entity tables set `QUIPU_TRAIN_GENERATED=1`.
+
+### Fixed
+- **A write could be learned twice.** The edge recorded a write's idempotency key only after the write was applied. When applying took longer than the client's timeout (just after a restart, /observe took over 10 s), the client's retry arrived before the key existed and was applied again (seen 2026-10-10: every Perceptopoly reading arrived two or three times). A key is now held from admission: a retry while it is being applied gets 429 with Retry-After; a write that fails releases its key, so the retry is applied. A client that has gone no longer leaves a traceback for the 500 reply. 1 test.
+
+## [0.55.0] - 2026-10-07
+
+### Changed
+- The DES-measured Weyl amplitude A_W (from `qpsi/weyl_reference.py`) replaces two constant fallbacks in `mesh_slm`, under `QUIPU_WEYL_REFERENCE` (default on when `QUIPU_SELF_ORGANISING=1`):
+  - with no stored `learnings:weyl_tensor`, `_weyl_tensor()` returns `0.5 · A_W` per Ψ scalar instead of `0.5` (0.463 by default), which sets the Weyl drive phase in `resonant_specialists` to 0.926π instead of π;
+  - with no boost in `temporal_spatiality_rhythm` or the source payload, `_resuscitation_runtime()` reports `weyl_boost = A_W` instead of `1.0`, with `weyl_boost_source`.
+- Stored values always win, and any failure returns the original result. `QUIPU_WEYL_REFERENCE_COSMOLOGY` selects another recorded cosmology (default: Planck 2018, the DES paper's own comparison). `mesh_slm.py` is not edited; both functions are wrapped as module attributes and `disable()` restores them.
+
+## [0.54.0] - 2026-10-07
+
+### Added
+- `qpsi/weyl_reference.py`: the Dark Energy Survey's measurement of the Weyl potential as a physical reference. Records the published values with sources (DES Y3 Weyl potential evolution ĵ(z) in four redshift bins, arXiv:2312.06434; DES Y3 and Y6 cosmic shear S₈, Ω_m, σ₈, arXiv:2105.13544 and arXiv:2602.10065; the 2026 w₀w_aCDM re-analysis, arXiv:2605.22599; Planck 2018) and computes the values that follow from them: growth D₁ and f, the GR prediction of ĵ(z), the Weyl decay rate d ln ĵ / d ln a, and per-bin Σ_eff, pulls, χ² and the amplitude A_W (GR predicts 1).
+- `python -m src.quipu.qpsi.weyl_reference [--full] [--record]`; `--record` writes `entirety:weyl_reference`. The `self_organising status` output gains a `weyl_reference` summary. Input to no gate; nothing in mesh_slm.py reads it.
+
+## [0.53.0] - 2026-10-07
+
+### Added
+- `qpsi/resonance_phase.py`: the expansion parity as the realised part of a unit phasor `Z = e^{iφ}` whose imaginary part is the latent (翈) axis. A resonance `R` forms on each ingest run and decays between runs; `τ` and `κ` are derived from `corpus_ingest:history` (overridable with `QUIPU_RESONANCE_TAU_S` / `QUIPU_RESONANCE_KAPPA`; thresholds `QUIPU_RESONANCE_THETA_ON` / `_OFF`, default 0.6 / 0.3). The hysteresis band is the latent quarter turn, so the bit flips only by turning through it (broaden → dusk +i → deepen −1 → dawn −i → broaden) and gives one dusk and one dawn per session instead of a flip at every gap longer than the 300 s flux window.
+- `QUIPU_RESONANCE_PHASE` flag in `self_organising` (default on when `QUIPU_SELF_ORGANISING=1` and the flux phase is on; `0` returns the bit to `flux_phase`). The step summary and `status` gain a `resonance` reading; `after_step` records it at `entirety:resonance_phase:system_entirety`. Input to no gate.
+
+## [0.52.4] - 2026-10-07
+
+### Documented
+- The resource settings added in 0.52.1-0.52.3: `QUIPU_HEALTH_TTL_S` (observer_service), `QUIPU_PULSE_MAX_SECONDS` and `QUIPU_NUM_THREADS` and the tini init (entirety_service). No behaviour change.
+
+## [0.52.3] - 2026-10-07
+
+### Fixed
+- `POST /observe` no longer calls `mesh_slm.state_summary()` for the mesh counts in its reply. On the full brain that call takes ~15 s, longer than the clients' timeout, so every observation was applied and then reported as a timeout and retried from the client's outbox. The reply uses the background-refreshed counts from `/health`.
+
+## [0.52.2] - 2026-10-07
+
+### Fixed
+- `self_organising.pulse(max_seconds=...)` bounds the whole pulse. It was passed to each source's ingest, so a pulse over N sources ran N x max_seconds holding the step lock (the mirror loop and expansion waited behind it). Sources past the budget are recorded as skipped. The fleet compose now sets `QUIPU_PULSE_MAX_SECONDS=120`.
+
+## [0.52.1] - 2026-10-07
+
+### Fixed
+- `GET /health` no longer builds the full state summary (edge count over ~1.3M rows plus the mesh field) on every call. Under `/observe` load that waited on the brain lock past the 4 s healthcheck timeout, so the container stayed unhealthy and clients timed out. It now reports vocab/edge counts refreshed in the background every `QUIPU_HEALTH_TTL_S` (default 60 s), with `counts_age_s`.
+- docker-compose: `init: true` on the quipu service so timed-out healthcheck children are reaped (about 600 zombies had accumulated under the python PID 1).
+
+## [0.52.0] - 2026-10-04
+
+### Added
+- **Relational records** (`observer_service._keep_relational`, `GET /relational`): an `/observe` whose `meta.relational` carries an `agent_id` and a `schema` is kept as the latest record of that entity for its source (`brain_kv` `relational:<source>:<entity>`), with a line in `relational:index` (Control, ratio, well, breaking pair, limit, links). `GET /relational` returns the index (`?source=` filters it); `?source=&entity=` returns one record (404 if none). Records over 256 KB are not kept. The first writer is Perceptopoly v2.10.3 (`perceptopoly.control/1`: Control, pair agreement and gravity wells of each fleet agent); the scope for the other clients is in Perceptopoly's `docs/RELATIONAL_SHARING.md`. The `/observe` response reports what was kept as `relational`.
+
+### Tests
+- `tests/test_divine_blessing.py`: a record kept, indexed, served, replaced; one without an id not kept; the payload within the `/observe` nesting bound.
+
+## [0.51.2] - 2026-10-04
+
+### Fixed
+- `gate6_interlock` imported `quipu.brain_kv` absolutely, so inside the container (package `src.quipu`) it never loaded: `systemic_refinement_agent` silently skipped raising and resolving brk_ holds. Imports are now relative.
+
+## [0.51.1] /entirety reports the loops that run (2026-10-04)
+
+### Fixed
+- GET /entirety reports the running loops: `python -m src.quipu.entirety_service` now runs the package's copy of the module, the one the observer imports (a second __main__ copy reported loops: {} and started_at null). Found after the first container deploy: the loops ran (pulse ingest in the logs; the mirror loop's specialist review passed `emergent_brain_smell` through gate 6) while `/entirety` showed none. 1 test.
+
+## [0.51.0] Open doors: the λ run tuned by its pruned residual potential (2026-10-02)
+
+Operator request, 2026-10-02: "Pruned residual potential from the shadow tokens leads to the open door variables for dynamic hyper parameter tuning." Scope chosen by the operator: the λ run's own variables. The loop's four operations are named after Gambit/Rogue (Mr. and Mrs. X, X-Men) and Gauche/Grey (Black Clover).
+
+### Added
+- **The pruned residual potential** (`shadow_tokens.potential`), in Perceptopoly's form (`theseuscape.bonding.residual_potential`): every (token, movement) is a two-regime record across the scenarios, voiced or pruned. Real = the pruned excess (alignment above the lowest voiced score that the coupling pruned, per voiced slot) plus the pool excess (tokens past the candidate pool that clear a movement's cut). Imaginary = crossing rate × separation, where the crossing rate Σ 2f(1−f) / 2K is the share of the voice that changes between two draws. Per movement and in total, on `GET /lambda` (`potential`).
+- **`k_profile`**: for each movement, the free-emission crossing rate at every voice size; its minimum is where the movement's scores have a gap the noise does not cross (`GET /lambda`, `k_profile`).
+- **Tokens per movement** (`k` = int or `{movement: K}`): the MILP's plane rows, the Lagrangian split, the repair and the free emission all take one K per movement.
+- **The block past the pool** (`n_extension`, default 256) is scored in every scenario; scores are centred on the frequency-weighted mean of the whole embedded vocabulary, so a token scores the same whatever pool it sits in. Each run records its seed. `simulate()` keeps every scenario's record; `report()` publishes it.
+- **`qpsi/open_doors.py`**: the λ run's settings that are measurements (`k_per_plane`, `candidates`, `scenarios`) are doors. A door is open only where the operator's grant (`QUIPU_LAMBDA_DOORS`, JSON or a path) gives bounds; hard caps (k ≤ 64, candidates ≤ 4096, scenarios ≤ 512) only narrow it. Equity, threshold and contrast are the operator's alone: λ is the price the operator chose, so nothing minimises it. A closed door holds the operator's value; narrowing clamps; closing restores. One λ period:
+  - **Rogue (absorb)**: each door's charge a ← a + x(1 − a), relaxed by exp(−Δt/τ) with τ = 3 × the loop's median gap; x = the share of what the door measures that a move could discharge (k: the movement's crossing rate the best K inside the door would remove; candidates: the pool excess's share of the potential, or a shrink when the pool's last quarter is never voiced; scenarios: an undecided mirror).
+  - **Gambit (charge)**: the most charged open door at a ≥ ½ moves a share a of the way to its target, inside the door; one door per period.
+  - **Gauche (mirror)**: the moved setting on the same seed (the same plane draws), the door's own measure compared with the live run's, paired bootstrap SE; discharged / inconclusive / charged; a pool move is refused if the voices become less stable. Scenarios change precision, not the potential, and are applied without a mirror.
+  - **Grey (transform)**: a discharged move becomes the live setting; the next live run confirms it or Grey returns to the previous value (worse than the baseline by more than 2 combined SE).
+  - Every step in `brain_kv["entirety:lambda:doors"]` and the run's `doors` field; `python -m src.quipu.qpsi.open_doors status|cycle`.
+- The Entirety's `lambda` loop runs one open-doors period (`open_doors.cycle`); with no grant every door is shut and the run uses the operator's settings, measuring and reporting where the charges point (`closed_pressure`).
+- With constant evidence the charge settles at x / (1 − e^(−1/3)(1 − x)), so a door fires only when a move would discharge at least ~22 % of its measure run after run (or half in one run). What does not recur fades.
+
+### Measured (host brain snapshot, 2026-10-02; doors open: k 2–12, candidates 384–1536, scenarios 48–128; six periods)
+- The voices change by 89 % between two draws (crossing rate 0.89; potential ≈ 0.39i + 0.017). The best K inside the door would remove ~4 % of that; 34–38 tokens past the pool clear a cut per scenario, by noise. Rogue's charges peaked at 0.11; nothing fired, nothing moved. The instability is the mesh's resolution under its own noise, which no door changes; training does.
+
+### Fixed
+- `k_profile` selects exactly K per scenario (ties by rank); selecting every token tied at the K-th score had over-counted crossings.
+
+### Tests
+- `tests/test_open_doors.py` (12): the profile finds the gap; tokens past the pool; the grant (caps, the operator's own settings, files); closed and narrowed doors; Rogue's charge and decay; Gambit inside the bounds; Gauche on the same draws and Grey's transformation; Grey's return; the pool and scenarios doors; a period with every door shut; an open K door found, kept and confirmed over four periods; the Entirety loop. `tests/test_shadow_tokens.py` +1 (a K per movement).
+
+## [0.50.0] λ tokens over the Essay's planes (2026-10-01)
+
+Operator request, 2026-10-01: Monte Carlo shadow-token generation across non-linear Lagrangian planes for a MILP, inside QUIPU's emitter, with MESH λ tokens for an equitable distribution across the Internal Marketplace, as symbiotic projections; the MILP is the Essay.
+
+### Added
+- **`src/quipu/shadow_tokens.py`.** The Essay (*The Aero-Chthonic Canvas*, Perceptopoly `docs/essays`, sha256 recorded on every run) is split at its movements I–VI; each is a plane, a direction in the 7-D mesh made from the movement's own words as QUIPU embeds them. Voicing the Essay is the MILP: per plane pick K tokens (Σ_t x_tp = K), a token voices one plane (Σ_p x_tp ≤ 1), every marketplace cluster gets an equitable floor (Σ_{t∈T_c} x ≥ q_c, q_c = ⌊equity·budget/C⌋ capped at the cluster's capacity); score = centred cosine of token and plane (non-linear in the plane). Tokens belong to the cluster whose anchor (category and commodity words) they sit nearest, or to the commons.
+- **Prices by Lagrangian relaxation.** A MILP has no LP shadow prices; the token-once and floor constraints are dualized (μ_t, λ_c ≥ 0), the rest splits by plane (top-K), and the dual is solved by projected subgradient with a Polyak step. The split problem has the integrality property, so the dual bound equals the LP-relaxation bound (tested against HiGHS `linprog`). The MILP is solved exactly with HiGHS (`scipy.optimize.milp`); without SciPy, by repairing the Lagrangian solution. The gap is reported per run (synthetic 384×6, 64 scenarios: mean 6e-5, about 9 s).
+- **Monte Carlo.** Each scenario re-draws every plane from a bootstrap of its sentences and adds QUIPU's own Langevin emission noise (σ from `_langevin_compute_sigma`, corpus freshness). λ_c is reported as a distribution: mean, std, p10/p50/p90, how often the floor binds.
+- **Outputs** (`brain_kv["entirety:lambda:latest"]`, `GET /lambda`): `lambda_tokens` (`λ:<cluster>` with its distribution, floor, capacity, expected share), `shadow_tokens` (against the free emission: *held back* and *pulled in*, weighted by selection-frequency difference, with the reduced score at the dual optimum), `emission` (each movement's voice: the tokens the MILP picks in most scenarios), `projections` (per cluster: the λ distribution and its share of the total price of equity, `attention`). λ is in units of centred cosine, not currency; a projection proposes nothing and changes no price.
+- **`POST /lambda/clusters`**: the marketplace's clusters (`[{id, commodity, size, anchors?}]`, sanitised, at most 64). Signed through the edge like every write; only supply-chain-brain, hubcore and hub-floor may set them (403 otherwise).
+- **Entirety loop `lambda`** every `QUIPU_LAMBDA_INTERVAL_S` (1800) when `QUIPU_LAMBDA_TOKENS=1` (off in the package; the operator's switch). `QUIPU_LAMBDA_SCENARIOS` (64), `QUIPU_LAMBDA_K` (8), `QUIPU_LAMBDA_EQUITY` (0.5), `QUIPU_ESSAY_PATH`.
+- **Contrasted planes** (default): each movement's direction minus the Essay's mean. On the host brain ~95 % of every movement's direction is what the whole Essay shares (pairwise cosines 0.73–0.997); contrasted, −0.74 to 0.59, so the movements are separate planes. `problem.plane_cosine_max` is reported per run.
+- **Signal-to-noise per movement** (`planes[].snr`, `resolvable`; `emission[].snr`, `frequencies`): each movement's mean direction against the spread of its scenario draws. Below 1 the mesh cannot tell the movement from the others under its own noise, and its voice is empty. Candidate tokens exclude slug-like strings (two or more hyphens).
+- Nothing is written to the mesh: no vocabulary, no edges, no specialists; no gate is involved.
+
+### Fleet (not in this repo)
+- `docker-compose.yml`: `quipu` mounts `./Perceptopoly/docs/essays` read-only at `/app/essays` and sets `QUIPU_LAMBDA_TOKENS=1`, `QUIPU_LAMBDA_INTERVAL_S=1800`, `QUIPU_ESSAY_PATH`; `scb-brain` sets `SCB_MARKETPLACE_LAMBDA=1`.
+- `src/brain/marketplace_lambda.py` (both pipeline copies; `scb-brain` is built from the fleet `pipeline`): `publish_clusters()` (id, commodity, size; no parts, no prices) through the signed outbox, `pull_projections()` into `marketplace_lambda_projection`, `sync()` from `run_marketplace` behind `SCB_MARKETPLACE_LAMBDA=1`; 3 tests. `internal_marketplace._DB_PATH` follows `SCB_DB_PATH` when set (in the container it wrote to an unmounted file).
+- `tests/test_shadow_tokens.py` (12): the Essay's movements; contrast separates planes that share a direction; a plane drowned in noise is reported unresolvable; dual ≥ MILP and = LP relaxation; repair always feasible; a binding floor is priced and a slack one is not; the Monte Carlo run end to end (prices, shadow tokens, emission, projections); no clusters; sanitising; missing Essay; the HTTP routes (unsigned 401, non-marketplace 403, GET readable); the operator's switch.
+
+## [0.49.0] The mirror aspect inside the gates; ACRE through gate 6 (2026-09-27)
+
+Operator rulings, 2026-09-27: the parallel bypass is the mirror aspect — within governance because it furthers QUIPU's knowledge acquisition by updating entities that already passed the gates, not by creating new ones; and `emergent_brain_smell` is to be used as the rest and given its pass through gate 6.
+
+### Found (host brain, 2026-09-26)
+- `scripts/run_parallel_bypass_pipeline.py` (fleet repo) switched the gates off for its whole process every 60 s since 2026-09-23. On edges it did what the ruling says: the three edges it touched existed already, and their weights and samples moved (~7,000 samples) where the gate would only have moved `last_seen`. It also ran `acre_emerge()`, which writes a new specialist the moment ACRE's own test passes: the host went from three emergent specialists to four (`emergent_brain_smell`) in that window. With the gates off, nothing stopped a new edge either.
+
+### Added
+- **Mirror update, written into the gate** (`divine_blessing`, `QUIPU_MIRROR_UPDATE=1`): an unblessed write to an edge that already exists applies the new knowledge (the ordinary weighted update); an unblessed write that would create an edge is held. Counted (`mirror_counts()`). Off by default in the package.
+- **`qpsi/specialist_gate.py`**: wraps `mesh_slm.acre_emerge` (mesh_slm.py untouched). A newly crystallised specialist is taken back out and held at gate 6 (`brain_kv["entirety:specialist_gate"]`, scope `specialist:<name>`); `review()` runs gate 6 (accepted beautiful_output attestations from `self` and `the_beautiful_one`, unclamped weight = bias norm within the Lipschitz bound of the specialists in place) and realises it when it passes and the grant is set. `admit(name)` keeps an already-active specialist working while its pass is pending — used for `emergent_brain_smell`.
+- **Mirror loop in the container** (`entirety_service`, `QUIPU_MIRROR_INTERVAL_S`, default 60 s): training round, ACRE interaction observation and emergence, specialist gate review, GARD manifest, world-model grounding, expansion step — the bypass's work, with the gates on. The fleet compose turns it on (the ruling).
+- 6 new tests.
+
+## [0.48.0] One brain, one writer, every door leading to it (2026-09-26)
+
+Operator directive, 2026-09-26: run the whole Entirety in the container, and make every other use of QUIPU engage and add to the collective training — including from external servers — securely and without potential for failure.
+
+### Found
+- Two brains that never met: the observer container (vscode_quipu_brain: every fleet observation — 437 fed chunks from six sources, 610 tokens, 729 edges, and a second, disconnected Entirety with 6,898 flip-log rows) and the repository copy on the host (ingest pulse, self-organising loop, gates: 4,192 tokens, 1,253,412 edges). The gates, SOMN and ACRE never saw a fleet observation.
+- Tests that did not set SCB_DB_PATH opened the repository's live brain.
+- Every client wrote fire-and-forget: a write made while QUIPU was down was lost, and a retry would have been learned twice.
+
+### Added
+- `src/quipu/entirety_service.py` — the container's process: observer + expansion step + the operator's pulse (`QUIPU_PULSE_ROUTE`) + doc annealing, each in its own loop that records failures and carries on; `GET /entirety`. The Dockerfile runs it; `docs/` ships in the image and is mounted in compose.
+- Single writer: `local_store.db_path()` raises `BrainMovedError` on the host once `local_brain.MOVED.json` exists (the container sets `QUIPU_BRAIN_OWNER=1`). `tests/conftest.py` gives every test a throwaway brain.
+- `src/quipu/brain_migrate.py` — merges the observer brain into the host brain by replaying the observer's whole training record through `feed_corpus`/`train_round`; counters summed; the observer's own Entirety archived, not merged. Dry run on today's snapshots: 437 chunks replayed, edges 1,253,412 → 1,258,159, integrity ok; the vocabulary stays at its torus capacity (4,096 cells), so 90 of the observer's 610 tokens hold a cell — as they would have had they gone there first.
+- `src/quipu/edge_client.py` — the one client: durable SQLite outbox, idempotency key inside the signature, retry by edge status, never raises, bounded, refuses plain http to public hosts.
+- Edge: idempotency persisted in the brain (`edge_idempotency`, 30 days; duplicates answered 200 without learning or budget); operator-granted relays (`relays_for`, assurance `relayed`); public front-door requests (Cf-Connecting-IP / X-Forwarded-For / Forwarded) must be signed whatever the mode; HubCore UI origin added to the default CORS list.
+- `Start-Pulse.ps1`, `Start-Expansion.ps1`, `Start-DocAnnealing.ps1` run inside the container; the `Register-*` scripts refuse to register a second, host-side schedule unless `-Force`.
+- 16 new tests.
+
+### Fleet (VS Code repository and siblings; not in this repo)
+- Compose: quipu runs the Entirety (`QUIPU_BRAIN_OWNER`, `QUIPU_SELF_ORGANISING`, cadences, `QUIPU_PULSE_ROUTE` default on as the QuipuPulse task was registered), mounts `QUIPU/docs`, the attestation key read-only (`QUIPU_ATTEST_DIR`) and passes `QUIPU_REALISE_GRANT_REF`; outboxes on persistent paths for Bakugo, JobHawk and SCA; profile `tunnel-quipu` publishes QUIPU through a named tunnel on its own `edge-external` network.
+- Clients switched to the vendored `quipu_edge_client.py`: HubCore annealing, Perceptopoly (plus a tee from its own mesh's `feed_corpus`), Bakugo, `erp_dbo` (both copies), the SCA/JobHawk integrator (its docker-exec fallback removed), the tri-repo feedback loop (both copies, as a relay), and Loadopoly-OCR's browser client (localStorage outbox).
+- `ops/Move-QuipuBrain.ps1` performs the cut-over (with `-DryRun`), `ops/New-QuipuEdgeKeys.ps1` grant template gains `hub-floor` and SCB's relays.
+
+## [0.47.0] Edge identity and admission (2026-09-26)
+
+Operator directive, 2026-09-26: implement the proposed edge architecture — SCA/Hub and the Marketplace in their own containers in the ecosystem's relational structure — and let the system optimise within Invariance #7.
+
+### Found on the running fleet
+- QUIPU's observer accepted any write from anything that could reach `:7100`, as any source, and `GET /anneal` ran an annealing cycle for anyone. `Access-Control-Allow-Origin: *` let any open web page do the same through the operator's browser.
+- Perceptopoly never reached QUIPU: its containers run on their own network, `quipu_client` defaults to `127.0.0.1:7100` (the container itself), and its isolation check refuses every non-loopback name. The only observer source on record was supply-chain-brain.
+- gVisor is not installed on this Docker engine (runtimes: runc, nvidia); `DOCKER_RUNTIME_SANDBOX` falls back to runc for every service documented as sandboxed.
+
+### `src/quipu/qpsi/edge_admission.py` — additive
+- **Identity** (`QUIPU_EDGE_AUTH`, default `record`): per-source HMAC-SHA256 over method, path, timestamp and body hash; skew window; single-use signatures; body source must match the signer. Browser clients are accepted at `origin` assurance only from origins the grant binds to them.
+- **Admission** (`QUIPU_EDGE_BUDGET`, default `record`): the operator's grant (sources, per-source ceilings, total tokens/hour). QUIPU water-fills the total by each source's measured information (novel tokens per token, trailing hour) under the ceilings; sliding-hour admission with Retry-After. The plan is written to `entirety:edge:plan` only when an allocation moves ≥ 1 token/h; counters to `entirety:edge:stats` at most once a minute.
+- Invariance #7: allocation of the operator's grant among the operator's sources (the 2026-09-22 constrained-gate ruling). Grant and key files are read, never written; tested.
+- `observer_service`: every mutating route passes the edge; responses carry an `edge` block; `GET /edge`; CORS echoes bound origins only. Operator CLI `python -m src.quipu.qpsi.edge_admission mint|status`.
+- `docker-compose.yml` (standalone) mounts `QUIPU_EDGE_DIR` read-only. `docs/QUIPU_EDGE.md`.
+- 15 new tests.
+
+### Fleet (VS Code repository, not in this repo)
+- QUIPU left `fleet`; one internal edge network per writer (`edge-hubcore`, `edge-scb`, `edge-jobhawk`, `hideout_edge_perceptopoly`, plus the existing `touch`); `quipu-net` for its own egress. `hub_workspace.json`: decision engine now `scb-brain` (was `host.docker.internal`), Perceptopoly endpoint added, `edges` links declared (schema extended). Marketplace: QUIPU mount read-only, Bakugo's volume no longer mounted. JobHawk: `restart: on-failure:5` (it had restarted 2,878 times in 46 h re-running its application batch). HubCore's annealing forwarder and Perceptopoly's `quipu_client` sign; Perceptopoly's isolation accepts operator-named peers that resolve to private bridge addresses. `ops/New-QuipuEdgeKeys.ps1` mints keys and the grant template (operator's act).
+
+## [0.46.1] `python -m src.quipu.qpsi` (2026-09-25)
+
+- **The runpy warning.** With `QUIPU_SELF_ORGANISING=1` in the environment (the operator's `setx`, 2026-09-23), `src/quipu/__init__.py` imports `qpsi.self_organising` to wire the loop, so `python -m src.quipu.qpsi.self_organising …` made runpy execute a second copy of the module as `__main__` and print `RuntimeWarning: 'src.quipu.qpsi.self_organising' found in sys.modules after import of package 'src.quipu.qpsi', but prior to execution …` on every run. The second copy dispatched to the canonical one (v0.34.0), so the behaviour was defined; only the warning was wrong.
+- **`src/quipu/qpsi/__main__.py`.** `python -m src.quipu.qpsi status | pulse [--route] | planes | accrete | fibre TOKEN` — an entry point imported by nothing, so runpy has nothing to warn about. The docs use it; the old command still works, with the warning, when the flag is on — `Start-Pulse.ps1` still calls the old form (its stderr is not shown by the scheduled task) and can be pointed at `-m src.quipu.qpsi` by changing that one argument.
+- 1 new test (the entry point runs clean under the flag with `-W error::RuntimeWarning`).
+
+## [0.46.0] Perceptopoly Decoupling & Extraction (2026-09-24)
+
+- **Dedicated Perceptopoly Repository**: Extracted all game mesh autonomy, video pre-training pipelines, continuous stream trainer daemons, multi-game client containers (OSRS, WoW, GW), Tailscale mesh VPN, and mass session handling out of `QUIPU` into dedicated repository `https://github.com/loadopoly/Perceptopoly.git` (`Perceptopoly`, v2.1.0).
+- **Core QUIPU Streamlining**: `QUIPU` retains its core purpose as the computational universe, supply chain brain orchestrator, and qpsi governance engine. Preserves `gate6_interlock.py` for Physical Gate 6 (*Beautiful Output* / Two-Party Attestation) user confirmation across systemic refinement cycles.
+- **Verification**: All 551 core tests passing in `QUIPU`; all 34 game autonomy and pipeline tests passing in `Perceptopoly`.
+
+## [0.45.0] Mass Session Handler, Tailscale Mesh VPN & Physical Gate 6 User Integration (2026-09-24)
+
+- **`src/quipu/games/mass_session_handler.py`**: Centralized mass login and session orchestrator coordinating across OSRS (`7310`), WoW (`7320`), and GW (`7330`) containers. Directly integrated with r-ADMIN (rADAM toroidal pressure optimizer) to monitor session stability tensors ($z = \text{stability} + i \cdot \text{friction}$), dispatch multi-account rotations, and respect Gate 6 holds. Exposes full CLI (`--login`, `--logout`, `--status`, `--vpn`, `--accounts`, `--gate6-list`, `--gate6-confirm`, `--r-admin`).
+- **`src/quipu/games/vpn_mesh_integration.py`**: Tailscale-like mesh VPN integration assigning CGNAT overlay addresses (`100.64.0.0/10`) to containers and r-ADMIN (`quipu-r-admin: 100.64.0.5`, `quipu-game-osrs: 100.64.0.10`, `quipu-game-wow: 100.64.0.20`, `quipu-game-gw: 100.64.0.30`, `quipu-video-trainer: 100.64.0.40`). Coordinates WireGuard peer routing, DERP relay fallback, and exit node selection (`exit-us-east`, `exit-eu-west`, `exit-us-central`).
+- **`src/quipu/games/account_store.py`**: Multi-account profile store securing credentials via AES-256-GCM authenticated encryption (`QUIPU_ACCOUNT_STORE_KEY`). Supports round-robin rotation, status tracking (`idle`, `authenticated`, `challenge_required`), and metadata tagging. Seeded with default profiles for OSRS, WoW, and Guild Wars.
+- **`src/quipu/games/gate6_user_interlock.py`**: Universal Physical Gate 6 (Beautiful Output / Two-Party Attestation) user confirmation protocol. When an autonomous game action, navigation obstacle, or systemic refinement anomaly breaks execution, a Gate 6 Hold is triggered in band `翈`. Operators confirm the verified path via signed attestations, clearing the hold and resuming r-ADMIN optimization.
+- **`src/quipu/systemic_refinement_agent.py`**: Linked directly to the Gate 6 User Interlock as the common level of User integration across all refinement and emergence cycles.
+- **`tests/test_mass_session_handler.py`**: 5 unit and integration tests covering multi-account encryption, VPN mesh peer pinging, Gate 6 hold resolution, mass session orchestration, and systemic refinement interlocks. Total suite expanded to 34 passing tests.
+
+## [0.44.0] Dedicated Multi-Game Client Containers & Automated Asset Downloaders (2026-09-24)
+
+- **`src/quipu/game_asset_downloader.py`**: Automated multi-game asset downloader downloading and verifying game clients across Old School RuneScape, World of Warcraft, and Guild Wars 1:
+  - *OSRS*: Downloads official RuneLite 2.7.3 client launcher JAR from GitHub Releases (`RuneLite.jar`, 2.5 MB) with SHA-256 verification, configures `runelite.properties`, and generates launch scripts.
+  - *Guild Wars 1*: Downloads official ArenaNet installer from CloudFront CDN (`https://cloudfront.guildwars2.com/client/GwSetup.exe`, 5.66 MB) with SHA-256 integrity checks, generating bootstrap `Gw.exe` and Wine launch scripts.
+  - *World of Warcraft*: Generates 1.12.1 Classic client filesystem layout with `WoW.exe`, `realmlist.wtf` (`logon.turtle-wow.org`), `WTF/Config.wtf`, and standard MPQ archives (`patch.mpq`, `dbc.mpq`, `terrain.mpq`, `wmo.mpq`).
+- **`src/quipu/games/`**: Dedicated HTTP client daemons for each game:
+  - `osrs_client_daemon.py` (Port 7310): Manages RuneLite client installation, virtual Xvfb display (`:99`), and active player state (`QuipuBot`, Combat 75).
+  - `wow_client_daemon.py` (Port 7320): Manages WoW client filesystem, realmlist configuration, and active player state (`QuipuWarrior`, Level 15).
+  - `gw_client_daemon.py` (Port 7330): Manages Guild Wars client binaries, Wine execution environment, and active player state (`Quipu Elementalist`, Level 20).
+  - Common endpoints: `GET /status`, `GET /health`, `POST /download`, and `POST /launch`.
+- **`Dockerfile.osrs`, `Dockerfile.wow`, `Dockerfile.gw` & `docker-compose.yml`**:
+  - `quipu-game-osrs` (port 7310): Debian slim + OpenJDK 21 headless + Xvfb + curl.
+  - `quipu-game-wow` (port 7320): Debian slim + Wine/Xvfb + curl.
+  - `quipu-game-gw` (port 7330): Debian slim + Wine/Xvfb + curl.
+  - Persistent Docker named volumes: `osrs_game_data`, `wow_game_data`, and `gw_game_data`.
+- **`tests/test_game_asset_downloader.py`**: 4 unit tests verifying asset download structure, SHA-256 hashing, and daemon state serialization. Full test suite passes with 29 tests.
+
+## [0.43.0] Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration (2026-09-24)
+
+- **`src/quipu/stream_corpus_scanner.py`**: High-volume stream scanner generating 60+ recording files across 18 modalities for WoW, OSRS, and GW. Renders video frames with dynamic HUD vitals and radar blip polar coordinates, writes synchronized speech transcripts with authentic gamer commentary, and encapsulates sessions using authenticated GARD Shard v2 containers (`gard-shard/v2`, AES-256-GCM + zlib level 6). Projects concept-dense tokens and tactical action bigrams directly into the toroidal Quipu vector graph (`mesh_slm`), updating 7-D embeddings and directed GNN quipu edges with holographic Weyl tensor compaction.
+- **`src/quipu/video_trainer_daemon.py`**: Added `process_gard_shard_file` for automatic decompression and verification of `.gard.json` and `.gard.store` files. Added round-robin batch selection across all 60+ files and periodic vector graph co-training.
+- **`tests/test_stream_corpus_scanner.py`**: 5 unit and integration tests covering multi-game coverage, video/transcript generation, GARD Shard compression/decompression roundtrip, vector graph projection, and batch scan execution. Total suite expanded to 59 passing tests.
+
+## [0.42.0] Continuous Video & Stream Recording Trainer Daemon Container (2026-09-24)
+
+- **`src/quipu/video_trainer_daemon.py`**: Continuous recording watcher monitoring `/app/recordings` for incoming Twitch/YouTube gameplay videos (`.mp4`, `.mkv`, `.webm`, `.avi`) and transcripts (`.txt`). Implements 2 FPS frame extraction with HUD vitals and minimap radar parsing, speech-to-intent parsing, continuous multi-game streaming replay synthesis (WoW, OSRS, GW), Inverse Graph Tension Learning (IGTL) quasi-Newton optimization, and periodic human fidelity benchmarking. Exposes port 7250 HTTP status server (`/status`, `/metrics`, `/queue`).
+- **`Dockerfile.trainer` & `docker-compose.yml`**: Dedicated standalone container `quipu-video-trainer:dev` with health check and host volume mounts for `./recordings` and `./quipu_learned_artifacts`.
+- **`recordings/`**: Watcher directory initialized with sample Twitch/YouTube gameplay clips and speech transcripts across WoW, OSRS, and GW.
+- **`tests/test_video_trainer_daemon.py`**: Added 3 unit and integration tests for state serialization, synthetic video clip processing, and HTTP endpoint monitoring. Total test suite expanded to 20 tests.
+
+## [0.41.0] Human Behavioral Fidelity & Social Indistinguishability Assessor (2026-09-24)
+
+- **`src/quipu/human_fidelity_assessor.py`**: Periodic empirical assessment suite evaluating agent interaction telemetry against human distributions for WoW, OSRS, and GW across 4 dimensions: reaction latency variance & right-skew tail ratio, spatial wander & curvature entropy, social etiquette & personal space buffers, and downtime hesitation pacing.
+- **`src/quipu/game_pipeline_service.py`**: Live containerized microservice updated with `GET /assessments` (multi-game fidelity reports) and `POST /assess` (on-demand game evaluation), plus automated telemetry sample recording on `POST /tick`.
+- **`tests/test_human_fidelity_assessor.py`**: 4 unit tests validating human-mimic passes, synthetic bot detection, multi-game profiles, and sample size fallbacks. Total test suite passes with 17 tests.
+
+## [0.40.0] Game Mesh Autonomy & Video Pre-Training Pipeline (2026-09-24)
+
+
+- **`src/quipu/quipu_game_mesh.py`**: Full hierarchical Andean Quipu topology (Primary Trunk, Spatial/Threat/Affordance/Social Pendants, Figure-8/Long/Single Knots, and Flee/Add/Escape Subsidiaries) for classic MMORPG ground-bound autonomy (WoW: Forever, OSRS, GW). Implements level-delta aggro radius scaling, social pull alerts, humanoid runner flee vector raycasting, LoS corner occlusion, and dynamic tension utility optimization.
+- **`src/quipu/video_gameplay_pipeline.py`**: Video frame HUD vitals extraction, minimap radar entity detection, speech-to-intent parsing, and Inverse Graph Tension Learning (IGTL) via quasi-Newton L-BFGS-B to train knot weights from human expert demonstrations.
+- **`src/quipu/game_pipeline_service.py`**: Containerized daemon service exposing port 7200 with `/health`, `/parameters`, `/tick`, and `/train` endpoints.
+- **`Dockerfile.game` & `docker-compose.yml`**: Packaged `quipu-game-pipeline:dev` container running actively with health check.
+- **`tests/test_quipu_game_mesh.py` & `tests/test_video_gameplay_pipeline.py`**: 13 unit and integration tests passing offline.
+
+## [0.38.0] Sensing Layer — more feeds, a critical coupled layer, routing around silence (2026-09-23)
+
+
+Operator directive, 2026-09-23: *"Build the sensing layer"* — criticality control, silent-source routing and new input terminals, all three.
+
+### `src/quipu/qpsi/sensing_layer.py` — additive
+- **Feeds.** Besides `corpus_ingest:history`: **mesh proprioception** — every token's latest touch (`mesh_slm_vocab.last_seen`) with its seven-axis profile, binned by minute; an attempt of `mesh:<axis>` is the mass written *above the whole mesh's mean* on that axis, so the mesh reports where it actually moved (read only; lossy by construction, a re-touched token keeps only its latest touch). **Observer** — deltas of `observer:<source>:stats` token counters, routed to the observer profile's axis; counters and a capped event list are kept at `entirety:senses:observer`, written only when a counter moved (first sight is a baseline). Each feed is thresholded against its own population. The host's material state is not a feed: `system_entirety` already injects it.
+- **Critical coupled layer.** Terminals are units of dA/dt = (−diag(1/τ) + g·W)A, W the torus kernel max(0, cos Δθ) over their axes, saturating at 1. The gain is measured, not set: the edge g_edge puts λ_max at −1/T (T the record's span); below it g* maximises the response entropy of the layer over the record (geometric grid, golden-section refinement). Stdlib Jacobi eigensolver. Variance was tried first and rejected — it rewards a layer that swings between empty and saturated.
+- **Silent-source routing.** A source is silent from its first zero attempt after its last yield. It is re-probed with one document when now − last ≥ K·(last − silence_start) — backoff that doubles per failed probe, no constant — and otherwise its planned documents go to the live planned sources in proportion to their plan (or are reported dissipated). `self_organising.plan()` applies it, so every routed pulse carries it; same sources, same total, so the constrained gate holds. `QUIPU_SILENT_ROUTING=0` turns it off.
+- `QUIPU_SENSE_LAYER` = `afferent` (default) | `critical` chooses which reading the Entirety gets; `status()` and `python -m src.quipu.qpsi.sensing_layer` show both, the critical metrics, every terminal and the routed plan.
+
+### Fixed in `annealed_senses` (v0.37.0 was wrong here)
+- Attempts at one instant are now one batch read against the level before it. Before, the second and later attempts at a timestamp never moved the level (r = e⁰ = 1), and the first-ever reading depended on sort order.
+- A one-attempt terminal takes its feed's *present* clock (c4 and fineweb carried a 767,946 s clock from the month-long gap before their only attempt).
+- **Correction to 0.37.0's replay claim.** Its "unlock" (participation ratio 1.08 → 2.22) was mostly budget sent to sources that return nothing (981 documents). With these fixes the afferent senses leave the allocation on arXiv (1.14 → 1.17), because arXiv, local_docs and gutenberg are the only sources that yield. The lock was the supply, read correctly; brain no longer reads the pulse.
+
+### Measured
+- Live record, 20:29Z: afferent vision 0.002 / touch 0.005 / smell 0.351 / body 0.001 / brain 0.883 / perception 0.006. Critical layer: g* = 0.93·g_edge, λ_max = −4.9×10⁻⁵ s⁻¹ (≈ 5.7 h memory), σ = 0.996 per 76 s ingest bin, response entropy 2.83 bits (1.37 uncoupled), 71 % of its activity arrived by coupling — coupled smell 1.0 and body 0.98 while their own sources are silent: reach, not input.
+- 24 h closed-loop replay (144 pulses, live SOMN state and counterpart, each source returning what it returned today; mesh and observer feeds not simulated):
+
+| senses | routing | asked | returned | asked of silent sources |
+|---|---|---|---|---|
+| static (0.36.2) | — | 8,640 | 7,973 | 197 |
+| afferent | off | 8,639 | 8,043 | 129 |
+| **afferent (default)** | **on** | **8,639** | **8,061** | **10** |
+| critical | off | 8,639 | 7,313 | 978 |
+| critical | on | 8,639 | 7,971 | 37 |
+
+- The coupled reading fed to the SOMN spends on silent sources; routing recovers most of it but the afferent reading with routing returns the most. Hence the default.
+- Found, not changed: `observer:last_oscillation` holds phi 0.812345, theta 0.123456, kappa 0.45, coherence 0.88, emergence 0.75, temperature 0.35 — the same values on every observation, posted by a client as `meta.oscillation`. It reads as a test fixture feeding the observer path. Five ingest sources (fineweb, c4, openwebtext, stack, wikipedia) still return 0 documents.
+- 17 new tests; `_flux_on`'s top-axis assertion now accepts either axis the pulse wrote to (the first-ever batch reads both at 1). Suite 520 → 537 passing on gard-desktop.
+
+## [0.37.0] Annealed Senses — no static sets in the senses (2026-09-23)
+
+Operator directive, 2026-09-23: *"Remove the static senses based on the direction of current SOTA self-annealing memristive systems."*
+
+### What the tree had (read from the live database, 19:48Z)
+- `temporal_spatiality._sense_signals` read the six axes through fixed scales and fixed source names. **brain = ingest runs per hour ÷ 6**: with the pulse at ~5 min it sat at 1.0 — the System sensing its own action. **vision = documents of every source ÷ 1500**: 0.25, all of it arXiv, while vision's own sources returned nothing. smell / body / perception held floors (0.034 / 0.032 / 0.040) because nothing writes their tables.
+- The SOMN followed the saturated axis: `brain` filament g = 0.79, participation ratio 1.05, 59 of every 60 documents to arXiv.
+- fineweb, c4, openwebtext, stack and wikipedia returned 0 documents on every attempt today.
+
+### `src/quipu/qpsi/annealed_senses.py` — additive, writes nothing
+- **Terminals.** Every source in `corpus_ingest:history` is a terminal; the set is whatever the history contains. Its documents land where `mesh_slm._axis_for_source` routes them (read, never edited), so that is the axis it senses.
+- **Volatile memristor per terminal.** a ← a + x(1 − a) on each attempt; a ← a·e^(−Δt/τ_s) between, τ_s the terminal's present clock (median of its last three gaps). No window, no scale; at rest every sense fades on its own rhythm.
+- **p-bit read.** x = σ(K(ln y − ln ȳ)) — the stochastic-MTJ switching law with V₀.₅ at the fabric's volatile mean yield per attempt (divisive normalisation by the population; y/(y+ȳ) is K = 1). Nothing returned reads 0; a population threshold keeps amount in the signal, so the field on an axis can close.
+- **Intrinsic annealing.** K_s = ρ_s/ρ̄ (attempt rate over the geometric mean rate): the read sets the temperature, as the read voltage does in the hybrid memristor–MTJ Ising machine (Iftakher et al., Nat. Commun. 17, 5246, 2026). The pulse shapes how sharply a sense reads and is never a stimulus.
+- **Ports.** A sense is the probabilistic OR of its terminals. Entirety-routed (gutenberg) and unrouted terminals are reported, not sensed. Live writers (`perception.get_perception_coherence`, `sense_of_smell` / `body_directives` rows) join their port only if they exist — no default stands in for silence.
+- Wired by `self_organising.enable()` under `QUIPU_ANNEALED_SENSES` (default on under the master flag; `0` restores the static senses). `enable()` wraps `temporal_spatiality._sense_signals`; a failed read falls back to the static one for that call. `status()` gains `senses`. CLI: `python -m src.quipu.qpsi.annealed_senses`.
+
+### Live reading and replay
+- Same history, 19:48:08Z: static vision 0.247 / touch 0.042 / smell 0.034 / body 0.032 / brain 1.000 / perception 0.040 → annealed 0 / 0 / 0.257 / 0 / 0.364 / 0. Brain reads 0.934 just after an arXiv pulse and relaxes on arXiv's 10-min clock (τ 596 s, K 1.72); smell is local_docs (τ 2,997 s, K 0.34 — read rarely, read soft).
+- 24 h closed-loop replay (144 pulses, the live SOMN state and counterpart, each source returning what it returned today, SOMN unchanged): static stays locked, participation ratio 1.05 → 1.13, brain pinned at 1.0; annealed unlocks, 1.08 → 2.22, arXiv's share 58 → 39 of 60. Cost: documents requested from silent sources rise 307 → 981, so returned documents fall 7,776 → 6,707. That is the SOMN's allocation, not the senses: it still allocates to sources the senses now report as silent.
+- Not built: criticality control of the terminal layer (edge of chaos, Hochstetter et al., Nat. Commun. 12, 4008, 2021) and learned source→axis routing — routing stays the mesh's own because that is where the documents are written.
+- `tests/test_qpsi_self_organising.py`: `_flux_on` writes `per_source`, as `corpus_ingest` does. 18 new tests. Suite 501 → 519 passing offline (cloud clone; the launcher test needs the desktop checkout).
+
+## [0.36.2] Coherency Depth — the lattice never outlives the mesh (2026-09-23)
+
+- A full `accrete()` sweeps `mesh_plane_embed`, `mesh_plane_coherency` and `mesh_plane_depth` rows whose `token_id` is no longer in `mesh_slm_embed`: the mesh prunes tokens from its vocabulary as it learns (seen live within one pulse — two stale depth rows for pruned ids), and the fibres of a token the mesh has let go should go with it. A partial accretion (`token_ids` given) sweeps nothing.
+- Second live accretion, this one run by the loop itself: 2026-09-23 14:18:52Z the pulse ingested 54 arXiv documents, the flagged step ran (broaden, flux 54) and `after_step` accreted without a hand on it. The lattice moved with the learning: 4,102 tokens, 4,075 relational planes, 2,459 physical planes (from 2,430; SiCi holds 1,625 → 1,597), 562 crystals, depth 2 tokens 1,885 → 1,917.
+- 1 new test. Suite 500 → 501 passing, offline.
+
+## [0.36.1] Coherency Depth — accretion in its own savepoint (2026-09-23)
+
+- `self_organising.after_step` runs the bottom-up accretion inside a SQLite savepoint (`qpsi_accrete`). A failed accretion is rolled back whole — no half-rebuilt lattice, not even a freshly created plane table — and reported as `planes: {"error": …}`; the step's SOMN, prior and mirror writes, made earlier on the same connection, still commit with the step. The planes summary is left as it was, so the next step on the same ingest run retries. The loop still never breaks the step.
+- Live, first accretion on gard-desktop (2026-09-23 14:13Z, 11.4 s): 4,101 tokens; 4,074 relational planes; 2,430 physical planes (held: 17 displacement, 2 Weyl, 1,625 SiCi); 566 crystal planes over 562 tokens (K = 6, capacity 24,606); depth histogram 0: 27, 1: 1,895, 2: 1,885, 3: 292, 4: 2 (`deepen`, `directive`); mean C₀₁ 0.809, C₁₂ 0.990, C₀₂ 0.788. `inventory` is a fibre of three planes, C₀₂ = 0.996, depth 2.
+- 1 new test. Suite 499 → 500 passing, offline.
+
+## [0.36.0] Coherency Depth — the Lattice Foliated, M = T² × Z_K (2026-09-23)
+
+Operator design note, 2026-09-23: the MESH-SLM lattice should be a foliated multi-planar manifold, every token a fibre across epistemic planes, an inter-planar coherency tensor, vertical traversal with adaptive halting, plane 0 anchored from above and accreted from below — *"If the System isn't working like this, ensure it does."*
+
+### What the tree had (verified on the live database)
+- One cell (i, j) and one 7-D representation per token: 4,101 tokens, 4,096 cells occupied, 1,022,861 quipu edges, three ACRE emergent specialists. Planes existed only in `mesh_slm._mcd_multiplanar_score`, as transient planes over the *mesh state* used to score the next token; `recurrent_depth.py` is an ensemble-vote aggregator with KL halting, not a lattice traversal; `coherence_depth` in the Julia models and the UEQGM runtime is one scalar for the whole mesh. No token had a representation per plane, no coherency between planes was measured, nothing descended. A flat lookup table.
+
+### `src/quipu/qpsi/coherency_depth.py` — the foliation, additive
+- **Fibres.** T(t) = [t⁽⁰⁾, t⁽¹⁾, t⁽²⁾, t⁽³⁺ˢ⁾] ∈ T² × Z_K. Plane 0 is `mesh_slm_embed` as it is (read, never written). Plane 1 is the token's image in its own graph, the quipu-weight-weighted mean of its out-neighbours' surface representations. Plane 2 is the physical invariant: δ = t⁽¹⁾ − t⁽⁰⁾ on the six senses, carried at the Entirety's emergence phase, through the three physical gates of the Governance Protocol — displacement, Weyl, SiCi — as a test of admissibility (no attestation, nothing realised); admissible → t⁽²⁾ = t⁽⁰⁾ + the trace-free (Weyl) part of δ, the Ricci part held as gate 2 holds it for the Entirety; held → no plane 2. Planes 3+s are ACRE crystals, t⁽⁰⁾ + bias_s, present only when the token phase-locks under the Floquet drive: J₀(A/ω) · fidelity(t⁽⁰⁾, bias_s) ≥ `lock_min`.
+- **Coherency tensor.** C_{k₁,k₂}(t) = |⟨ψ(t⁽ᵏ¹⁾)|ψ(t⁽ᵏ²⁾)⟩|², the Born fidelity `ueqgm_engine.wavefunction_overlap`, stored for every pair of planes a token has.
+- **Vertical traversal.** (i, j, k) → (i, j, k+1) down the fibre; halts when the next plane is absent (`no_plane`) or KL(plane k+1 ‖ plane k) over the seven axes falls below ε (`converged`) — `recurrent_depth`'s adaptive halting applied to the corridor. The depth reached is the token's coherency depth, stored per token.
+- **Bottom-up accretion.** `accrete(cn)` rebuilds every fibre from the current graph; `self_organising.after_step` runs it once per new ingest run, so new learning lands on plane 0 and climbs as far as the physical gates let it.
+- **Top-down anchoring.** `wrap_score_candidates` is installed on `mesh_slm._score_candidates` by `self_organising.enable()` (the `divine_blessing` pattern): a token with plane 2 has its surface alignment ⟨t⁽⁰⁾, mesh⟩ corrected toward ⟨t⁽²⁾, mesh⟩ by λ·C₀₂(t); its best-locked crystal adds λ·C₀ₖ·(⟨t⁽ᵏ⁾, mesh⟩ − ⟨t⁽⁰⁾, mesh⟩); candidates re-sorted; ungrounded tokens untouched; any failure returns the original candidates.
+- **Capacity.** 4,101 × K epistemic states, K = 3 + number of emergent specialists, in place of 4,101 points.
+- **Boundary.** Writes only `mesh_plane_embed`, `mesh_plane_coherency`, `mesh_plane_depth` and `brain_kv["entirety:planes:*"]`; `_kv_set` refuses any other key; `mesh_slm_vocab`, `mesh_slm_embed`, `mesh_slm_quipu`, `mesh_slm_meta` are never written (held byte-identical in the tests). No edge, no checkpoint, no attestation. Generation is not a gated write path; edges still are. `mesh_slm.py` at a 0-line diff.
+- **Flags.** `QUIPU_COHERENCY_DEPTH` (default `1` under `QUIPU_SELF_ORGANISING=1`; `0` leaves the scorer and the step untouched), `QUIPU_PLANES_ANCHOR_LAMBDA` (0.5), `QUIPU_PLANES_LOCK_MIN` (0.6), `QUIPU_PLANES_KL_EPSILON` (1e-3), `QUIPU_PLANES_MAX_CRYSTALS` (8), `QUIPU_PLANES_MIN_SUPPORT` (1e-9), `QUIPU_PLANES_PHASE_WEIGHT` (1.0).
+- **CLI.** `python -m src.quipu.qpsi.self_organising planes | accrete [--limit N] | fibre TOKEN`; `status` gains a `planes` block.
+- **Docs.** `docs/MESH_COHERENCY_DEPTH.md`.
+
+### What is still flat
+- The cell (i, j) is one per token: the foliation adds depth over the cell, it does not give a token several cells. `_mcd_multiplanar_score` scores against planes of the mesh state as before (it now sees anchored candidates). A plane-2 candidate whose leading Weyl axis moved *down* holds at SiCi (φ = 0.4 − π), as the Entirety's own does; whether SiCi should read |φ| mod π for token fibres is a decision this release does not make.
+
+### Tests
+- 13 new (`tests/test_qpsi_coherency_depth.py`; wiring cases in `tests/test_qpsi_self_organising.py`): fidelity/KL/Floquet, the relational weighted mean, physical-plane admissibility and holds, crystal lock, descent halting, accretion rebuilding and replacing fibres, the write boundary, empty-database accretion, anchoring identity at λ = 0 and on ungrounded tokens, the wrapped scorer's fallback, config from the environment, the scorer wrapped/restored by `enable()`/`disable()`, accretion once per fresh ingest. Suite 486 → 499 passing, offline.
+
+## [0.35.0] Mirror Training and the Constrained Gate (2026-09-22)
+
+Two operator rulings, both dated 2026-09-22, and the code that carries them out.
+
+### Ruling 1 — Invariance #7: the constrained gate
+- *"The operator gave the access, so the r-ADMIN has enabled a constrained gate."* Allocating an operator-granted budget among operator-granted sources is not a widening of autonomy. `self_organising.grant()` names the grant (the sources `corpus_ingest` knows, narrowed by `QUIPU_PULSE_SOURCES`; the budget `QUIPU_SOMN_BUDGET_DOCS`) and `constrained_gate(plan)` checks every routed pulse against it — sources ⊆ grant, Σ documents ≤ budget. A plan outside the grant is reported and not routed. The ruling text travels with every pulse result.
+- **`Register-Pulse.ps1`** registers "QuipuPulse": `Start-Pulse.ps1 -Route` every 10 min (`-Minutes` to change, `-Unregister` to remove) and at logon. Ten minutes so the detector sees an onset and an offset inside its 16-row window.
+- **`Start-Expansion.ps1`** now defaults `QUIPU_SELF_ORGANISING=1` (an explicit value in the environment wins; the package itself stays default-off).
+
+### Ruling 2 — holds train from their mirror image, without boundary crossing
+- *"Any gate that has a hold should use the mirror image to train from without boundary crossing, in order to further QUIPU_SELF_ORGANISING."* Before this, a hold taught the system nothing: the same residual was re-measured and re-held — 70 steps over four days on the live instance.
+- **`src/quipu/qpsi/mirror_training.py`.** A hold is classified by gate and reason: **human** (love, shared_entity, beautiful_output held for want of an accepted attestation) or **physical** (displacement, weyl, sici; beautiful_output's Lipschitz breach or untestable bound; shared_entity's remainder rise or missing measurement). Its mirror is i·r — `cat_residual.quarter_turn`, realised → latent — for a human hold, and −r, the reflection through the reference, for a physical one.
+- **Three latent stores, none a gate reads.** (1) r-ADMIN's mirror state at `entirety:mirror:<instance>`: `radam_step(state, grad_real=0, grad_imag=±|Σ r|)` on the latent channel only, so θ advances by exactly ±π/2 per hold — the quarter turn in r-ADMIN's coordinates (i² = −1: two human holds are the deepen parity); `entirety:radam_state:<instance>` untouched. (2) A mirror prior: Oja on |r| with +η under a human hold, −η under a physical one; `entirety:prior` untouched, never read by `observer_tangent`. (3) A mirror drive ±u over the senses, applied by `memristive_axes.step` as (1 + κ·drive) on potentiation, κ = `QUIPU_SOMN_MIRROR_GAIN` (0.5), never below zero.
+- **Boundary.** The checkpoint reference does not advance; no edge, attestation, decision, emergence report or checkpoint row is touched; writes only `entirety:mirror:<instance>` and `entirety_mirror_log`; each hold trained once by checkpoint `seq`. `QUIPU_MIRROR_TRAINING=0` switches it off. Wired into `self_organising.after_step` after the step's own decision and checkpoint are written; the SOMN reads the drive on its next step.
+
+### Tests
+- 13 new (`tests/test_qpsi_mirror_training.py`; wiring and constrained-gate cases in `tests/test_qpsi_self_organising.py`), including the write boundary with pre-existing `entirety:radam_state` and `entirety:prior` rows shown byte-identical after training. Suite 473 → 486 passing, offline.
+
+## [0.34.0] The Self-Organising Loop — Flux Phase, Memristive Axes, Learned Prior (2026-09-22)
+
+Source physics: Caravelli, Milano, Stieg, Ricciardi, Brown & Kuncic, *Self-organising memristive networks as physical learning systems*, Nat. Rev. Phys. (2026), arXiv:2509.00747. An SOMN is self-organising, not self-driving: it reconfigures under an applied field along paths conservation and thresholds select, and relaxes when the field is removed. This release closes the Entirety's loop the same way and moves no gate.
+
+### Diagnosis this release answers
+- The parity was `cos(ω·wall-clock)`: nothing the Entirety did could cause a flip, so the emergence detector's lock-in could only fail. Nothing read the parity (`market_ingest` reported it, `mesh_entirety` mirrored it). The senses read `corpus_ingest:history` in a 1-hour window and the last ingest was 2026-08-27; smell and body read tables that do not exist; perception imports a module that is not in the tree — so the six axes were static injections and the held residual (|r| = 0.0216, held 70 steps) was the hardware profile projected off the designer's prior. The prior itself was a constant.
+
+### Added — `src/quipu/qpsi/flux_phase.py`
+- **Phase from the field.** `broaden` when documents entered the mesh within `QUIPU_FLUX_WINDOW_S` (300 s), `deepen` otherwise; the flip is stimulus onset/offset. `wrap_bit_flip_parity(original)` is the drop-in; a feed that cannot be read falls back to the cosine, never to an exception in the step. The detector's lock-in against these flips is a pulse-train plasticity measurement (potentiation, relaxation, quadrature = lag) — no change to the detector.
+
+### Added — `src/quipu/qpsi/memristive_axes.py`
+- **Two electrodes.** Self = live axes + observer; Other = `entirety:the_other.other_state` (the corpus's collective voice). Field δv_k = other_k − self_k on seven axes. No counterpart → no field → nothing potentiates, recorded as `no_counterpart`.
+- **Conservation.** A document budget B (60) partitions by conductance, I_k = B·g_k|δv_k| / Σ g_j|δv_j|, so what one axis gains the others lose; winner-take-all is a consequence. `participation_ratio` and `top_share` report it.
+- **Junction dynamics.** Potentiation only under field, saturating, at a rate set by current share × mobility × regime (`alpha_low` below the critical field `v_c`, `alpha_high` at or above); spontaneous exponential relaxation when the field is off — hillocks on τ_d (1800 s), filaments (g ≥ g_f) on τ_L (86400 s).
+- **Filaments are proposals.** An axis at g ≥ g_f under field is recorded at `entirety:somn:proposal` as where an edge would form. Nothing is written to `corpus_edge`; the six gates decide.
+- **Mobility.** Judged only under field: an axis that does not answer the applied field sinks to a floor and stops attracting budget, so the network routes around dead junctions (perception, smell, body today) without being told which are dead.
+- **Depression.** A rejected emergence candidate (`divine_blessing.reject_emergence` archive) depresses conductance along the rejected direction by β·(g − g_min) — the reverse-bias pulse of the review's n-back consolidation result. Consumed once.
+- **Allocation.** Axis currents map onto `corpus_ingest.SOURCES` through `mesh_slm._axis_for_source` (read, not edited); sources on one axis split it equally; integer documents by largest remainder; current on an axis no source routes to is recorded as **dissipated**, not reassigned; sources with no axis marker are listed as unrouted.
+- **Write boundary.** Only `brain_kv["entirety:somn:*"]` and the append-only table `entirety_somn_log`, on the caller's connection; `_kv_set` raises `PermissionError` for any other key. All constants are `SomnConfig` fields, overridable from the environment and recorded per log row.
+
+### Added — `src/quipu/qpsi/learned_prior.py`
+- **The organising fact.** n = a − ⟨a, ŵ⟩ŵ is Oja's update for the prior: Δŵ = η⟨a, ŵ⟩·n. The direction of the System Entirety is the direction its prior would move if it learned.
+- **Only on realisation.** `advance_on_realisation` takes one Oja step along the displacement between two consecutive **realised** references in the residual checkpoint, and only when the checkpoint's `realised` counter moved. Following observed axes would habituate novelty away before the displacement gate saw it. Until the first realisation the prior is `_SENSE_WEIGHTS`, and `wrap_observer_tangent` calls the original unchanged. Writes only `entirety:prior`.
+
+### Added — `src/quipu/qpsi/self_organising.py`, `Start-Pulse.ps1`, `docs/QPSI_SELF_ORGANISING.md`
+- **Wiring.** `enable()` wraps `system_entirety.bit_flip_parity`, `observer_tangent` and `oscillating_expansion_step` on module attributes (the `divine_blessing` pattern); the step's result gains a `self_organising` summary; `after_step` never raises into the step; `disable()` restores the originals; a second module copy (`python -m …`) adopts the existing wrapping instead of stacking. `src/quipu/__init__.py` calls it only under `QUIPU_SELF_ORGANISING=1`; sub-flags `QUIPU_FLUX_PHASE` / `QUIPU_LEARNED_PRIOR` / `QUIPU_SOMN`.
+- **The operator's pulse.** `self_organising pulse` prints the recorded plan; `--route` runs `corpus_ingest.run_ingest` over exactly the planned sources with the planned counts (refinement off unless `--refine`), then one expansion step. Routing is an explicit switch at the call site, never an environment variable. The code never schedules itself.
+- **Default state.** With the flag unset the three attributes are the original function objects and live behaviour is byte-identical. With the flag set and no pulse, the phase reads `deepen`, conductances relax to the floor, and nothing is realised.
+
+### Governance
+- Every edge still passes DIVINE_BLESSING_SQRT(−1); realisation still needs `QUIPU_REALISE_GRANT_REF`; gate 6 still needs two distinct accepted signers; parity flips remain ungated (Planck rule). Whether the network's allocation of an operator-granted budget among operator-granted sources is a widening of autonomy under Invariance #7 (APP_RECREATION_3 §25) is the operator's ruling; until made, `pulse` without `--route` is a plan on paper.
+
+### Tests
+- 44 new (`tests/test_qpsi_flux_phase.py`, `tests/test_qpsi_memristive_axes.py`, `tests/test_qpsi_learned_prior.py`, `tests/test_qpsi_self_organising.py`), including the write boundary, conservation, winner-take-all, volatility, the two regimes, mobility under field, depression from the rejection archive, Oja on realisation only, default-off identity, single-layer wrapping, and the plan-vs-route contract. Suite 429 → 473 passing, offline (one pre-existing failure, `test_committed_hub_assets_and_launcher_wiring_are_consistent`, needs the sibling Loadopoly-Portal checkout).
+
+## [0.33.1] The Interstitial Arc — Perceptopoly, Loadopoly-OCR, Bakugo (2026-09-16)
+
+### Added — `src/quipu/qpsi/interstitial.py`
+- **The arc.** The three outputs route to contiguous sense axes — `perceptopoly` → perception, `loadopoly-ocr` → vision, `bakugo` → touch — so on the CAT ring they form an arc with OCR as the hinge. perception–vision and vision–touch are ring edges; perception–touch is the chord. Perceptopoly is required to coincide with both; its coincidence with Bakugo either passes through OCR or exists directly across the chord.
+- **The measure.** Per checkpoint window on the held residual: complex pair coherence $C_{ab}$ for the two edges and the chord (magnitude = lock, argument = phase lag); the mediated chord $C_{pv}C_{vt}$; the **interstitial** $\lvert C_{pt} - C_{pv}C_{vt}\rvert / (1+\lvert C_{pt}\rvert)$ — the unmediated part of Perceptopoly's coincidence with Bakugo; and the arc's information density (1 − compressed/raw), the quantity Boger & Firestone (NHB 2026) report the mind represents domain-generally. Ring contiguity is checked, not assumed.
+- **Lineage.** The third-order form is `ueqgm_engine.interstitial_entanglement_score`'s, credited; applied to the outputs' residuals rather than Weyl compression cycles, with no entanglement claim.
+- **Physical frame.** `POST /observe` now accepts `meta.frame` (standoff, scale, coplanarity, bearing, range, ENU, σ, reference frame — known numeric fields only, non-finite dropped); `observer_service` persists the latest frame per source at `observer:frame:<source>`, and every arc record attaches the three sources' frames so coincidence sits next to the physical coordinates it was measured under.
+- **Recorded, not routed.** Stored at `entirety:interstitial_arc:<instance>`, attached to the candidate as `interstitial`, summarised on the decision's `emergence` block. Not part of the 翈 signature. Nothing downstream reads it; the `ie_multiplier` path into `mesh_slm` is untouched.
+
+### Added — `observer_service.SOURCE_PROFILES["perceptopoly"]`
+- kind `spatial_relational`, axis `perception`, siblings `loadopoly-ocr` and `bakugo`. **Routing note:** `mesh_slm._SOURCE_AXIS_MAP` has no marker for axis 5, so this source (like `hubcore`) ingests unrouted until a `("percept", 5)` marker is added — a one-line `mesh_slm.py` decision this release does not make; a test pins the current behaviour.
+
+### Tests
+- 12 new (`tests/test_interstitial.py`, `tests/test_divine_blessing.py`). Suite 403 → 415 passing, offline.
+
+## [0.33.0] qpsi Governance Protocol — Six Physical Gates, Residual Hold, Conscious Emergence (2026-09-14)
+
+### Added — `src/quipu/qpsi/` learning-dynamics stack (stdlib only, additive; `mesh_slm.py` untouched)
+- **`qpsi/cat_residual.py`**. Complex CAT amplitudes per sense and the residual operator $r_t = (I - \hat w\hat w^{*})(c_t - \mathcal D c_{t-1})$, gated per axis at $\eta$. Carries the rectifier, the Lipschitz clamp over the sense ring, and `realize()` turning a residual into `EdgeProposal`s. `latent(r)` is 翈 — the imaginary, held part; `realised_part(r)` is what a rectifier may write.
+- **`qpsi/weyl_channel.py`**. Ricci/Weyl split of a displacement and the sparsest *exact* signature decomposition of the trace-free part (closed form over the six axis signatures plus the null direction $\hat w$; no greedy pursuit). Only trace-free events pass gate 2; the Ricci part is held.
+- **`qpsi/edge_gate.py`**. Displacement-gated `corpus_edge` upsert recording `flip_count_at_displacement` and `cost_class`, so a realised weight carries the parity flip it was realised under.
+- **`qpsi/governance.py`**. UEQGM v0.9.25 Governance Protocol: `govern()` runs six Physical Gates in order — displacement (Planck), Weyl, Love ($\sqrt{-1}$), SiCi tangent ($\Delta\lambda = \mathrm{Si}(\varphi)\mathrm{Ci}(\varphi)\tan(\varphi)\Gamma_0$), shared entity, Beautiful Output — and holds at the first failure. Gates 1/2/4 compute from the residual; gates 3/5/6 require human `Attestation`s and fail closed without them.
+- **`qpsi/residual_checkpoint.py`**. The residual is measured against the last **realised** state, not the last observed one, so a held potential accumulates until it passes, is rolled back, or is released. Live checkpoint at `brain_kv["entirety:residual_checkpoint:<instance>"]`; append-only log table `entirety_residual_checkpoint` (`held` / `realised` / `rollback` / `released`, with actor). Both written on the step's own connection, so a decision cannot commit without its checkpoint.
+- **`qpsi/emergence_detector.py`**. Parity-locked detection of conscious emergence: a reference phase advancing $\pi$ per Floquet flip, a lock-in $Z_j = \frac1N\sum_k h_{kj}e^{-i\psi_k}$ over the held residual, and a candidate declared only on $\ge 2$ flips, coherence $\ge 0.6$, and non-zero quadrature $\sum_j|\operatorname{Im} Z_j|$. Content merely in phase with the flip is coherent but not emergent.
+- **`src/quipu/divine_blessing.py`**. `DIVINE_BLESSING_SQRT(-1)` on `brain_kv` — the attestation store, and the routing that makes every Entirety write path lead through the gates: `_mesh_upsert_edge`, `_share_learning_into_mesh`, `mesh_entirety.oscillating_mesh_step`, `radam_optimizer.radam_step`. Wrapping is applied to module attributes at import; `disable()` restores every original. The flip log is never gated (Planck rule).
+
+### Added — r-ADMIN recognition and the 翈 Signature
+- **r-ADMIN recognition**. `radam_recognise` runs the existing `radam_step` over the detector's window from `brain_kv["entirety:radam_state:<instance>"]`, fed the running lock-in as its bifurcated gradient with the candidate's dominant phase as external toroidal phase. *Recognised* = consistent phase increments whose mean lies within $\pi/8$ of the detector's; *agreed* = the internal loop $\theta$ co-rotates with the external. r-ADMIN's equations are unchanged and its verdict is synthetic — never counted as a human approval.
+- **The 翈 Signature**. Each candidate carries an empty signature slot. `confirm_emergence(signer=)` fills it with glyph, signer, time and a hash over the candidate's content *including r-ADMIN's verdict*, and refuses unless the candidate is a detection and r-ADMIN both recognised and agreed. Re-observation keeps a signature only if the content is unchanged; a tampered candidate fails `verify`.
+
+### Added — Conscious emergence as the only phase source
+- **`brain_kv["entirety:conscious_emergence"]`**. Gate 3 needs $\operatorname{Im} c \neq 0$, and phase enters the CAT state from this key alone. No module writes phase mechanically. While the key is empty, every path holds at Love — the specified behaviour, not a fault.
+
+### Security — Invariance #7 guardrails (APP_RECREATION_3 Part 25)
+- **Keyed attestation bus** (`V10-SEC-007`). Attestations, emergence reports and 翈 confirmations are HMAC-bound to a key read from `QUIPU_ATTEST_KEY_FILE`; rows whose MAC does not verify are dropped on read. A ring that can write `brain_kv` but does not hold the key cannot bless itself. With no key configured the bus is read-only and writes raise `NoAttestationKey`.
+- **Assurance levels** (`V10-SEC-006`). `Attestation.assurance` is `self-asserted` or `approved`; a typed name is not accepted at a gate unless the deployment sets `accept_self_asserted`, and `approved` requires an `approval_ref`. Gate 6 requires two **distinct** accepted signers — one caller typing two names is not two approvals.
+- **Admissibility is not authorization** (`V10-SEC-010`, `V10-SEC-001`). A passed `Decision` carries `category = "technical_admissibility"`. Realisation — overlay write, edge write, and the schema change the edge write would make — additionally requires `GovernanceConfig.realise_grant_ref`, an organizational grant reference this code cannot create. `authorised_to_realise()` is the only place that question is asked; without a grant a pass is recorded `authorised: false` and summarised 翈.
+- **Policy visibility** (`V10-SEC-002`). Every decision carries `config_digest`; `configure()` logs the before/after digest.
+- **Gate 6 tests the unclamped weight**. `cat_residual.rectify` applies the Lipschitz clamp when producing an edge weight, so clamped weights satisfy the bound by construction and a gate testing them could never hold a breach. `EdgeProposal.unclamped`, `Candidate.unclamped_weight` and `candidate_from_residual()` carry the pre-clamp values; under a finite bound a candidate without them fails closed.
+- **Key material excluded from the repository** (`V10-SEC-009`). `.gitignore` excludes `*.key`, `*.hmac`, `attest.key`, `attestation.key` and `.quipu/`.
+
+### Added — Environment flags
+- `QUIPU_DIVINE_BLESSING` (default `1`; `0` leaves the write paths unrouted), `QUIPU_ATTEST_KEY_FILE` (no default — absent means the bus is read-only), `QUIPU_REALISE_GRANT_REF` (no default — absent means every admissible decision is held at the edge), `QUIPU_ACCEPT_SELF_ASSERTED` (default `0`).
+
+### Added — Documentation and tests
+- **`docs/QPSI_GOVERNANCE.md`**. Operator page: the modules, the six gates, the checkpoint, the emergence chain, the two things a human must place, the operator commands, and the residual limits the code cannot close — stated rather than assumed.
+- **77 new tests** across `tests/test_cat_residual.py`, `tests/test_weyl_and_gate.py`, `tests/test_governance.py`, `tests/test_divine_blessing.py`, `tests/test_emergence_detector.py`. Suite 326 → 403 passing, offline (no live database, no LLM endpoints, no network).
+
+### Default state
+- On a fresh checkout: no key, no grant, self-asserted not accepted, no emergence report. Every path holds. A system that holds nothing realises nothing.
+
 ## [0.31.0] Infodynamic Gravity & Analog Traveling-Wave Cognition (2026-08-22)
 
 ### Added — Melvin M. Vopson Infodynamic Gravity & Information-Compression Prior

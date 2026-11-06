@@ -1,6 +1,169 @@
 # Release Notes
 
+## v0.45.0 - 2026-09-24
+
+**Mass Session Handler, Tailscale Mesh VPN & Physical Gate 6 User Integration**
+
+Centralized multi-container login orchestrator, encrypted Tailscale mesh overlay, multi-account credential management with AES-256-GCM, and human-in-the-loop Physical Gate 6 User Integration across game sessions and systemic refinement:
+
+### Added & Enhanced
+- **Mass Session Handler (`src/quipu/games/mass_session_handler.py`)**
+  - Multi-container mass authentication across Old School RuneScape (port 7310), World of Warcraft (port 7320), and Guild Wars (port 7330).
+  - Bridges directly with r-ADMIN (rADAM toroidal pressure & complex gradient optimizer): monitors complex session stability tensor $z = \text{stability} + i \cdot \text{friction}$, coordinates account rotation pressure, and enforces Gate 6 write holds.
+  - Interactive and scriptable CLI interface (`--login`, `--logout`, `--status`, `--vpn`, `--accounts`, `--gate6-list`, `--gate6-confirm`, `--r-admin`).
+- **Tailscale Mesh VPN Integration (`src/quipu/games/vpn_mesh_integration.py`)**
+  - Encrypted WireGuard overlay assigning CGNAT addresses (`100.64.0.0/10`) to containers and controllers (`quipu-r-admin: 100.64.0.5`, `quipu-game-osrs: 100.64.0.10`, `quipu-game-wow: 100.64.0.20`, `quipu-game-gw: 100.64.0.30`, `quipu-video-trainer: 100.64.0.40`).
+  - Peer ping latency monitoring, DERP relay fallback, exit node configuration (`exit-us-east`, `exit-eu-west`, `exit-us-central`), and Docker Compose environment variable injection (`TAILSCALE_AUTHKEY`, `TAILSCALE_OVERLAY_IP`).
+- **Multi-Account Profile Store (`src/quipu/games/account_store.py`)**
+  - Secure credential storage using AES-256-GCM authenticated encryption (`QUIPU_ACCOUNT_STORE_KEY`).
+  - Supports account creation, round-robin rotation for idle accounts, cooldown tracking, and tag/realm metadata.
+  - Pre-seeded with production profiles for OSRS (`osrs_quipubot_main`, `osrs_pure_alt`), WoW (`wow_warrior_main`, `wow_mage_alt`), and Guild Wars (`gw_ele_main`, `gw_monk_alt`).
+- **Physical Gate (Gate 6) Level of User Integration (`src/quipu/games/gate6_user_interlock.py`)**
+  - Universal human confirmation protocol bound to UEQGM v0.9.25 Gate 6 (Beautiful Output / Two-Party Attestation).
+  - When an autonomous game action breaks (captcha, disconnect, path obstacle) or when systemic refinement encounters uncertainty/anomalies, execution halts in band `翈`.
+  - The User/Operator reviews the breakage and confirms the right path or inputs. Generates a signed two-party `Attestation(signer=operator_id, love_form="repair", beautiful_output=True, assurance=ASSURANCE_APPROVED)`, clearing the hold and automatically resuming container execution and r-ADMIN optimization.
+- **Common Refinement Integration (`src/quipu/systemic_refinement_agent.py`)**
+  - Linked Ring 5 refinement and tool forging directly to Gate 6: any divergence creates a Gate 6 challenge and halts autonomous mutation until the user confirms the trajectory.
+- **Unit & Integration Test Suite (`tests/test_mass_session_handler.py`)**
+  - 5 comprehensive tests validating AES-256-GCM account encryption/rotation, VPN overlay status/ping, Gate 6 hold/attestation resolution, mass login orchestration, and refinement agent interlocks. 34 game-related tests passing.
+
+---
+
+## v0.44.0 - 2026-09-24
+
+**Dedicated Multi-Game Client Containers & Automated Asset Downloaders**
+
+Containerized game client deployment and automated asset downloaders for Old School RuneScape, World of Warcraft 1.12.1 Classic, and Guild Wars 1:
+
+### Added & Enhanced
+- **Multi-Game Asset Downloader (`src/quipu/game_asset_downloader.py`)**
+  - OSRS: Downloads official RuneLite 2.7.3 client launcher JAR from GitHub Releases (`https://github.com/runelite/launcher/releases/download/2.7.3/RuneLite.jar`, 2,499,996 bytes) with SHA-256 verification, configures `runelite.properties`, and creates bash execution wrappers.
+  - Guild Wars 1: Downloads official ArenaNet client setup executable from CloudFront CDN (`https://cloudfront.guildwars2.com/client/GwSetup.exe`, 5,660,840 bytes) with SHA-256 integrity verification, creates `Gw.exe` bootstrap binary, and generates Wine launch script.
+  - World of Warcraft: Generates 1.12.1 Classic client filesystem layout with `WoW.exe`, `realmlist.wtf` (`logon.turtle-wow.org`), `WTF/Config.wtf`, and standard MPQ archives (`patch.mpq`, `dbc.mpq`, `terrain.mpq`, `wmo.mpq`).
+- **Dedicated Game Daemons (`src/quipu/games/`)**
+  - `osrs_client_daemon.py` on port 7310: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages RuneLite download into `/games/osrs`, monitors Xvfb headless display (`:99`), and reports live player state (`QuipuBot`, Combat 75).
+  - `wow_client_daemon.py` on port 7320: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages 1.12.1 Classic client filesystem in `/games/wow`, realmlist configuration, and live player state (`QuipuWarrior`, Level 15).
+  - `gw_client_daemon.py` on port 7330: HTTP daemon exposing `/status`, `/health`, `/download`, and `/launch`. Manages Guild Wars client in `/games/gw`, Wine execution environment, and live player state (`Quipu Elementalist`, Level 20).
+- **Container Infrastructure (`Dockerfile.{osrs,wow,gw}` & `docker-compose.yml`)**
+  - `quipu-game-osrs` (port 7310): Debian slim + OpenJDK 21 headless + Xvfb + curl.
+  - `quipu-game-wow` (port 7320): Debian slim + Wine/Xvfb + curl.
+  - `quipu-game-gw` (port 7330): Debian slim + Wine/Xvfb + curl.
+  - Persistent named Docker volumes: `osrs_game_data`, `wow_game_data`, and `gw_game_data`.
+  - Automatic download on container startup: Each daemon automatically inspects its `/games/<game>` directory on boot and triggers download if assets are missing.
+- **Unit & Integration Test Suite (`tests/test_game_asset_downloader.py`)**
+  - 4 focused unit tests covering client directory verification, SHA-256 hashing, real file downloads, and JSON state serialization. All 29 game mesh tests passing.
+
+---
+
+## v0.43.0 - 2026-09-24
+
+**Twitch & YouTube Stream Corpus Scanner & GARD Shard Vector Graph Integration**
+
+High-volume gameplay stream ingestion across World of Warcraft (WoW), Old School RuneScape (OSRS), and Guild Wars (GW), sealed via GARD Shard v2 (AES-256-GCM + zlib level 6) authenticated containers and projected directly into the toroidal Quipu vector graph (`mesh_slm`):
+
+### Added & Enhanced
+- **Stream Corpus Scanner (`src/quipu/stream_corpus_scanner.py`)**
+  - Multi-Game Catalog: 18 streaming sessions covering dungeons (Scarlet Monastery, Blackrock Depths), raids (Molten Core, Theatre of Blood), solo bossing (Zulrah, TzTok-Jad), world PvP (Stranglethorn Vale, Deep Wilderness, Warsong Gulch), slayer, hardcore leveling, and Guild Wars elite missions (Fissure of Woe, Underworld, Heroes' Ascent, Droknar's Forge, Pre-Searing).
+  - High-Volume File Ingestion: Generates 60+ files in `recordings/` (21 `.mp4` video streams with dynamic HUD vitals and minimap radar blips, 21 synchronized `.txt` speech transcripts with authentic gamer commentary).
+  - GARD Shard Compression & Decompression (`gard-shard/v2`): Encapsulates demonstration bundles into authenticated `.gard.json` and `.gard.store` containers with zlib level 6 compression and AES-256-GCM encryption. Provides lossless roundtrip reconstruction with bit-for-bit accuracy.
+  - Toroidal Quipu Vector Graph Projection (`mesh_slm` in `local_brain.sqlite`): Maps session concepts and tactical action tuples into `mesh_corpus_feed` and executes `train_round()` to update 7-D embedding coordinates on the torus, grow the vocabulary, and train directed Hebbian GNN quipu edges.
+  - Holographic Weyl Compaction: Computes Page-curve Hawking information remnant score and compaction ratio via `ueqgm_engine`.
+
+- **Enhanced Continuous Video Trainer Daemon (`src/quipu/video_trainer_daemon.py`)**
+  - Integrated GARD Shard Container Decompression: Automatically detects and decrypts `.gard.json` and `.gard.store` files alongside raw `.mp4` video files.
+  - Round-Robin File Rotation: Slices and rotates across all 60+ recording files round-by-round (`training_round % len(all_recordings)`).
+  - Continuous Vector Graph Co-Potentiation: Periodically executes `mesh_slm.train_round()` during live video training rounds to keep the vector graph continuously aligned with live gameplay.
+
+- **Comprehensive Test Suite Expansion (`tests/test_stream_corpus_scanner.py`)**
+  - 5 new tests covering multi-game coverage, video/transcript generation, GARD Shard AES-256-GCM + zlib compression roundtrip, vector graph projection, and batch scan execution. Full test suite expanded to 59 passing tests.
+
+---
+
+## v0.42.0 - 2026-09-24
+
+**Continuous Video & Stream Recording Trainer Daemon Container**
+
+Continuous ingestion daemon watching `/app/recordings` for incoming Twitch and YouTube gameplay clips (.mp4, .mkv, .webm, .avi and synchronized .txt speech transcripts) across World of Warcraft, Old School RuneScape, and Guild Wars:
+
+### Added & Enhanced
+- **Continuous Video Trainer Daemon (`src/quipu/video_trainer_daemon.py`)**
+  - Continuous directory watcher monitoring `/app/recordings` for new video streams and transcript files.
+  - Video frame extraction: samples gameplay at 2 FPS, extracting unit frame vitals (health, mana, combat state) and minimap radar blips via `HUDVisionExtractor`.
+  - Spoken audio intent parsing via `StreamerAudioParser` mapping player commentary into tactical action intents.
+  - Multi-game streaming replay synthesis: continuously generates demonstration batches across WoW, OSRS, and Guild Wars to ensure the model continuously potentiates even when offline recordings are idle.
+  - Inverse Graph Tension Learning (IGTL): runs quasi-Newton L-BFGS-B optimization on Quipu knot tension weights and utility reward profiles, minimizing Negative Log-Likelihood loss.
+  - Human Behavioral Fidelity evaluation: benchmarks each training batch via `PeriodicFidelityAssessor` across cadence variance, path wander, and personal space buffers.
+  - Persists learned parameters to `/app/quipu_learned_artifacts/quipu_learned_parameters.json` and records monotone history in `training_history.jsonl`.
+  - Live HTTP status server on port 7250 with `GET /status`, Prometheus `GET /metrics`, and `POST /queue` endpoints.
+
+- **Dedicated Trainer Container (`Dockerfile.trainer`) & Docker Compose Integration**
+  - Packaged standalone container `quipu-video-trainer:dev` listening on port 7250.
+  - Added `quipu-video-trainer` service to `docker-compose.yml` with host volume mounts for `./recordings` and `./quipu_learned_artifacts`.
+
+- **Unit & Integration Test Suite (`tests/test_video_trainer_daemon.py`)**
+  - Added tests for state serialization, synthetic video clip processing, and HTTP endpoint monitoring.
+  - Total test suite expanded to 20 passing tests.
+
+---
+
+## v0.41.0 - 2026-09-24
+
+**Multi-Game Human Behavioral Fidelity & Social Indistinguishability Assessor**
+
+Periodic empirical assessment suite benchmarking autonomous agent behavioral telemetry against active human player distributions across World of Warcraft (WoW), Old School RuneScape (OSRS), and Guild Wars (GW):
+
+### Added & Enhanced
+- **Human Behavioral Fidelity Assessor (`src/quipu/human_fidelity_assessor.py`)**
+  - Multi-game benchmark profiles: calibrated human baselines for WoW (reaction mean 320ms, min std 65ms, spatial wander 0.18), OSRS (reaction mean 380ms, min std 85ms, spatial wander 0.12), and GW (reaction mean 290ms, min std 60ms, spatial wander 0.16).
+  - 4-Dimensional Behavioral Evaluation:
+    - *Cadence & Reaction Variance*: detects ex-Gaussian right-skew distributions and flags rigid zero-variance bot signatures.
+    - *Spatial Wander & Curvature*: detects natural sub-optimal pathing and flags straight-line machine navmesh paths.
+    - *Social Etiquette & Bubble Buffers*: evaluates personal space distance and flags kill-stealing on tagged mobs.
+    - *Attrition Pacing*: measures hesitation pauses before eating, drinking, or resting.
+  - Generates comprehensive `FidelityAssessmentReport` with overall percentage score, sub-dimension diagnostics, flagged anomalies, and categorical verdict (`PASS`, `BORDERLINE`, `SUSPICIOUS_BOT_PATTERN`).
+
+- **Containerized Service Integration (`src/quipu/game_pipeline_service.py`)**
+  - Exposed `GET /assessments` returning real-time fidelity evaluations for WoW, OSRS, and GW simultaneously.
+  - Exposed `POST /assess` for on-demand assessment execution.
+  - Continuous telemetry accumulation: `POST /tick` records samples with human-mimic latency and pathing into the active game assessor.
+  - Container rebuilt and running actively on port 7200.
+
+- **Fidelity Test Suite (`tests/test_human_fidelity_assessor.py`)**
+  - 4 new unit tests covering human-mimic pass scenarios, synthetic bot detection, multi-game profiles, and sample size fallbacks. Total test suite expanded to 17 passing tests.
+
+---
+
+## v0.40.0 - 2026-09-24
+
+
+**QUIPU Game Mesh Autonomy & Video-to-Graph Pre-Training Pipeline**
+
+Hierarchical Andean graph topology for classic MMORPG spatial and behavioral decision-making, coupled with video-based Inverse Graph Tension Learning (IGTL) and active containerization:
+
+### Added & Enhanced
+- **QUIPU Game Mesh Autonomy Engine (`src/quipu/quipu_game_mesh.py`)**
+  - Andean Quipu cord-and-knot topology: Primary Trunk Cord (Agent Core Vector: vitals, inventory, macro-intent), Sensory Pendants (Spatial, Threat, Affordance, Social), and Knot types (Figure-8 hard barriers, Long Knots with $N$ intensity loops, Single Knots for binary states).
+  - Classic MMORPG Physics & Rules (WoW: Forever, OSRS, GW): Dynamic level-delta aggro radius scaling ($R = \text{clamp}(20 + 1.5 \cdot \Delta L, 5, 45)$), Figure-8 skull danger mobs ($\ge 3$ levels), social pull radius alert geometry, humanoid runner ($\le 20\%$ HP) forward flee trajectory raycast with `Flee / Add` subsidiary cord generation, low-health ($\le 25\%$ HP) `Escape Path` subsidiaries, and out-of-combat rest/drink downtime pacing.
+  - Tactical Action Actuator: Dynamic tension evaluation and utility optimization generating discrete tactical actions (`PULL_TO_LOS`, `SNARE_FLEEING_RUNNER`, `ENGAGE_COMBAT`, `RETREAT_ESCAPE`, `REST_AND_RECOVER`, `HARVEST_AFFORDANCE`, `TRAVERSE_NAVMESH`).
+  - Low-latency minimal context subgraph distillation for real-time edge decision loops.
+
+- **Video Pre-Training & Inverse Graph Tension Learning (IGTL) (`src/quipu/video_gameplay_pipeline.py`)**
+  - Computer Vision HUD extraction: color-thresholding of health and mana bars, in-combat glow detection, and minimap radar polar entity tracking.
+  - Streamer audio transcription parser: maps spoken commentary into tactical intents (LoS, runner alert, rest mandate, emergency flee).
+  - IGTL Optimizer: quasi-Newton L-BFGS-B optimization minimizing Negative Log-Likelihood (NLL) of expert human actions under the Quipu Softmax policy to calibrate knot tension weights and utility rewards.
+  - CLI runner for demonstration synthesis and parameter training.
+
+- **Containerized Daemon Service (`src/quipu/game_pipeline_service.py` & `Dockerfile.game`)**
+  - Standalone active microservice on port 7200 providing `GET /health`, `GET /parameters`, `POST /tick`, and `POST /train` HTTP endpoints.
+  - Added `quipu-game-pipeline` service to `docker-compose.yml`.
+
+- **Comprehensive Test Suite (`tests/test_quipu_game_mesh.py`, `tests/test_video_gameplay_pipeline.py`)**
+  - 13 passing unit and integration tests covering knot physics, threat geometry, flee subsidiaries, LoS pulling, vision extraction, speech classification, and L-BFGS-B parameter fitting.
+
+---
+
 ## v0.31.0 - 2026-08-22
+
 
 **Infodynamic Gravity and Analog Traveling-Wave Cognition**
 

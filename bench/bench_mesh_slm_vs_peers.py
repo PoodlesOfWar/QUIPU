@@ -83,18 +83,30 @@ except Exception:
 # --- imports (late to keep harness light) ---
 try:
     from src.quipu import mesh_slm
-    from src.quipu.llm_ensemble import dispatch_parallel
-    from src.quipu.llm_router import rank_llms, select_llm
-    from src.quipu.expert_orchestrator import run_expert_orchestration
     from src.quipu.mesh_slm import MeshSLMUnavailable
 except Exception as e:
-    print("Warning: core imports failed, some variants will be stubbed:", e)
+    print("Warning: mesh_slm import failed:", e)
     mesh_slm = None
+    MeshSLMUnavailable = Exception
+
+try:
+    from src.quipu import expert_orchestrator
+    def run_expert_orchestration(query, meta=None):
+        return expert_orchestrator.dispatch(query, trigger_forge=False)
+except Exception as e:
+    print("Warning: expert_orchestrator import failed:", e)
+    run_expert_orchestration = None
+
+try:
+    _SCB_PATH = _PIPELINE_ROOT.parent / "Supply-Chain-Brain" / "pipeline"
+    if str(_SCB_PATH) not in sys.path:
+        sys.path.insert(0, str(_SCB_PATH))
+    from src.brain.llm_ensemble import dispatch_parallel
+    from src.brain.llm_router import rank_llms, select_llm
+except Exception as e:
     dispatch_parallel = None
     rank_llms = None
     select_llm = None
-    run_expert_orchestration = None
-    MeshSLMUnavailable = Exception
 
 # --- benchmark harness ---
 def time_call(fn: Callable, *args, **kwargs) -> tuple[Any, float, int]:

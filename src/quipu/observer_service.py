@@ -20,12 +20,15 @@ into the MESH SLM (vocab + quipu bigram edges) on a fixed cadence, so the
 enacted guidance strengthens as both corpora accumulate.
 
 Endpoints (all JSON unless noted):
-    GET  /health              liveness + mesh counters + hideout identity
+    GET  /health              liveness + mesh counters + hideout identity (counts are cached; see QUIPU_HEALTH_TTL_S)
     GET  /state               mesh_slm.state_summary()
     GET  /hideout             Black Bulls Hideout realization (scbrain-hideout)
     POST /observe             {source, text, kind?, confidence?, meta?}
     GET  /guidance?source=X   lexicon, pairs, calibration, per-source stats
     POST /feedback            {source, expected, observed?, confidence?}
+    GET  /relational          kept relational records (?source=, ?source=&entity=)
+    POST /relational          {source, relational}: keep a record without feeding any text to the mesh
+                              (a coordinator's result is generated, so it is shared, not learned)
     GET  /digest              today's learning digest (text/plain)
 
 Environment:
@@ -33,6 +36,9 @@ Environment:
     QUIPU_PORT            port (default 7100)
     QUIPU_TRAIN_INTERVAL  seconds between trainer wake-ups (default 45)
     QUIPU_TRAIN_BUDGET    max seconds per train_round (default 8)
+    QUIPU_HEALTH_TTL_S    how often the vocab/edge counts reported by /health and
+                          the /observe reply are refreshed in the background (default 60).
+                          Counting ~1.3M edges takes ~15 s, so neither route computes it per request.
     SCB_DB_PATH           SQLite brain location (honoured by local_store)
     QUIPU_HIDEOUT_HOST    MESH peer host (default scbrain-hideout)
     QUIPU_HIDEOUT_MESH    mesh target (default hideout-mesh)
@@ -44,15 +50,18 @@ Stdlib only — no new dependencies.
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
 import traceback
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import brain_kv, hideout_mesh, mesh_slm, world_model
+from . import brain_kv, hideout_mesh, mesh_slm, world_model, security
+from .qpsi import edge_admission
 from ._version import __version__
 from .local_store import db_path
 
@@ -74,6 +83,17 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis": "touch",
         "axis_source": "bakugo/code/hideout-mesh",
         "sibling": "loadopoly-ocr",
+    },
+    # Perceptopoly: spatial coordination — relational measurements taken from the
+    # observer's perspective — required to coincide with both Loadopoly-OCR and
+    # Bakugo (qpsi.interstitial measures that arc).  Routed by the ("percept", 5)
+    # marker in mesh_slm._SOURCE_AXIS_MAP.
+    "perceptopoly": {
+        "kind": "spatial_relational",
+        "axis": "perception",
+        "axis_source": "perceptopoly/percept/hideout-mesh",
+        "sibling": "loadopoly-ocr",
+        "siblings": ["loadopoly-ocr", "bakugo"],
     },
     "supply-chain-brain": {
         "kind": "analytical",
@@ -99,6 +119,13 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "axis_source": "jobhawk/code/hideout-mesh",
         "sibling": "supply-chain-brain",
     },
+    "stockopoly": {
+        "kind": "warehouse_spatial_slotting",
+        "axis": "touch",
+        "axis_source": "stockopoly/code/hideout-mesh",
+        "sibling": "loadopoly-ocr",
+        "siblings": ["loadopoly-ocr", "bakugo"],
+    },
 }
 
 _ALIASES = {
@@ -119,17 +146,60 @@ _ALIASES = {
     "hub_floor": "hub-floor",
     "job_hawk": "jobhawk",
     "job-hawk": "jobhawk",
+    "stockopoly": "stockopoly",
+    "stock_opoly": "stockopoly",
 }
 
 _STATS_KEY = "observer:{source}:stats"
 _FEEDBACK_KEY = "observer:{source}:feedback"
 _LAST_TRAIN_KEY = "observer:last_train"
 _LAST_OSCILLATION_KEY = "observer:last_oscillation"
+_FRAME_KEY = "observer:frame:{source}"     # latest physical frame posted by a source (meta.frame)
+_RELATIONAL_KEY = "relational:{source}:{entity}"   # latest relational record of one entity (meta.relational)
+_RELATIONAL_INDEX = "relational:index"             # source:entity -> summary, for every client to read
+_RELATIONAL_MAX_BYTES = 256 * 1024
+_FRAME_FIELDS = ("standoff_m", "scale_mm_per_px", "coplanarity", "bearing_deg", "range_m",
+                 "enu_e", "enu_n", "enu_u", "sigma_m", "reference_frame")
 
 _last_oscillation: dict[str, Any] = {}
 
 _pending_lock = threading.Lock()
 _pending_observations = 0
+
+# GET /health is the container's liveness probe (4 s timeout). It used to call
+# mesh_slm.state_summary(), which counts ~1.3M edges and builds the mesh field
+# under the brain's write lock; while /observe traffic held that lock the probe
+# timed out and the container sat "unhealthy". /health now reports counts that a
+# background thread refreshes at most every QUIPU_HEALTH_TTL_S seconds, so the
+# probe never waits on the brain.
+_HEALTH_TTL_S = float(os.environ.get("QUIPU_HEALTH_TTL_S", "60"))
+_health_counts: dict[str, Any] = {"vocab": None, "edges": None, "at": None}
+_health_refreshing = threading.Lock()
+
+
+def _refresh_health_counts() -> None:
+    if not _health_refreshing.acquire(blocking=False):
+        return
+    try:
+        with mesh_slm._conn() as cn:
+            vocab = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_vocab").fetchone()["c"])
+            edges = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_quipu").fetchone()["c"])
+        _health_counts.update(vocab=vocab, edges=edges, at=time.time())
+    except Exception:
+        pass
+    finally:
+        _health_refreshing.release()
+
+
+def _health_snapshot() -> dict[str, Any]:
+    at = _health_counts["at"]
+    if at is None or time.time() - at > _HEALTH_TTL_S:
+        threading.Thread(target=_refresh_health_counts, name="health-counts", daemon=True).start()
+    return {
+        "vocab": _health_counts["vocab"],
+        "edges": _health_counts["edges"],
+        "counts_age_s": None if at is None else round(time.time() - at, 1),
+    }
 
 
 def _canonical_source(raw: str | None) -> str | None:
@@ -274,7 +344,76 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
     }
 
 
+def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
+    """Keep the latest relational record an entity's source posted (meta.relational; e.g. Perceptopoly's
+    perceptopoly.control/1: Control, pair agreement, wells, links) and its line in the index, so every
+    client reads it from GET /relational. Records without an agent_id or schema, or larger than
+    _RELATIONAL_MAX_BYTES, are not kept. Returns what was kept, or None."""
+    if not isinstance(rec, dict):
+        return None
+    entity = str(rec.get("agent_id") or "").strip()[:64]
+    schema = str(rec.get("schema") or "").strip()[:64]
+    if not entity or not schema:
+        return None
+    try:
+        if len(json.dumps(rec, default=str)) > _RELATIONAL_MAX_BYTES:
+            return None
+    except (TypeError, ValueError):
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    kept = {**rec, "source": source, "received_at": now}
+    ro = rec.get("readout") if isinstance(rec.get("readout"), dict) else {}
+    der = rec.get("derived") if isinstance(rec.get("derived"), dict) else {}
+    links = rec.get("links") if isinstance(rec.get("links"), dict) else {}
+    try:
+        brain_kv.kv_set_json(_RELATIONAL_KEY.format(source=source, entity=entity), kept)
+        idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+        idx[f"{source}:{entity}"] = {"source": source, "entity": entity, "schema": schema,
+                                     "world": rec.get("world"), "received_at": now,
+                                     "control": ro.get("control"), "r": ro.get("r"), "well": bool(ro.get("well")),
+                                     "breaking": ro.get("breaking"), "limit": der.get("limit"),
+                                     "links": {k: links.get(k) for k in ("mirror_of", "lineage_of", "inherited_from", "bonds") if links.get(k)}}
+        brain_kv.kv_set_json(_RELATIONAL_INDEX, idx)
+    except Exception:
+        return None
+    return {"entity": entity, "schema": schema}
+
+
+def _relational_post(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST /relational: keep one relational record for a known source, the way meta.relational on /observe
+    does, but without text: nothing reaches the mesh corpus, the stats or the world model. For records a
+    coordinator synthesises from other sources' work (the Fleet Harness), which are generated and so must
+    be shared without being learned (see mesh_slm.region_for_source, 'generated')."""
+    source = _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False, "error": "unknown source; expected one of " + ", ".join(sorted(SOURCE_PROFILES))}
+    kept = _keep_relational(source, body.get("relational"))
+    if kept is None:
+        return 400, {"ok": False, "error": "relational must be an object with agent_id and schema, under "
+                                           f"{_RELATIONAL_MAX_BYTES} bytes"}
+    return 200, {"ok": True, "source": source, "kept": kept}
+
+
+def _relational(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """GET /relational: the index of every kept relational record (?source= filters it), or one record
+    (?source=&entity=)."""
+    source = (qs.get("source") or [""])[0]
+    entity = (qs.get("entity") or [""])[0]
+    if source and entity:
+        rec = brain_kv.kv_get_json(_RELATIONAL_KEY.format(source=source, entity=entity[:64]), None)
+        return (200, {"ok": True, "record": rec}) if rec else (404, {"ok": False, "error": "no relational record"})
+    idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+    if source:
+        idx = {k: v for k, v in idx.items() if v.get("source") == source}
+    return 200, {"ok": True, "index": idx}
+
+
 def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    # Enforce gVisor security and payload bounding
+    valid, sec_err = security.validate_observe_payload(body)
+    if not valid:
+        return 400, {"ok": False, "error": f"Security boundary error: {sec_err}"}
+
     source = _canonical_source(body.get("source"))
     if source is None:
         return 400, {
@@ -308,6 +447,30 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         except Exception:
             pass
 
+    # Physical frame: the observer's relational measurements (Perceptopoly's
+    # standoff/scale/coplanarity, an OCR anchor's bearing/range, ENU metres).
+    # Only known numeric fields are kept; the latest frame per source is persisted
+    # so qpsi.interstitial can place an arc record next to physical coordinates.
+    frame_in = (body.get("meta") or {}).get("frame") or {}
+    if isinstance(frame_in, dict) and frame_in:
+        frame: dict[str, Any] = {}
+        for k in _FRAME_FIELDS:
+            v = frame_in.get(k)
+            if k == "reference_frame":
+                if isinstance(v, str) and v:
+                    frame[k] = v[:64]
+            elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)):
+                frame[k] = float(v)
+        if frame:
+            frame["source"] = source
+            frame["at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                brain_kv.kv_set_json(_FRAME_KEY.format(source=source), frame)
+            except Exception:
+                pass
+
+    relational = _keep_relational(source, (body.get("meta") or {}).get("relational"))
+
     world_model_result = world_model.assess_observation(
         source=source,
         tokens=tokens,
@@ -316,7 +479,10 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         novel_tokens=unknown,
     )
 
-    summary = mesh_slm.state_summary()
+    # The reply's mesh counts come from the same background-refreshed snapshot as
+    # /health: state_summary() takes ~15 s on the full brain, longer than the
+    # clients' timeout, so every observation timed out after it had been applied.
+    counts = _health_snapshot()
     res_body = {
         "ok": True,
         "source": source,
@@ -330,11 +496,12 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "calibration": _calibration(source),
         },
         "world_model": world_model_result,
+        "relational": relational,
         "totals": {
             "observations": stats.get("observations"),
             "tokens": stats.get("tokens"),
         },
-        "mesh": {"vocab": summary.get("vocab_size"), "edges": summary.get("quipu_edges")},
+        "mesh": {"vocab": counts["vocab"], "edges": counts["edges"]},
         "hideout": hideout_mesh.hideout_identity(),
     }
     if osc:
@@ -344,6 +511,10 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
 def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """Ground-truth reinforcement: the app tells the Observer what was right."""
+    valid, sec_err = security.validate_feedback_payload(body)
+    if not valid:
+        return 400, {"ok": False, "error": f"Security boundary error: {sec_err}"}
+
     source = _canonical_source(body.get("source"))
     if source is None:
         return 400, {"ok": False, "error": "unknown source"}
@@ -371,6 +542,17 @@ def _feedback(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     brain_kv.kv_set_json(key, log[-200:])
     return 200, {"ok": True, "source": source, "recorded": True, "log_size": len(log)}
 
+
+
+def _lambda_clusters(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """The Internal Marketplace's clusters for the λ tokens (shadow_tokens).  Only the
+    marketplace's own sources may set them; the edge has already checked who is asking."""
+    from . import shadow_tokens
+    source = (decision.source if decision is not None and decision.source else None) \
+        or _canonical_source(body.get("source"))
+    if source not in shadow_tokens.MARKET_SOURCES:
+        return 403, {"ok": False, "error": f"clusters come from the marketplace ({', '.join(shadow_tokens.MARKET_SOURCES)})"}
+    return 200, shadow_tokens.store_clusters(body.get("clusters"), source)
 
 def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, dict[str, Any]]:
     """Execute universal MESH-SLM inference, classification, or scoring over HTTP."""
@@ -409,6 +591,33 @@ def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, d
         return 503, {"ok": False, "error": f"MeshSLMUnavailable: {exc}"}
     except Exception as exc:
         return 500, {"ok": False, "error": str(exc)}
+
+
+def _world_model_transition(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """Forward state prediction and rollout simulation endpoint."""
+    try:
+        state = body.get("state", {})
+        if "actions" in body:
+            actions = body.get("actions", [])
+            dt = float(body.get("dt", 1.0))
+            trajectory = world_model.simulate_rollout(state, actions, dt=dt)
+            return 200, {
+                "ok": True,
+                "mode": "rollout",
+                "trajectory": [s.to_dict() for s in trajectory],
+                "final_state": trajectory[-1].to_dict(),
+            }
+        else:
+            action = body.get("action")
+            dt = float(body.get("dt", 1.0))
+            next_state = world_model.transition_step(state, action, dt=dt)
+            return 200, {
+                "ok": True,
+                "mode": "step",
+                "predicted_state": next_state.to_dict(),
+            }
+    except Exception as exc:
+        return 400, {"ok": False, "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -458,16 +667,44 @@ class ObserverHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload).encode()
         self._send_raw(code, body, "application/json")
 
-    def _send_raw(self, code: int, body: bytes, ctype: str) -> None:
+    def _send_raw(self, code: int, body: bytes, ctype: str, extra: dict[str, str] | None = None) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # CORS: echo only origins the operator bound (grant browser_origins or
+        # QUIPU_CORS_ORIGINS) — never "*", which let any open web page write here.
+        allow = edge_admission.cors_origin(self.headers.get("Origin"))
+        if allow:
+            self.send_header("Access-Control-Allow-Origin", allow)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers",
+                             "Content-Type, X-Quipu-Source, X-Quipu-Timestamp, X-Quipu-Signature, "
+                             "X-Quipu-Idempotency")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
+
+    def _edge(self, method: str, path: str, raw: bytes, body: dict[str, Any]):
+        """Identity and admission for a mutating route (qpsi.edge_admission)."""
+        text = ""
+        if path == "/observe":
+            text = str(body.get("text") or "")
+        elif path == "/feedback":
+            text = str(body.get("expected") or "")
+        try:
+            tokens = len(mesh_slm._tokenize(text)) if text else 0
+        except Exception:
+            tokens = len(text.split())
+        return edge_admission.edge().admit(method, path, dict(self.headers.items()), raw, body,
+                                           _canonical_source, tokens)
+
+    def _refuse(self, d) -> None:
+        extra = {"Retry-After": str(d.retry_after)} if d.retry_after else None
+        body = json.dumps({"ok": False, "error": d.error, "edge": d.to_json()}).encode()
+        self._send_raw(d.code, body, "application/json", extra)
 
     def do_OPTIONS(self) -> None:  # CORS preflight for the browser clients
         self._send_raw(204, b"", "text/plain")
@@ -476,19 +713,25 @@ class ObserverHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/health":
-                summary = mesh_slm.state_summary()
+                counts = _health_snapshot()
+                sec_posture = security.get_security_posture()
                 self._send_json(200, {
                     "ok": True,
                     "service": "quipu-observer",
                     "version": __version__,
                     "db": str(db_path()),
-                    "vocab": summary.get("vocab_size"),
-                    "edges": summary.get("quipu_edges"),
+                    **counts,
                     "pending": _pending_observations,
                     "hideout": hideout_mesh.hideout_identity(),
+                    "gvisor_sandboxed": sec_posture["gvisor_sandboxed"],
+                    "security_tier": sec_posture["isolation_tier"],
                 })
+            elif parsed.path == "/security":
+                self._send_json(200, security.get_security_posture())
             elif parsed.path == "/state":
-                self._send_json(200, mesh_slm.state_summary())
+                state_data = mesh_slm.state_summary()
+                state_data["gvisor_sandboxed"] = security.is_gvisor_sandboxed()
+                self._send_json(200, state_data)
             elif parsed.path == "/hideout":
                 self._send_json(200, hideout_mesh.hideout_status())
             elif parsed.path == "/guidance":
@@ -507,7 +750,51 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(200, world_model.world_model_state())
             elif parsed.path == "/anneal":
                 # Execute on-demand self-annealing cycle across the sensory manifold
+                d = self._edge("GET", "/anneal", b"", {})
+                if not d.ok:
+                    self._refuse(d)
+                    return
                 self._send_json(200, world_model.annealing_cycle())
+            elif parsed.path == "/edge":
+                self._send_json(200, edge_admission.edge().status())
+            elif parsed.path == "/relational":
+                code, payload = _relational(parse_qs(parsed.query))
+                self._send_json(code, payload)
+            elif parsed.path == "/entirety":
+                from . import entirety_service
+                self._send_json(200, entirety_service.status())
+            elif parsed.path == "/lambda":
+                from . import shadow_tokens
+                self._send_json(200, shadow_tokens.latest())
+            elif parsed.path == "/the_other":
+                # The shared understanding of the Other as last published by the
+                # refinement cycle (read-only): what the forge's 52 Hz gate reads.
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
+            elif parsed.path == "/rheology":
+                # The CRAM axis array read as a viscoelastic material, as last
+                # published by pcm_cells.record (read-only): what the Herald's
+                # edge weighting reads (qpsi/rheology.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {})
+            elif parsed.path == "/bathymetry":
+                from . import brain_kv
+                from .qpsi import vnn_bathymetry
+                saved = brain_kv.kv_get_json(vnn_bathymetry.KV_VNN_BATHYMETRY_LATEST, None)
+                if not saved:
+                    checks = vnn_bathymetry.run_v033_synthetic_checks()
+                    grid = vnn_bathymetry.BathymetricGrid.sloped_shelf()
+                    hist_grid, _ = vnn_bathymetry.reconstruct_historical_bathymetry(grid, t_historical=1850.0)
+                    feat = vnn_bathymetry.extract_bathymetric_features(
+                        500.0, 500.0, grid, hist_grid, sediment_flux_x=0.01, sediment_flux_y=-0.005
+                    )
+                    saved = {
+                        "ok": True,
+                        "version": "quipu-vnn-bathymetry-v0.33",
+                        "bathymetry_features": feat.to_dict(),
+                        "v033_synthetic_checks": checks,
+                    }
+                self._send_json(200, saved)
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -524,6 +811,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        decision = None
         try:
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
@@ -536,10 +824,23 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "body must be an object"})
                 return
 
+            decision = None
+            if ("POST", parsed.path) in edge_admission.MUTATING:
+                decision = self._edge("POST", parsed.path, raw, body)
+                if not decision.ok:
+                    self._refuse(decision)
+                    return
+                if decision.duplicate:
+                    # Already applied (a client retry): acknowledge, do not learn twice.
+                    self._send_json(200, {"ok": True, "duplicate": True, "edge": decision.to_json()})
+                    return
+
             if parsed.path == "/observe":
                 code, payload = _observe(body)
             elif parsed.path == "/feedback":
                 code, payload = _feedback(body)
+            elif parsed.path == "/relational":
+                code, payload = _relational_post(body)
             elif parsed.path == "/anneal":
                 code, payload = 200, world_model.annealing_cycle()
             elif parsed.path == "/slm":
@@ -548,12 +849,55 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="classify")
             elif parsed.path == "/generate":
                 code, payload = _slm(body, endpoint_kind="generate")
+            elif parsed.path == "/lambda/clusters":
+                code, payload = _lambda_clusters(body, decision)
+            elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
+                code, payload = _world_model_transition(body)
+            elif parsed.path == "/bathymetry":
+                from . import brain_kv
+                from .qpsi import vnn_bathymetry
+                grid = vnn_bathymetry.BathymetricGrid.uniform(
+                    depth_m=float(body.get("modern_depth_m", 100.0))
+                )
+                hist_grid, _ = vnn_bathymetry.reconstruct_historical_bathymetry(
+                    grid, t_historical=float(body.get("t_historical", 1850.0))
+                )
+                feat = vnn_bathymetry.extract_bathymetric_features(
+                    float(body.get("x", 500.0)),
+                    float(body.get("y", 500.0)),
+                    grid,
+                    hist_grid,
+                    sediment_flux_x=float(body.get("sediment_flux_x", 0.0)),
+                    sediment_flux_y=float(body.get("sediment_flux_y", 0.0)),
+                )
+                checks = vnn_bathymetry.run_v033_synthetic_checks()
+                rec = {
+                    "ok": True,
+                    "version": "quipu-vnn-bathymetry-v0.33",
+                    "bathymetry_features": feat.to_dict(),
+                    "v033_synthetic_checks": checks,
+                    "at": time.time(),
+                }
+                brain_kv.kv_set_json(vnn_bathymetry.KV_VNN_BATHYMETRY_LATEST, rec)
+                code, payload = 200, rec
             else:
                 code, payload = 404, {"ok": False, "error": "not found"}
+            if decision is not None:
+                if code == 200 and isinstance(payload, dict):
+                    edge_admission.edge().settle(decision, payload)
+                else:
+                    edge_admission.edge().release(decision)
+                if isinstance(payload, dict):
+                    payload["edge"] = decision.to_json()
             self._send_json(code, payload)
         except Exception as exc:
             traceback.print_exc()
-            self._send_json(500, {"ok": False, "error": str(exc)})
+            if decision is not None and not decision.duplicate:
+                edge_admission.edge().release(decision)
+            try:
+                self._send_json(500, {"ok": False, "error": str(exc)})
+            except OSError:
+                pass                              # the client has gone (e.g. it timed out); the write stands
 
 
 def run() -> None:
