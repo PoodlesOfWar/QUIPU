@@ -88,6 +88,19 @@ $$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
 
 ---
 
+### 2.12. Viscous Decay Merger & Drag-Deepened Potential (v0.67.0)
+Defined in [src/quipu/ueqgm_engine.py](../src/quipu/ueqgm_engine.py) and [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py):
+$$v(t) = \frac{a\,v_0}{(a + b\,v_0)\,e^{a t} - b\,v_0}, \qquad a = 0.35\,(1 + \gamma),\; b = 0.15\,(1 - \text{coherence})$$
+$$\text{prox}(d) = 1 - (d/N)^{1 + \kappa\gamma}, \qquad \text{textile\_fraction} = \frac{b\,v_0}{a + b\,v_0}$$
+$$\text{knot\_gain}(cell) = 1 + 0.10\,A[cell]\,G, \qquad \eta_q^{edge} = \eta_q\,(1 + 0.05\,\min(A_{src}, A_{dst})\,G)$$
+$$G = \text{clip}_{01}\big(\text{rADAM}(0.6\,\text{broaden} + 0.4\,\text{liveness},\; m_{supernova}) \times \text{actionable\_potential}\big)$$
+
+### 2.13. LiTaSb Bond-Shear Chain (v0.67.0)
+Defined in [src/quipu/qpsi/bond_shear.py](../src/quipu/qpsi/bond_shear.py):
+$$F_{max} = \tfrac{1}{2} a D_e, \quad F_{LiTaSb} = \min(F_{LiSb}, F_{TaSb}), \quad \text{ratio}_k = w_k\,F/F_{LiTaSb}$$
+$$S = \sum_k w_k\, R\,(1 - \text{ratio}_k^2), \quad T = 1 - \Big(\frac{n_1 - n_2}{n_1 + n_2}\Big)^2, \quad k = A\,e^{-E_a/k_B T}$$
+$$\text{yield} = S \cdot |C|^2\,\tfrac{T_{PC} + T_{CR39}}{2} \cdot e^{-k t}$$
+
 ## 3. Measurable Signal Inventory
 
 | Signal Name | Source | Type / Bounds | Primary Consumer |
@@ -103,6 +116,12 @@ $$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
 | `infodynamic_compression` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `analog_coherence` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `stencil_gain_mean` | `mesh_slm` | $[0.90, 1.10]$ | `mesh_slm.train_round()` |
+| `knot_gain_mean` | `mesh_slm` | $[1.00, 1.10]$ | `viscous_merger_trend()` |
+| `drag_gamma` / `drag_b` | `temporal_spatiality` via `mesh_slm` | $[0.0, 1.0]$ | `_proximity`, `_viscous_knot_field` |
+| `decay_textile_fraction` | `ueqgm_engine` | $[0.0, 1.0]$ | `viscous_merger_trend()` |
+| `supernova_gate` | `supernova_gate` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
+| `bond_shear.yield` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `GET /bond_shear`, `/guidance` |
+| `bond_shear.shear_ratio` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `TypedViscousCoupler.step(shear_reading=)` |
 | `transaction_drive` | `system_entirety` | $[0.0, 1.0]$ | `self_realization_loop` |
 | `structural_fingerprint` | `doc_annealing` | SHA-256 hex | `doc_annealing` map trigger |
 

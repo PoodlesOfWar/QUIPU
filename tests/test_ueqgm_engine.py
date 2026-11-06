@@ -1124,3 +1124,115 @@ def test_refresh_adaptive_runtime_persists_infodynamic_and_analog_keys():
     assert rt2["infodynamic_compression"] > 0.0
     assert rt2["analog_coherence"] == pytest.approx(1.0, abs=1e-4)
 
+
+
+# ---------------------------------------------------------------------------
+# v0.67.0 — viscous decay merger, drag-deepened proximity, trefoil vN-peak field
+# ---------------------------------------------------------------------------
+
+def test_viscous_decay_merger_limits_and_monotonicity():
+    from src.quipu.ueqgm_engine import viscous_decay_merger, textile_ekenstam_decay
+    assert viscous_decay_merger(1.0, 0.35, 0.15, 0.0) == 1.0
+    # b = 0 → memoryless exponential (muonic antimony regime)
+    assert viscous_decay_merger(1.0, 0.35, 0.0, 2.0) == pytest.approx(math.exp(-0.7))
+    # a = 0 → Ekenstam hyperbola (textile regime)
+    assert viscous_decay_merger(2.0, 0.0, 0.5, 3.0) == pytest.approx(2.0 / (1.0 + 0.5 * 2.0 * 3.0))
+    assert textile_ekenstam_decay(2.0, 0.5, 3.0) == pytest.approx(2.0 / (1.0 + 3.0))
+    vals = [viscous_decay_merger(1.0, 0.35, 0.15, t) for t in (0.0, 0.5, 1.0, 5.0, 50.0)]
+    assert all(0.0 <= v <= 1.0 for v in vals)
+    assert all(a >= b for a, b in zip(vals, vals[1:]))
+    assert viscous_decay_merger(0.0, 0.35, 0.15, 1.0) == 0.0
+
+
+def test_decay_regime_comparison_shares_and_half_lives():
+    from src.quipu.ueqgm_engine import decay_regime_comparison, muonic_disappearance_rate
+    muonic = decay_regime_comparison(0.35, 0.0)
+    assert muonic["textile_fraction"] == 0.0 and muonic["muonic_fraction"] == 1.0
+    assert muonic["half_life_ratio"] == pytest.approx(1.0, abs=1e-6)       # memoryless
+    assert muonic["first_half_life"] == pytest.approx(math.log(2.0) / 0.35, rel=1e-6)
+    textile = decay_regime_comparison(0.0, 0.5)
+    assert textile["textile_fraction"] == 1.0
+    assert textile["half_life_ratio"] == pytest.approx(2.0, abs=1e-6)      # self-slowing
+    mixed = decay_regime_comparison(0.35, 0.15)
+    assert 0.0 < mixed["textile_fraction"] < 1.0 and 1.0 < mixed["half_life_ratio"] < 2.0
+    assert mixed["crossover_amplitude"] == pytest.approx(0.35 / 0.15)
+    # Sb μ⁻: capture dominates the Huff-suppressed free decay by ~20×.
+    rate = muonic_disappearance_rate()
+    assert 1.0e7 < rate < 1.1e7
+
+
+def test_drag_deepened_proximity_equals_legacy_at_zero_drag_and_exceeds_it_after():
+    from src.quipu.ueqgm_engine import drag_deepened_proximity
+    for d in (0, 1, 16, 32, 63, 64):
+        assert drag_deepened_proximity(d, 64, 0.0) == pytest.approx(max(0.0, 1.0 - d / 64.0))
+        assert drag_deepened_proximity(d, 64, 1.0) >= drag_deepened_proximity(d, 64, 0.0) - 1e-12
+    assert drag_deepened_proximity(0, 64, 0.7) == 1.0
+    assert drag_deepened_proximity(64, 64, 0.7) == 0.0
+    assert drag_deepened_proximity(32, 64, 1.0) == pytest.approx(0.75)
+
+
+def test_torus_knot_cells_close_wind_and_mirror():
+    from src.quipu.ueqgm_engine import torus_knot_cells
+    n = 64
+    right = torus_knot_cells(n, 2, 3)
+    left = torus_knot_cells(n, 2, -3)
+    assert right[0] == (0, 0) and len(right) == len(left) > n
+    assert len(set(right)) == len(right)                     # no stalls
+    # Winding counts: axis-0 wraps twice, axis-1 three times.
+    def wraps(cells, k):
+        return sum(1 for a, b in zip(cells, cells[1:] + cells[:1]) if abs(a[k] - b[k]) > n // 2)
+    assert wraps(right, 0) == 2 and wraps(right, 1) == 3
+    assert wraps(left, 0) == 2 and wraps(left, 1) == 3
+    # The mirror reflects the second axis.
+    assert set(left) == {(i, (-j) % n) for i, j in right}
+    assert torus_knot_cells(8, 0, 0) == [(0, 0)]
+
+
+def test_torus_knot_arc_field_bounds_and_empty_cases():
+    from src.quipu.ueqgm_engine import torus_knot_cells, torus_knot_arc_field
+    knot = torus_knot_cells(64, 2, 3)
+    assert torus_knot_arc_field(64, knot, []) == {}
+    assert torus_knot_arc_field(64, [], [{"idx": 0, "amplitude": 1.0, "age": 0}]) == {}
+    field = torus_knot_arc_field(64, knot, [{"idx": 3, "amplitude": 0.9, "age": 0.0}])
+    assert set(field) == set(knot)
+    assert max(field.values()) == pytest.approx(0.9) and min(field.values()) >= 0.0
+    assert field[knot[3]] == pytest.approx(0.9)
+    assert field[knot[3]] > field[knot[40]] > field[knot[len(knot) // 2]]
+    aged = torus_knot_arc_field(64, knot, [{"idx": 3, "amplitude": 0.9, "age": 50.0}])
+    assert aged[knot[3]] < field[knot[3]]
+
+
+def test_weyl_chiral_merge_adds_amplitude_and_cancels_chirality():
+    from src.quipu.ueqgm_engine import weyl_chiral_merge
+    amp, chi = weyl_chiral_merge({(0, 0): 0.6, (1, 1): 0.7}, {(0, 0): 0.6, (2, 2): 0.3})
+    assert amp[(0, 0)] == pytest.approx(1.0) and chi[(0, 0)] == pytest.approx(0.0)   # mirrored pair
+    assert amp[(1, 1)] == pytest.approx(0.7) and chi[(1, 1)] == pytest.approx(0.7)
+    assert amp[(2, 2)] == pytest.approx(0.3) and chi[(2, 2)] == pytest.approx(-0.3)
+
+
+def test_coulomb_iterated_peaks_filters_by_the_lossy_floor_and_weights_by_psi2():
+    from src.quipu.ueqgm_engine import coulomb_iterated_peaks
+    series = [0.1, 0.5, 0.2, 0.3, 0.9, 0.4, 0.41, 0.2]
+    peaks = coulomb_iterated_peaks(series, 1.0, 0.05)
+    assert [p["idx"] for p in peaks] == [1, 4]
+    assert peaks[1]["prominence"] == pytest.approx(0.7) and peaks[1]["age"] == 3
+    assert peaks[1]["amplitude"] == pytest.approx(0.7 / 0.8)
+    # Raising the floor drops the small peak; Ψ₂ scales amplitude.
+    assert [p["idx"] for p in coulomb_iterated_peaks(series, 1.0, 0.5)] == [4]
+    assert coulomb_iterated_peaks(series, 0.5, 0.05)[1]["amplitude"] == pytest.approx(0.35 / 0.8)
+    assert coulomb_iterated_peaks([0.3, 0.3, 0.3], 1.0, 0.0) == []
+    assert coulomb_iterated_peaks([0.1, 0.2], 1.0, 0.0) == []
+    assert coulomb_iterated_peaks([0.1, "x", 0.2], 1.0, 0.0) == []
+
+
+def test_v067_helpers_registered_in_math_map_and_all():
+    from src.quipu import ueqgm_engine
+    for name in ("viscous_decay_merger", "muonic_disappearance_rate", "textile_ekenstam_decay",
+                 "decay_regime_comparison", "drag_deepened_proximity", "torus_knot_cells",
+                 "torus_knot_arc_field", "weyl_chiral_merge", "coulomb_iterated_peaks",
+                 "morse_rupture_force", "landau_shear_survival", "fresnel_transmission",
+                 "arrhenius_pyrolysis_rate"):
+        assert name in ueqgm_engine.UEQGM_MATH_MAP, name
+    for name in ("viscous_decay_merger", "drag_deepened_proximity", "torus_knot_cells",
+                 "weyl_chiral_merge", "coulomb_iterated_peaks", "_SUPERNOVA_KEY", "_KNOT_DECAY_A"):
+        assert name in ueqgm_engine.__all__, name

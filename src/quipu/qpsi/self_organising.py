@@ -216,6 +216,14 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                                            now=now, cfg=pcm_cells.PcmConfig.from_env(), deepen=deepen,
                                            shear=os.environ.get(PCM_SHEAR_ENV, "1").strip() != "0")
                 pcm_cells.record(cn, arr, pcm, now=now)
+                # The LiTaSb bond-shear chain reads the rheology weights and the
+                # condensate coherence just published; it writes only
+                # entirety:bond_shear:latest and never blocks the cells.
+                try:
+                    from . import bond_shear
+                    out["bond_shear"] = {"yield": bond_shear.publish(cn, now=now)["yield"]}
+                except Exception as exc:
+                    out["bond_shear"] = {"error": str(exc)}
                 ens = pcm.pop("_ensemble", None)
                 out["pcm_shear"] = ens
                 out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"],

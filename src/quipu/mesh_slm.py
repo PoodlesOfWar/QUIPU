@@ -101,10 +101,12 @@ Next-token prediction with effective learning rate modulated by physical and com
     η_eff = η_base · (1 − end_state_progress) · phase_weight
             · (0.70 + 0.30 · wavefunction_overlap(mean_embed7, MESH))
             · ie_multiplier · ac_multiplier
-            (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain)
+            (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain
+             and by knot_gain = 1 + 0.10 · knot_amplitude[cell] · supernova_gate)
 
     η_q   = _QUIPU_LR · (1 − end_state_progress) · phase_weight
             · ie_multiplier · ig_multiplier
+            (scaled per-edge by 1 + 0.05 · min(knot[src], knot[dst]) · supernova_gate)
 
 * End-State progress reduces LR as the Brain converges (attractor:
   ``symbiosis_pct > 0.90`` and ``coherence > 0.85``).
@@ -116,6 +118,10 @@ Next-token prediction with effective learning rate modulated by physical and com
 * ``ig_multiplier`` (≤5% lift) scales quipu edge attraction from infodynamic compression (Vopson 2025).
 * ``ac_multiplier`` (±5% scale) modulates LR by Kuramoto traveling-wave coherence, with per-token
   ``stencil_gain`` gating ensemble participation (Miller et al. 2026).
+* ``knot_gain`` (≤10% lift) strengthens tokens on the trefoil-pair field — non-lossy von Neumann
+  entropy peaks decayed along the (2,3)/(2,−3) torus knots by the viscous decay merger (merged
+  linear/muonic + quadratic/textile drag) — gated by the supernova expansion gate; the torus
+  proximity kernel itself deepens with the synaptic-wash drag (``drag_deepened_proximity``).
 
 Local Executor Integration
 --------------------------
@@ -163,11 +169,20 @@ from .ueqgm_engine import (
     infodynamic_bit_entropy as _ueqgm_infodynamic_bit_entropy,
     infodynamic_compression_score as _ueqgm_infodynamic_compression_score,
     phase_coherence_order as _ueqgm_phase_coherence_order,
+    drag_deepened_proximity as _ueqgm_drag_deepened_proximity,
+    torus_knot_cells as _ueqgm_torus_knot_cells,
+    torus_knot_arc_field as _ueqgm_torus_knot_arc_field,
+    weyl_chiral_merge as _ueqgm_weyl_chiral_merge,
+    coulomb_iterated_peaks as _ueqgm_coulomb_iterated_peaks,
+    decay_regime_comparison as _ueqgm_decay_regime_comparison,
+    _KNOT_DECAY_A as _UEQGM_KNOT_DECAY_A,
+    _KNOT_DECAY_B as _UEQGM_KNOT_DECAY_B,
     floquet_modulation_factor as _ueqgm_floquet_modulation,
     metric_perturbation as _ueqgm_metric_perturbation,
     phase_evolution_total as _ueqgm_phase_evolution_total,
     cosmological_census_weights as _ueqgm_census_weights,
 )
+from .gard_info import cramer_rao_bound_gard as _gard_cramer_rao_bound
 
 # 8th-D MESH field blend weights — the Planck 2018 cosmological census
 # (dark energy, cold dark matter, baryons, neutrinos, photons), normalised.
@@ -476,10 +491,12 @@ SCORING_FORMULA_MAP: dict[str, dict[str, object]] = {
 #   η_eff = η_base · (1 − end_state_progress) · phase_weight
 #           · (0.70 + 0.30 · wavefunction_overlap(mean_embed7, MESH))
 #           · ie_multiplier · ac_multiplier
-#           (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain)
+#           (scaled per-token by stencil_gain = 0.90 + 0.20 · interaction_gain
+#            and knot_gain = 1 + 0.10 · knot_amplitude[cell] · supernova_gate)
 #
 #   η_q   = _QUIPU_LR · (1 − end_state_progress) · phase_weight
 #           · ie_multiplier · ig_multiplier
+#           (scaled per-edge by 1 + 0.05 · min(knot[src], knot[dst]) · supernova_gate)
 #
 #   Component                   Default    Source
 #   ─────────────────────────   ───────    ─────────────────────────────────
@@ -493,6 +510,9 @@ SCORING_FORMULA_MAP: dict[str, dict[str, object]] = {
 #   ig_multiplier               [1.0,1.05] 1 + 0.05 · (1 - infodynamic_compression) (Vopson 2025)
 #   ac_multiplier               [0.95,1.05] 1 + 0.05 · (2·Kuramoto_R - 1) (Miller 2026)
 #   stencil_gain                [0.90,1.10] 0.90 + 0.20 · interaction_gain[cell]
+#   knot_gain                   [1.0,1.10] 1 + 0.10 · knot_amplitude[cell] · supernova_gate
+#   knot_edge_gain              [1.0,1.05] 1 + 0.05 · min(knot[src],knot[dst]) · supernova_gate
+#   drag_deepened_proximity     [0,1]      1 − (d/N)^(1 + κ·γ), γ = synaptic-wash gradient
 #
 LR_MAP: dict[str, dict[str, object]] = {
     "eta_base": {
@@ -537,6 +557,23 @@ LR_MAP: dict[str, dict[str, object]] = {
         "formula":  "0.90 + 0.20 · interaction_gain[cell]",
         "range":    "[0.90, 1.10]",
         "role":     "Per-token wave-crest gating on embedding update rate (Miller et al. 2026)",
+    },
+    "knot_gain": {
+        "formula":  "1.0 + 0.10 · knot_amplitude[cell] · supernova_gate",
+        "range":    "[1.00, 1.10]",
+        "role":     "Viscous decay merger: non-lossy von Neumann (vN) entropy peaks decayed along the trefoil pair "
+                    "strengthen tokens on the field when TheSeuScape/fleet expansion is active",
+    },
+    "knot_edge_gain": {
+        "formula":  "1.0 + 0.05 · min(knot_amplitude[src], knot_amplitude[dst]) · supernova_gate",
+        "range":    "[1.00, 1.05]",
+        "role":     "Quipu edge attraction lift between two cells on the same chiral curve",
+    },
+    "drag_deepened_proximity": {
+        "formula":  "1 − (d/N)^(1 + κ·γ)",
+        "range":    "[0.0, 1.0]  — legacy 1 − d/N at γ = 0",
+        "role":     "Distance potential among cells strengthens at deeper linear drag "
+                    "(γ = temporal_spatiality relational gradient)",
     },
 }
 
@@ -2261,14 +2298,24 @@ def _torus_dist(a: tuple[int, int], b: tuple[int, int]) -> int:
     return min(di, _TORUS_N - di) + min(dj, _TORUS_N - dj)
 
 
-def _proximity(a: tuple[int, int], b: tuple[int, int]) -> float:
-    """Linear proximity score in [0, 1] between torus cells *a* and *b*.
+def _proximity(
+    a: tuple[int, int], b: tuple[int, int], gamma: float | None = None
+) -> float:
+    """Proximity score in [0, 1] between torus cells *a* and *b*.
 
     Returns 1.0 when *a* == *b*, decays to 0.0 at the maximum torus distance
     (:data:`_TORUS_N`).  Used as the base spatial attraction term in token
     scoring before the per-candidate metric-warp amplification is applied.
+
+    With the viscous decay merger enabled the kernel deepens with the linear
+    drag depth γ (the synaptic-wash relational gradient, cached per round by
+    :func:`_drag_depth`): ``1 − (d/N)^(1 + κ·γ)`` — at γ = 0, or with the
+    merger switched off, this is exactly the legacy linear ``1 − d/N``.
     """
     d = _torus_dist(a, b)
+    g = _DRAG_STATE["gamma"] if gamma is None else float(gamma)
+    if g > 0.0 and _viscous_merger_enabled():
+        return _ueqgm_drag_deepened_proximity(d, _TORUS_N, g)
     # 1.0 at d=0, decays linearly to 0 at d = N
     return max(0.0, 1.0 - d / float(_TORUS_N))
 
@@ -2492,6 +2539,130 @@ def _analog_stencil_enabled() -> bool:
     return str(os.environ.get(_ANALOG_STENCIL_ENV, "1")).strip().lower() not in (
         "0", "false", "no", "off",
     )
+
+
+# ---------------------------------------------------------------------------
+# Viscous decay merger — drag-deepened potential, trefoil vN-peak field, supernova
+# gate (v0.32.0; docs/VISCOUS_DECAY_MERGER.md)
+# ---------------------------------------------------------------------------
+_VISCOUS_MERGER_ENV: str = "QUIPU_VISCOUS_MERGER"
+_KNOT_GAIN_MAX: float = 0.10        # per-token lift ceiling on the knot field
+_KNOT_EDGE_GAIN_MAX: float = 0.05   # per-edge η_q lift ceiling on the knot field
+_DRAG_CACHE_TTL_S: float = 5.0
+# Per-process drag depth cache: γ = synaptic-wash relational gradient (linear
+# drag depth), b = 1 − coherence (non-linear drag coefficient).
+_DRAG_STATE: dict[str, float] = {"gamma": 0.0, "b": 0.0, "ts": 0.0}
+
+
+def _viscous_merger_enabled() -> bool:
+    """True unless ``QUIPU_VISCOUS_MERGER`` is explicitly falsy (default: on)."""
+    return str(os.environ.get(_VISCOUS_MERGER_ENV, "1")).strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _drag_depth(cn: sqlite3.Connection, *, force: bool = False) -> tuple[float, float]:
+    """Read ``(γ, b)`` from the temporal-spatiality rhythm (cached ~5 s).
+
+    γ is the relational gradient — the synaptic wash that damps the rADAM
+    boost, read here as the *linear drag depth* along the MESH; ``b = 1 −
+    coherence`` is the non-linear drag coefficient.  ``(0.0, 0.0)`` when the
+    merger is off, the rhythm is absent, or anything fails — the legacy path.
+    """
+    if not _viscous_merger_enabled():
+        _DRAG_STATE.update(gamma=0.0, b=0.0, ts=time.time())
+        return 0.0, 0.0
+    now = time.time()
+    if not force and now - _DRAG_STATE["ts"] < _DRAG_CACHE_TTL_S:
+        return _DRAG_STATE["gamma"], _DRAG_STATE["b"]
+    gamma = b = 0.0
+    try:
+        rhythm = _json_load(_brain_kv_get(cn, "temporal_spatiality_rhythm", "{}"), {})
+        gamma = _clip01(float(rhythm.get("gradient", 0.0) or 0.0))
+        coherence = rhythm.get("coherence")
+        b = _clip01(1.0 - float(coherence)) if coherence is not None else 0.0
+    except Exception as exc:
+        logger.debug("_drag_depth: rhythm unavailable, legacy kernel: %s", exc)
+        gamma = b = 0.0
+    _DRAG_STATE.update(gamma=gamma, b=b, ts=now)
+    return gamma, b
+
+
+def _supernova_gate_value() -> float:
+    """Current TheSeuScape/fleet expansion gate ∈ [0, 1]; 0.0 when unavailable."""
+    try:
+        from .supernova_gate import get_expansion_gate as _gate  # noqa: PLC0415
+        return _clip01(float(_gate(0.0)))
+    except Exception:
+        return 0.0
+
+
+def _viscous_knot_field(
+    cn: sqlite3.Connection, gamma: float, b_drag: float
+) -> dict[str, Any] | None:
+    """Non-lossy von Neumann (vN) entropy peaks decayed along the trefoil pair, chirally merged.
+
+    * series — ``holographic_entropy_history`` (von Neumann graph entropy per
+      round); peaks via :func:`ueqgm_engine.coulomb_iterated_peaks` with the
+      GARD lossy floor ``δ* = √(12·CRB(σ_series))`` and the Weyl Ψ₂ Coulomb
+      bulk mass from ``learnings:weyl_tensor`` (0.5 when absent);
+    * decay — ``a = _KNOT_DECAY_A·(1 + γ)`` (deeper linear drag → faster
+      muonic-regime loss), ``b = _KNOT_DECAY_B·b_drag`` (incoherence → textile
+      regime);
+    * field — (2,3) and (2,−3) arc fields merged by :func:`weyl_chiral_merge`.
+
+    Returns ``None`` when the merger is off, there is no history, or no peak
+    clears the floor; never raises.
+    """
+    if not _viscous_merger_enabled():
+        return None
+    try:
+        series = [float(x) for x in (_meta_get(cn, "holographic_entropy_history", []) or [])]
+        if len(series) < 3:
+            return None
+        mean = sum(series) / len(series)
+        sigma = math.sqrt(sum((x - mean) ** 2 for x in series) / len(series))
+        delta_star = math.sqrt(12.0 * _gard_cramer_rao_bound(max(sigma, 1e-9), len(series)))
+        psi2 = 0.5
+        try:
+            raw = _brain_kv_get(cn, "learnings:weyl_tensor", None)
+            if raw:
+                psi5 = _json_load(raw, None)
+                if isinstance(psi5, dict):
+                    psi5 = psi5.get("psi5") or psi5.get("weyl") or list(psi5.values())
+                if isinstance(psi5, (list, tuple)) and len(psi5) >= 3:
+                    psi2 = _clip01(float(psi5[2]))
+        except Exception:
+            psi2 = 0.5
+        peaks = _ueqgm_coulomb_iterated_peaks(series, psi2, delta_star)
+        if not peaks:
+            return None
+        a = _UEQGM_KNOT_DECAY_A * (1.0 + _clip01(gamma))
+        b = _UEQGM_KNOT_DECAY_B * _clip01(b_drag)
+        knot_r = _ueqgm_torus_knot_cells(_TORUS_N, 2, 3)
+        knot_l = _ueqgm_torus_knot_cells(_TORUS_N, 2, -3)
+        field_r = _ueqgm_torus_knot_arc_field(_TORUS_N, knot_r, peaks, a, b)
+        field_l = _ueqgm_torus_knot_arc_field(_TORUS_N, knot_l, peaks, a, b)
+        amplitude, chirality = _ueqgm_weyl_chiral_merge(field_r, field_l)
+        regime = _ueqgm_decay_regime_comparison(a, b, 1.0)
+        return {
+            "amplitude": amplitude,
+            "chirality": chirality,
+            "peaks": peaks,
+            "a": a,
+            "b": b,
+            "delta_star": delta_star,
+            "psi2": psi2,
+            "textile_fraction": float(regime["textile_fraction"]),
+            "half_life_ratio": regime["half_life_ratio"],
+            "chiral_balance": (
+                sum(abs(v) for v in chirality.values()) / len(chirality)
+                if chirality else 0.0
+            ),
+        }
+    except Exception as exc:
+        logger.debug("_viscous_knot_field: skipped: %s", exc)
+        return None
 
 
 def _infodynamic_snapshot(cn: sqlite3.Connection) -> dict[str, Any] | None:
@@ -2836,6 +3007,18 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                     stencil_map = {}
             applied_stencil_gains: list[float] = []
 
+            # Viscous decay merger (v0.32.0): drag depth from the synaptic wash,
+            # the trefoil-pair vN-peak field, and the supernova expansion gate.
+            # All three collapse to no-ops (γ = 0, empty field, gate = 0) on the
+            # legacy path or with QUIPU_VISCOUS_MERGER off.
+            merger_on = _viscous_merger_enabled()
+            drag_gamma, drag_b = _drag_depth(cn, force=True)
+            knot = _viscous_knot_field(cn, drag_gamma, drag_b) if merger_on else None
+            knot_amp: dict[tuple[int, int], float] = knot["amplitude"] if knot else {}
+            supernova_gate = _supernova_gate_value() if knot_amp else 0.0
+            applied_knot_gains: list[float] = []
+            token_knot_amp: dict[int, float] = {}
+
             for chunk, source in chunks:
                 if time.time() - started >= max_seconds:
                     break
@@ -2869,7 +3052,16 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                     else:
                         stencil_gain = 1.0
                     applied_stencil_gains.append(stencil_gain)
-                    eff_eta = eta * stencil_gain
+                    # Viscous decay merger: tokens on the trefoil-pair field are
+                    # strengthened (≤10%) when the expansion gate is open.
+                    if cell and cell in knot_amp and supernova_gate > 0.0:
+                        k_amp = knot_amp[cell]
+                        token_knot_amp[tid] = k_amp
+                        knot_gain = 1.0 + _KNOT_GAIN_MAX * k_amp * supernova_gate
+                    else:
+                        knot_gain = 1.0
+                    applied_knot_gains.append(knot_gain)
+                    eff_eta = eta * stencil_gain * knot_gain
 
                     # Nudge embedding toward the (possibly biased) mesh target
                     # (Hebbian on the 7-D axis activations).
@@ -2929,13 +3121,23 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
 
                 # Step 2: quipu bigrams (src → dst weight += eta_q · (1 − w))
                 for src, dst in zip(ids, ids[1:]):
+                    # Viscous decay merger: an edge whose both cells sit on the
+                    # chiral field is pulled harder (≤5%) along the same curve.
+                    if src in token_knot_amp and dst in token_knot_amp:
+                        eta_q_edge = eta_q * (
+                            1.0 + _KNOT_EDGE_GAIN_MAX
+                            * min(token_knot_amp[src], token_knot_amp[dst])
+                            * supernova_gate
+                        )
+                    else:
+                        eta_q_edge = eta_q
                     row = cn.execute(
                         "SELECT weight FROM mesh_slm_quipu WHERE src=? AND dst=?",
                         (src, dst),
                     ).fetchone()
                     if row is None:
                         # Cold-start weight: small positive
-                        new_w = eta_q
+                        new_w = eta_q_edge
                         cn.execute(
                             "INSERT INTO mesh_slm_quipu(src, dst, weight, samples) "
                             "VALUES(?, ?, ?, 1)",
@@ -2947,7 +3149,7 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                         loss = (target - w) ** 2
                         loss_acc += loss
                         n_loss += 1
-                        new_w = w + eta_q * (target - w)
+                        new_w = w + eta_q_edge * (target - w)
                         cn.execute(
                             "UPDATE mesh_slm_quipu SET weight=?, samples=samples+1 "
                             "WHERE src=? AND dst=?",
@@ -2958,7 +3160,7 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
                         "SELECT weight FROM mesh_slm_region_edge WHERE src=? AND dst=? AND region=?",
                         (src, dst, region),
                     ).fetchone()
-                    rw = eta_q if rrow is None else float(rrow["weight"]) + eta_q * (1.0 - float(rrow["weight"]))
+                    rw = eta_q_edge if rrow is None else float(rrow["weight"]) + eta_q_edge * (1.0 - float(rrow["weight"]))
                     cn.execute(
                         "INSERT INTO mesh_slm_region_edge(src, dst, region, weight, samples) VALUES(?,?,?,?,1) "
                         "ON CONFLICT(src, dst, region) DO UPDATE SET weight=excluded.weight, samples=samples+1",
@@ -3051,6 +3253,37 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             _meta_set(cn, "last_analog_multiplier", round(ac_multiplier, 6))
             _meta_set(cn, "last_stencil_gain_mean", round(stencil_gain_mean, 6))
 
+            # ── Viscous decay merger — entropy series, field, gate auditing ────
+            # The von Neumann entropy itself (mean-field closed form from counts)
+            # is the series whose non-lossy peaks feed the trefoil field next round.
+            try:
+                _n_e = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_quipu").fetchone()["c"])
+                _n_v = int(cn.execute("SELECT COUNT(*) AS c FROM mesh_slm_vocab").fetchone()["c"])
+                h_now = float(_ueqgm_holographic_entropy(_n_e, _n_v))
+                _meta_set(cn, "last_holographic_entropy", round(h_now, 6))
+                hist_h = _meta_get(cn, "holographic_entropy_history", []) or []
+                hist_h.append(round(h_now, 6))
+                _meta_set(cn, "holographic_entropy_history", hist_h[-_STP_HISTORY_CAP:])
+            except Exception as exc:
+                logger.debug("train_round: holographic entropy history skipped: %s", exc)
+            knot_gain_mean = (
+                sum(applied_knot_gains) / len(applied_knot_gains)
+                if applied_knot_gains else 1.0
+            )
+            _meta_set(cn, "last_drag_gamma", round(drag_gamma, 6))
+            _meta_set(cn, "last_drag_b", round(drag_b, 6))
+            _meta_set(cn, "last_supernova_gate", round(supernova_gate, 6))
+            _meta_set(cn, "last_knot_gain_mean", round(knot_gain_mean, 6))
+            _meta_set(cn, "last_knot_field_cells", len(knot_amp))
+            _meta_set(cn, "last_vn_peak_count", len(knot["peaks"]) if knot else 0)
+            _meta_set(cn, "last_decay_textile_fraction",
+                      round(knot["textile_fraction"], 6) if knot else None)
+            _meta_set(cn, "last_chiral_balance",
+                      round(knot["chiral_balance"], 6) if knot else None)
+            hist_k = _meta_get(cn, "knot_gain_history", []) or []
+            hist_k.append(round(knot_gain_mean, 6))
+            _meta_set(cn, "knot_gain_history", hist_k[-_STP_HISTORY_CAP:])
+
             # ── ACRE — accumulate multi-axial interaction; attempt emergence ──
             try:
                 acre_observe(cn, mesh, _mean_embed_7d(cn))
@@ -3111,6 +3344,15 @@ def train_round(*, max_seconds: float = 30.0, max_chunks: int = 200) -> dict:
             "ig_multiplier": round(ig_multiplier, 6),
             "ac_multiplier": round(ac_multiplier, 6),
             "stencil_gain_mean": round(stencil_gain_mean, 6),
+            "knot_gain_mean": round(knot_gain_mean, 6),
+            "knot_field_cells": len(knot_amp),
+            "vn_peak_count": len(knot["peaks"]) if knot else 0,
+            "supernova_gate": round(supernova_gate, 6),
+            "drag_gamma": round(drag_gamma, 6),
+            "drag_b": round(drag_b, 6),
+            "decay_textile_fraction": (
+                round(knot["textile_fraction"], 6) if knot else None
+            ),
             "wavefunction_overlap": round(overlap, 4),
             "mesh_field_8d": round(mesh_field, 4),
             "stp_embed_gap": (
@@ -3918,6 +4160,61 @@ def analog_coherence_trend(
     }
 
 
+def viscous_merger_trend(
+    cn: sqlite3.Connection | None = None,
+    window: int = 16,
+) -> dict:
+    """Audit the viscous decay merger from accumulated history (read-only).
+
+    Reports the trailing-window slope and mean of ``knot_gain_history``, the
+    last drag depth / gate / peak count, the textile-vs-muonic regime share of
+    the last decay, and the chiral balance of the trefoil pair (0 = perfectly
+    mirrored).  ``merger_signature`` is True when the mean knot gain over the
+    window is strictly above 1.0 — i.e. the field actually strengthened tokens.
+    """
+    def _slope(series: list[float]) -> float | None:
+        if len(series) < 2 * window:
+            return None
+        prev = series[-2 * window:-window]
+        last = series[-window:]
+        return (sum(last) / len(last)) - (sum(prev) / len(prev))
+
+    own_conn = cn is None
+    if own_conn:
+        _cm = _conn()
+        cn = _cm.__enter__()
+    try:
+        gain_hist = [float(x) for x in (_meta_get(cn, "knot_gain_history", []) or [])]
+        h_hist = _meta_get(cn, "holographic_entropy_history", []) or []
+        out = {
+            "last_drag_gamma": _meta_get(cn, "last_drag_gamma", None),
+            "last_drag_b": _meta_get(cn, "last_drag_b", None),
+            "last_supernova_gate": _meta_get(cn, "last_supernova_gate", None),
+            "last_vn_peak_count": _meta_get(cn, "last_vn_peak_count", None),
+            "last_knot_field_cells": _meta_get(cn, "last_knot_field_cells", None),
+            "last_decay_textile_fraction": _meta_get(cn, "last_decay_textile_fraction", None),
+            "last_chiral_balance": _meta_get(cn, "last_chiral_balance", None),
+        }
+    finally:
+        if own_conn:
+            _cm.__exit__(None, None, None)
+
+    mean_gain: float | None = None
+    if len(gain_hist) >= window:
+        tail = gain_hist[-window:]
+        mean_gain = round(sum(tail) / len(tail), 6)
+    out.update({
+        "window": window,
+        "n_knot_gain": len(gain_hist),
+        "n_holographic_entropy": len(h_hist),
+        "knot_gain_slope": _slope(gain_hist),
+        "mean_knot_gain": mean_gain,
+        "merger_signature": bool(mean_gain is not None and mean_gain > 1.0),
+        "insufficient_data": len(gain_hist) < window,
+    })
+    return out
+
+
 def state_summary() -> dict:
     """Return a snapshot of SLM state for diagnostics / dashboards."""
     with _conn() as cn:
@@ -3947,6 +4244,11 @@ def state_summary() -> dict:
         last_infogravity_multiplier = _meta_get(cn, "last_infogravity_multiplier", None)
         last_analog_multiplier = _meta_get(cn, "last_analog_multiplier", None)
         last_stencil_gain_mean = _meta_get(cn, "last_stencil_gain_mean", None)
+        last_knot_gain_mean = _meta_get(cn, "last_knot_gain_mean", None)
+        last_supernova_gate = _meta_get(cn, "last_supernova_gate", None)
+        last_drag_gamma = _meta_get(cn, "last_drag_gamma", None)
+        last_vn_peak_count = _meta_get(cn, "last_vn_peak_count", None)
+        last_decay_textile_fraction = _meta_get(cn, "last_decay_textile_fraction", None)
         mesh = _mesh_state_7d()
         mesh_field = _mesh_field_8d(cn, mesh)
         try:
@@ -3984,6 +4286,11 @@ def state_summary() -> dict:
         "last_infogravity_multiplier": last_infogravity_multiplier,
         "last_analog_multiplier": last_analog_multiplier,
         "last_stencil_gain_mean": last_stencil_gain_mean,
+        "last_knot_gain_mean":   last_knot_gain_mean,
+        "last_supernova_gate":   last_supernova_gate,
+        "last_drag_gamma":       last_drag_gamma,
+        "last_vn_peak_count":   last_vn_peak_count,
+        "last_decay_textile_fraction": last_decay_textile_fraction,
         "patched_local_executor": _PATCHED,
         "resuscitation_quipu":   resuscitation,
         "acre_specialists":      emergent,

@@ -332,6 +332,17 @@ def test_hub_manifest_is_public_and_publishable(tmp_path, monkeypatch):
     assert _PUBLIC_FIXTURE_SECRET.decode("utf-8") not in json.dumps(manifest)
 
 
+_HUB_ASSETS = (
+    _WORKSPACE_ROOT / "Loadopoly-Portal" / "gard-shard-model.json",
+    _WORKSPACE_ROOT / "Loadopoly-Portal" / "index.html",
+    _WORKSPACE_ROOT / "Launch-Loadopoly.ps1",
+)
+
+
+@pytest.mark.skipif(
+    not all(path.exists() for path in _HUB_ASSETS),
+    reason="needs the sibling Loadopoly-Portal checkout and Launch-Loadopoly.ps1 next to this repo",
+)
 def test_committed_hub_assets_and_launcher_wiring_are_consistent():
     portal_manifest = read_envelope_json(
         _WORKSPACE_ROOT / "Loadopoly-Portal" / "gard-shard-model.json"

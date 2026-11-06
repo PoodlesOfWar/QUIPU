@@ -407,6 +407,16 @@ ADAPTIVE_RUNTIME_MAP: dict[str, dict[str, str]] = {
 #   infodynamic_bit_entropy(occ) H = -p·log2 p - (1-p)log2(1-p) binary occupancy entropy (Vopson 2025)
 #   infodynamic_compression(f)   1 - H(p)/ln N                frequency mass compaction
 #   phase_coherence_order(φ)     R = |Σ e^(iφ)| / N            Kuramoto order (Miller 2026)
+#   viscous_decay_merger(v0,a,b,t) a·v0/((a+b·v0)e^{at}−b·v0)  merged linear+quadratic drag
+#                                                              (Timmerman & van der Weele 1999)
+#   muonic_disappearance_rate()  Q·Λ_free + Λ_capture          Sb μ⁻ linear regime (Primakoff 1959)
+#   textile_ekenstam_decay(DP,k) DP0/(1 + k·DP0·t)             cellulose scission, quadratic regime
+#   decay_regime_comparison(a,b) b·v0/(a + b·v0)               textile vs muonic share of the loss
+#   drag_deepened_proximity(d,γ) 1 − (d/n)^(1+κγ)              distance potential at deeper drag
+#   torus_knot_cells(n,2,±3)     (p·n·s, q·n·s) mod n          trefoil + mirror closed geodesics
+#   torus_knot_arc_field(...)    max_k A_k·decay(arc+age)       vN-entropy peaks along the knot
+#   weyl_chiral_merge(R,L)       amp=R+L, χ=R−L                 Weyl node pair (Nielsen–Ninomiya)
+#   coulomb_iterated_peaks(S,Ψ₂) prominence ≥ δ*, ×Ψ₂          non-lossy entropy peaks
 #
 UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
     "coherence_to_phi": {
@@ -507,6 +517,101 @@ UEQGM_MATH_MAP: dict[str, dict[str, str]] = {
                    "framework (Earl K. Miller et al., J. Neurosci. 2026, "
                    "DOI 10.1523/JNEUROSCI.0711-26.2026); drives ac_multiplier in "
                    "train_round(), kill-switch QUIPU_ANALOG_STENCIL",
+    },
+    "viscous_decay_merger": {
+        "formula": "v(t) = a·v0 / ((a + b·v0)·e^{a·t} − b·v0)",
+        "range":   "[0, v0]  — v0 at t=0; b=0 → v0·e^{−at}; a=0 → v0/(1 + b·v0·t)",
+        "note":    "Decay under merged linear + quadratic drag (Timmerman & van der "
+                   "Weele, Am. J. Phys. 67, 538 (1999)). Linear regime grounded on the "
+                   "muonic decay of antimony (bound μ⁻, Z=51: Primakoff, RMP 31, 802 "
+                   "(1959); Suzuki, Measday & Roalsvig, PRC 35, 2212 (1987)); quadratic "
+                   "regime on textile cellulose decay (Ekenstam 1936; Zou, Uesaka & "
+                   "Gurnagul, Cellulose 3, 243 (1996)). Per round a = _KNOT_DECAY_A·(1+γ), "
+                   "b = _KNOT_DECAY_B·(1 − coherence) from the synaptic wash; lays vN-entropy "
+                   "peaks along the trefoil pair; kill-switch QUIPU_VISCOUS_MERGER",
+    },
+    "muonic_disappearance_rate": {
+        "formula": "Λ = Q·(1/τ_μ) + Λ_capture",
+        "range":   "s⁻¹, ≈1e7 for Z≈50 (capture-dominated)",
+        "note":    "Total μ⁻ disappearance rate in a muonic atom; antimony defaults "
+                   "(Huff factor Q≈0.85, capture ~1e7 s⁻¹ order of magnitude — refine "
+                   "against the tabulated Sb row of Suzuki et al. 1987). The memoryless "
+                   "(linear-drag) limit of viscous_decay_merger.",
+    },
+    "textile_ekenstam_decay": {
+        "formula": "DP(t) = DP0 / (1 + k·DP0·t)   ⇔   1/DP − 1/DP0 = k·t",
+        "range":   "[0, DP0]  — self-slowing; half-life doubles each halving",
+        "note":    "Ekenstam cellulose chain-scission kinetics (textile decay). The "
+                   "quadratic-drag limit of viscous_decay_merger; compared against the "
+                   "muonic Sb exponential by decay_regime_comparison.",
+    },
+    "decay_regime_comparison": {
+        "formula": "textile_fraction = b·v0 / (a + b·v0);  v* = a/b;  t½₂/t½₁",
+        "range":   "textile_fraction ∈ [0,1]; half_life_ratio = 1 (muonic) → >1 (textile)",
+        "note":    "Shape comparison only — the physical rates differ by ~17 decades "
+                   "and are never mixed numerically. Persisted per round as "
+                   "last_decay_textile_fraction.",
+    },
+    "drag_deepened_proximity": {
+        "formula": "prox(d) = 1 − (d/n)^(1 + κ·γ),  κ = _DRAG_KAPPA",
+        "range":   "[0.0, 1.0]  — identical to 1 − d/n at γ = 0; ≥ legacy for γ > 0",
+        "note":    "Overdamped (Stokes) limit: at deeper linear drag γ (temporal_spatiality "
+                   "relational gradient) motion is gradient flow on the potential, so the "
+                   "cell distance potential dominates scoring and training.",
+    },
+    "torus_knot_cells": {
+        "formula": "(i, j) = (p·n·s, q·n·s) mod n,  s ∈ [0,1)",
+        "range":   "closed lattice path; (2,3) right trefoil, (2,−3) left trefoil",
+        "note":    "Closed geodesics on the 64×64 Quipu torus; the pair is read as a Weyl "
+                   "semimetal node pair of opposite chirality.",
+    },
+    "torus_knot_arc_field": {
+        "formula": "F(cell) = max_k A_k · viscous_decay_merger(1, a, b, arc_k·8 + age_k·0.05)",
+        "range":   "[0.0, 1.0] per knot cell",
+        "note":    "Each non-lossy vN-entropy peak, anchored at arc index idx mod L (one cell per "
+                   "training round), decays along the knot in both directions.",
+    },
+    "weyl_chiral_merge": {
+        "formula": "amplitude = clip01(R + L);  chirality = R − L",
+        "range":   "amplitude ∈ [0,1]; chirality ∈ [−1,1] (0 on a mirrored pair)",
+        "note":    "Opposite-chirality Weyl node pair (Nielsen & Ninomiya, Nucl. Phys. B 185, "
+                   "20 (1981); Armitage, Mele & Vishwanath, RMP 90, 015001 (2018)): "
+                   "amplitudes add, chirality cancels.",
+    },
+    "morse_rupture_force": {
+        "formula": "F_max = a·D_e/2  at  r = r_e + ln2/a;  F_LiTaSb = min(F_LiSb, F_TaSb)",
+        "range":   "nN (1 eV/Å = 1.602 nN); generic M–Sb parameters give ≈1.7 nN",
+        "note":    "Maximum restoring force of a Morse bond — the force needed to break "
+                   "it; single-bond AFM rupture is 1–4 nN (Grandbois et al., Science 283, "
+                   "1727 (1999)). LiTaSb is not tabulated: estimate, overridable via "
+                   "QUIPU_BOND_SHEAR_*. qpsi/bond_shear.litasb_rupture.",
+    },
+    "landau_shear_survival": {
+        "formula": "ratio_k = w_k·F/F_rupture;  S = Σ_k w_k · R·(1 − ratio_k²)",
+        "range":   "[0.0, R]  — multiplanar: no plane reaches the rupture ratio",
+        "note":    "Exciton-polariton condensate ψ = √R·e^{iφ} (Kasprzak et al., Nature 443, "
+                   "409 (2006)) sheared below the Landau critical ratio flows without "
+                   "dissipation (Amo et al., Nat. Phys. 5, 805 (2009)); R is the "
+                   "Kuramoto analog coherence. qpsi/bond_shear.landau_survival.",
+    },
+    "fresnel_transmission": {
+        "formula": "T = 1 − ((n₁ − n₂)/(n₁ + n₂))²  (normal incidence)",
+        "range":   "[0.0, 1.0]; cavity 2.7 → polycarbonate 1.586 / CR-39 1.498",
+        "note":    "Photonic Hopfield fraction of the polariton leaving the microcavity "
+                   "into the polycarbonate and CR-39 optics. qpsi/bond_shear.",
+    },
+    "arrhenius_pyrolysis_rate": {
+        "formula": "k = A·exp(−E_a/(k_B·T));  remaining = viscous_decay_merger(1, k, 0, t)",
+        "range":   "s⁻¹; E_a ≈ 1.55 eV, A = 1e10 s⁻¹, T = 723 K → k ≈ 0.15 s⁻¹",
+        "note":    "First-order asphalt (bitumen) pyrolysis — the memoryless (muonic) "
+                   "limit of the viscous decay merger; order-of-magnitude TGA kinetics, "
+                   "overridable via QUIPU_BOND_SHEAR_PYROLYSIS_*. qpsi/bond_shear.",
+    },
+    "coulomb_iterated_peaks": {
+        "formula": "peaks = {i : s[i] local max, prominence_i ≥ δ*};  A_i = clip01(Ψ₂·prominence_i/span)",
+        "range":   "amplitude ∈ [0,1]; δ* = √(12·CRB) from gard_info",
+        "note":    "Non-lossy von Neumann entropy peaks: prominence must clear the GARD "
+                   "lossy quantizer step; each weighted by the Weyl Ψ₂ Coulomb bulk mass.",
     },
 }
 
@@ -1522,6 +1627,341 @@ def sici_phase_weight(coherence: int) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Viscous decay merger — combined linear + quadratic drag (v0.32.0)
+# ---------------------------------------------------------------------------
+#
+# Decay under combined linear and quadratic (non-linear) drag,
+#
+#     dv/dt = −a·v − b·v²
+#
+# is a Bernoulli equation with the closed form
+#
+#     v(t) = a·v₀ / ((a + b·v₀)·e^{a·t} − b·v₀)
+#
+# (Timmerman & van der Weele, *Am. J. Phys.* 67, 538 (1999)).  The two limits
+# are each a *published* decay law in its own right, and QUIPU grounds the two
+# regime constants on them:
+#
+#   * b = 0 — memoryless exponential, v₀·e^{−a·t}.  The muonic decay of
+#     antimony: a bound μ⁻ in a Sb atom (Z = 51) disappears at the total rate
+#     Λ = Q·Λ_free + Λ_capture, where Λ_free = 1/τ_μ (τ_μ = 2.1969811 µs,
+#     PDG), Q ≈ 0.85 is the Huff bound-decay suppression for Z ≈ 50, and
+#     Λ_capture is the nuclear capture rate (Primakoff, *Rev. Mod. Phys.* 31,
+#     802 (1959); measured lifetimes for Z ≈ 50 are ~0.1 µs — Suzuki, Measday
+#     & Roalsvig, *Phys. Rev. C* 35, 2212 (1987)).  Capture dominates free
+#     decay by ~20×, so the Sb muon is the archetype of a fast, memoryless,
+#     *linear* loss channel.
+#   * a → 0 — hyperbolic (self-slowing) decay, v₀ / (1 + b·v₀·t).  Textile
+#     decay: cellulose chain scission in cotton/linen follows the Ekenstam
+#     law 1/DP − 1/DP₀ = k·t (Ekenstam, *Ber. Dtsch. Chem. Ges.* 69, 553
+#     (1936); Zou, Uesaka & Gurnagul, *Cellulose* 3, 243 (1996)), i.e.
+#     dDP/dt = −k·DP², exactly the quadratic term — the decay rate falls as
+#     the fabric degrades, the opposite of the muon's constant hazard.
+#
+# The physical rates differ by ~17 decades (ns vs. years), so QUIPU never
+# mixes them numerically: the *comparison* is of decay **shape**, scored by
+# decay_regime_comparison() as the fraction of the initial loss carried by the
+# textile (quadratic) term.  Inside the mesh, a and b are set per round from
+# the synaptic wash (temporal_spatiality): the relational gradient is the
+# linear drag depth γ and 1 − coherence the non-linear coefficient.
+_DRAG_KAPPA: float = 1.0
+"""Exponent gain of drag_deepened_proximity: kernel 1 − (d/n)^(1 + κ·γ)."""
+_KNOT_DECAY_A: float = 0.35
+"""Base linear (muonic-regime) decay rate along the trefoil arc, per arc unit."""
+_KNOT_DECAY_B: float = 0.15
+"""Base quadratic (textile-regime) decay coefficient along the trefoil arc."""
+_KNOT_ARC_SCALE: float = 8.0
+"""Arc-length fraction → decay-time units (one full knot = 8 decay units)."""
+_KNOT_AGE_SCALE: float = 0.05
+"""Peak age (training rounds) → decay-time units."""
+_MUON_FREE_LIFETIME_S: float = 2.1969811e-6
+"""Free μ⁻ mean lifetime τ_μ in seconds (PDG)."""
+_SB_Z: int = 51
+_SB_A: float = 121.76
+_SB_HUFF_FACTOR: float = 0.85
+"""Bound-muon decay suppression Q for Z ≈ 50 (Huff, Ann. Phys. 16, 288 (1961))."""
+_SB_MUON_CAPTURE_RATE_S: float = 1.0e7
+"""Order-of-magnitude μ⁻ nuclear capture rate for Z ≈ 50 (Suzuki et al. 1987);
+override with the tabulated Sb value when calibrating."""
+_TEXTILE_EKENSTAM_K: float = 1.0
+"""Dimensionless Ekenstam scission constant used for shape comparison (the
+physical k for cotton is ~1e-7–1e-6 per DP-unit per year under ambient
+storage; only the shape, not the rate, enters the mesh)."""
+_SUPERNOVA_KEY: str = "perceptopoly:supernova_events"
+"""brain_kv key: external TheSeuScape/Perceptopoly supernova event log."""
+_SUPERNOVA_GATE_KEY: str = "ueqgm:supernova_gate"
+"""brain_kv key: persisted supernova expansion gate (rADAM × potential ADAM)."""
+
+
+def viscous_decay_merger(v0: float, a: float, b: float, t: float) -> float:
+    """Closed-form decay under merged linear (a) and quadratic (b) drag.
+
+    ``v(t) = a·v0 / ((a + b·v0)·e^{a·t} − b·v0)`` (Timmerman & van der Weele,
+    *Am. J. Phys.* 67, 538 (1999)).  ``b = 0`` recovers the memoryless
+    exponential (muonic antimony regime); ``a = 0`` recovers the hyperbolic
+    Ekenstam law ``v0 / (1 + b·v0·t)`` (textile regime).  Non-negative inputs
+    only; the result is clamped to ``[0, v0]`` and equals ``v0`` at ``t = 0``.
+    """
+    v0 = max(0.0, float(v0))
+    a = max(0.0, float(a))
+    b = max(0.0, float(b))
+    t = max(0.0, float(t))
+    if v0 == 0.0 or t == 0.0:
+        return v0
+    if a < 1e-12:
+        return v0 / (1.0 + b * v0 * t)
+    try:
+        growth = math.exp(min(a * t, 700.0))
+    except OverflowError:
+        return 0.0
+    denom = (a + b * v0) * growth - b * v0
+    if denom <= 0.0:
+        return 0.0
+    return max(0.0, min(v0, a * v0 / denom))
+
+
+def muonic_disappearance_rate(
+    capture_rate: float = _SB_MUON_CAPTURE_RATE_S,
+    huff_factor: float = _SB_HUFF_FACTOR,
+    free_lifetime: float = _MUON_FREE_LIFETIME_S,
+) -> float:
+    """Total μ⁻ disappearance rate Λ = Q·Λ_free + Λ_capture (s⁻¹) in a muonic atom.
+
+    Defaults describe antimony (Z = 51): free decay suppressed by the Huff
+    factor Q (Huff 1961) plus nuclear capture (Primakoff 1959; Suzuki, Measday &
+    Roalsvig 1987).  This is the pure linear-drag regime of
+    :func:`viscous_decay_merger` — a constant hazard with no memory.
+    """
+    free_rate = 1.0 / max(1e-18, float(free_lifetime))
+    return max(0.0, float(huff_factor)) * free_rate + max(0.0, float(capture_rate))
+
+
+def textile_ekenstam_decay(dp0: float, k: float, t: float) -> float:
+    """Ekenstam cellulose chain-scission decay ``DP(t) = DP0 / (1 + k·DP0·t)``.
+
+    1/DP − 1/DP0 = k·t (Ekenstam 1936; Zou, Uesaka & Gurnagul 1996) — the
+    textile decay law, identical to the ``a = 0`` limit of
+    :func:`viscous_decay_merger`.  The hazard ``k·DP`` falls as the fibre
+    degrades: a self-slowing decay, in contrast to the muon's constant hazard.
+    """
+    return viscous_decay_merger(dp0, 0.0, k, t)
+
+
+def decay_regime_comparison(a: float, b: float, v0: float = 1.0) -> dict:
+    """Compare the textile (quadratic) and muonic (linear) shares of a merged decay.
+
+    Returns ``textile_fraction = b·v0 / (a + b·v0)`` — the fraction of the
+    initial loss rate carried by the self-slowing Ekenstam term (0 = pure
+    muonic-antimony exponential, 1 = pure textile hyperbola) — together with the
+    crossover amplitude ``v* = a/b`` below which the linear channel dominates,
+    and the ratio of the second half-life to the first (1.0 for a memoryless
+    exponential, > 1 as the textile term slows the decay).
+    """
+    a = max(0.0, float(a))
+    b = max(0.0, float(b))
+    v0 = max(0.0, float(v0))
+    total = a + b * v0
+    textile_fraction = (b * v0 / total) if total > 0.0 else 0.0
+    crossover = (a / b) if b > 0.0 else math.inf
+
+    def _half_life(v_start: float) -> float | None:
+        if v_start <= 0.0 or total <= 0.0:
+            return None
+        target = 0.5 * v_start
+        lo, hi = 0.0, 1.0
+        while viscous_decay_merger(v_start, a, b, hi) > target and hi < 1e9:
+            hi *= 2.0
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            if viscous_decay_merger(v_start, a, b, mid) > target:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi)
+
+    t1 = _half_life(v0)
+    t2 = _half_life(0.5 * v0)
+    ratio = (t2 / t1) if (t1 and t2 and t1 > 0.0) else None
+    return {
+        "a": a,
+        "b": b,
+        "v0": v0,
+        "textile_fraction": textile_fraction,
+        "muonic_fraction": 1.0 - textile_fraction,
+        "crossover_amplitude": crossover,
+        "first_half_life": t1,
+        "second_half_life": t2,
+        "half_life_ratio": ratio,
+    }
+
+
+def drag_deepened_proximity(
+    d: float, n: int, gamma: float, kappa: float = _DRAG_KAPPA
+) -> float:
+    """Torus proximity ``1 − (d/n)^(1 + κ·γ)`` — stronger at deeper linear drag.
+
+    At ``γ = 0`` this is exactly the legacy linear kernel ``1 − d/n``.  As the
+    linear drag depth γ ∈ [0, 1] grows the motion becomes overdamped (Stokes
+    limit: pure gradient flow on the potential), so the distance potential
+    between cells dominates: the kernel flattens near ``d = 0`` and every
+    non-zero distance scores at least as high as under the legacy kernel.
+    """
+    n = max(1, int(n))
+    x = max(0.0, min(1.0, float(d) / float(n)))
+    g = max(0.0, min(1.0, float(gamma)))
+    expo = 1.0 + max(0.0, float(kappa)) * g
+    return max(0.0, 1.0 - x ** expo)
+
+
+def torus_knot_cells(n: int, p: int = 2, q: int = 3) -> list[tuple[int, int]]:
+    """Cells of the (p, q) torus knot on an ``n × n`` torus, in arc order.
+
+    The (2, 3) knot is the right-handed trefoil; ``q = −3`` gives its mirror,
+    the left-handed trefoil.  The curve ``(i, j) = (p·n·s, q·n·s) mod n`` for
+    ``s ∈ [0, 1)`` winds ``p`` times around one axis and ``q`` times around the
+    other.  Consecutive duplicate cells are dropped so the list is a closed
+    lattice path with no stalls; the first cell is ``(0, 0)``.
+    """
+    n = max(1, int(n))
+    p = int(p)
+    q = int(q)
+    if p == 0 and q == 0:
+        return [(0, 0)]
+    samples = max(1, n * max(abs(p), abs(q)) * 2)
+    cells: list[tuple[int, int]] = []
+    for k in range(samples):
+        s = k / float(samples)
+        i = int(round(p * n * s)) % n
+        j = int(round(q * n * s)) % n
+        cell = (i, j)
+        if not cells or cells[-1] != cell:
+            cells.append(cell)
+    if len(cells) > 1 and cells[-1] == cells[0]:
+        cells.pop()
+    return cells
+
+
+def torus_knot_arc_field(
+    n: int,
+    knot: Sequence[tuple[int, int]],
+    peaks: Sequence[dict],
+    a: float = _KNOT_DECAY_A,
+    b: float = _KNOT_DECAY_B,
+) -> dict[tuple[int, int], float]:
+    """Lay each von Neumann (vN) entropy peak's viscous decay along the knot's arc length.
+
+    Peak ``k`` (``amplitude`` ∈ [0, 1], ``age`` in rounds, ``idx`` its series
+    index) is anchored at arc position ``idx mod L`` — the training-round
+    clock walks one cell per round along the closed geodesic — and radiates
+    ``amplitude · viscous_decay_merger(1, a, b, arc_dist·ARC_SCALE +
+    age·AGE_SCALE)`` in both arc directions.  Cells take the maximum over
+    peaks.  Returns ``{}`` when there are no peaks or no knot cells.
+    """
+    cells = list(knot)
+    L = len(cells)
+    if L == 0 or not peaks:
+        return {}
+    field: dict[tuple[int, int], float] = {}
+    for pk in peaks:
+        try:
+            amp = max(0.0, min(1.0, float(pk.get("amplitude", 0.0))))
+            age = max(0.0, float(pk.get("age", 0.0)))
+            anchor = int(pk.get("idx", 0)) % L
+        except (TypeError, ValueError):
+            continue
+        if amp <= 0.0:
+            continue
+        age_t = age * _KNOT_AGE_SCALE
+        for m, cell in enumerate(cells):
+            arc = min(abs(m - anchor), L - abs(m - anchor)) / float(L)
+            val = amp * viscous_decay_merger(1.0, a, b, arc * _KNOT_ARC_SCALE + age_t)
+            if val > field.get(cell, 0.0):
+                field[cell] = val
+    return field
+
+
+def weyl_chiral_merge(
+    field_r: dict[tuple[int, int], float],
+    field_l: dict[tuple[int, int], float],
+) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
+    """Merge the right- and left-handed trefoil fields as a Weyl node pair.
+
+    Weyl nodes come in opposite-chirality pairs (Nielsen & Ninomiya, *Nucl.
+    Phys. B* 185, 20 (1981)); each is a 2D-planar cone peak (Armitage, Mele &
+    Vishwanath, *Rev. Mod. Phys.* 90, 015001 (2018)).  Where the two trefoils
+    overlap their **amplitude adds** (clipped to [0, 1]) while their
+    **chirality cancels**: ``chirality = R − L ∈ [−1, 1]`` is 0 on a perfectly
+    mirrored pair.
+    """
+    keys = set(field_r) | set(field_l)
+    amplitude: dict[tuple[int, int], float] = {}
+    chirality: dict[tuple[int, int], float] = {}
+    for k in keys:
+        r = max(0.0, min(1.0, float(field_r.get(k, 0.0))))
+        l = max(0.0, min(1.0, float(field_l.get(k, 0.0))))
+        amplitude[k] = min(1.0, r + l)
+        chirality[k] = max(-1.0, min(1.0, r - l))
+    return amplitude, chirality
+
+
+def coulomb_iterated_peaks(
+    series: Sequence[float],
+    psi2: float,
+    delta_star: float,
+) -> list[dict]:
+    """Local maxima of an entropy series that survive the GARD lossy floor.
+
+    A peak at index ``i`` has prominence ``s[i] − max(left_min, right_min)``
+    where each min is taken until a higher point is met.  Peaks with prominence
+    below ``delta_star`` (the GARD quantizer step ``δ* = √(12·CRB)``,
+    gard_info.gard_floor_bytes) are *lossy* — indistinguishable from channel
+    noise — and are dropped; the survivors are the non-lossy peaks.  Each is
+    weighted by ``psi2`` (Ψ₂, the Weyl-tensor Coulomb bulk mass): the
+    "coulomb iterator".  Returns ``[{idx, value, prominence, amplitude, age}]``
+    oldest first; ``amplitude`` is ``clip01(psi2 · prominence / span)``.
+    """
+    vals = []
+    for x in series:
+        try:
+            vals.append(float(x))
+        except (TypeError, ValueError):
+            return []
+    n = len(vals)
+    if n < 3:
+        return []
+    span = max(vals) - min(vals)
+    if span <= 1e-12:
+        return []
+    psi2 = max(0.0, min(1.0, float(psi2)))
+    delta_star = max(0.0, float(delta_star))
+    peaks: list[dict] = []
+    for i in range(1, n - 1):
+        if not (vals[i - 1] < vals[i] >= vals[i + 1]):
+            continue
+        left_min = vals[i]
+        for k in range(i - 1, -1, -1):
+            if vals[k] > vals[i]:
+                break
+            left_min = min(left_min, vals[k])
+        right_min = vals[i]
+        for k in range(i + 1, n):
+            if vals[k] > vals[i]:
+                break
+            right_min = min(right_min, vals[k])
+        prominence = vals[i] - max(left_min, right_min)
+        if prominence < delta_star or prominence <= 0.0:
+            continue
+        peaks.append({
+            "idx": i,
+            "value": vals[i],
+            "prominence": prominence,
+            "amplitude": max(0.0, min(1.0, psi2 * prominence / span)),
+            "age": n - 1 - i,
+        })
+    return peaks
+
+
+# ---------------------------------------------------------------------------
 # Broader UEQGM mathematics
 # ---------------------------------------------------------------------------
 
@@ -2338,6 +2778,7 @@ _UEQGM_TAGS: tuple[str, ...] = (
     '"ueqgm"', '"wavefunction"', '"quantum field"',
     '"quantum dynamics"', '"holographic"', '"floquet"', '"entanglement"',
     '"infodynamics"', '"infodynamic"', '"analog cognition"', '"analog_coherence"',
+    '"viscous"', '"trefoil"', '"weyl semimetal"', '"muonic"',
 )
 
 # Feature keywords for the bag-of-words feature vector.
@@ -2345,6 +2786,7 @@ _UEQGM_KEYWORDS: list[str] = [
     "quantum", "wavefunction", "holographic", "floquet",
     "entanglement", "ueqgm", "topological", "entropy",
     "infodynamics", "infodynamic", "analog", "coherence",
+    "viscous", "trefoil", "chirality", "muonic", "textile",
 ]
 
 
@@ -2456,6 +2898,15 @@ __all__ = [
     "infodynamic_bit_entropy",
     "infodynamic_compression_score",
     "phase_coherence_order",
+    "viscous_decay_merger",
+    "muonic_disappearance_rate",
+    "textile_ekenstam_decay",
+    "decay_regime_comparison",
+    "drag_deepened_proximity",
+    "torus_knot_cells",
+    "torus_knot_arc_field",
+    "weyl_chiral_merge",
+    "coulomb_iterated_peaks",
     "hawking_information_remnant_score",
     "weyl_scalar_tensor",
     "information_compaction_scalar",
@@ -2490,6 +2941,11 @@ __all__ = [
     "_INTERSTITIAL_ENTANGLEMENT_KEY",
     "_INFODYNAMIC_KEY",
     "_ANALOG_COHERENCE_KEY",
+    "_SUPERNOVA_KEY",
+    "_SUPERNOVA_GATE_KEY",
+    "_DRAG_KAPPA",
+    "_KNOT_DECAY_A",
+    "_KNOT_DECAY_B",
     "_MESH_TORUS_N",
     "_MESH_VOCAB_LIMIT",
     "_MESH_EMBED_DIMS",
