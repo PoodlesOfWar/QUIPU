@@ -225,6 +225,7 @@ def source_guidance_directive(source: str, device_id: str | None = None) -> dict
             "refraction_priors": {
                 "pmma_n": 1.491,
                 "pc_n": 1.586,
+                "cr39_n": 1.498,
                 "air_n": 1.000,
             },
             "sprt_parameters": {
