@@ -144,6 +144,14 @@ $$\text{Rupture} \iff (\text{coverage} < 0.30 \land \text{confidence} > 0.80) \l
 - **Multi-Tenant Device Isolation**: External users querying via `bakugo.loadopoly.com` or `loadopoly.com` are scoped strictly by `device_id` (`WHERE device_id = ?`) preventing unauthorized access to host databases or the shared DuckDB Vault.
 - **Contamination Firewall**: Uncertified crowd inputs are recorded as `SELF_REPORTED` and firewalled from ground-truth training datasets.
 
+### Loop 9: Viscous Decay Merger & Supernova Expansion Gate (v0.67.0)
+- **Drag → potential**: the synaptic-wash relational gradient $\gamma$ deepens the torus kernel to $1 - (d/N)^{1+\kappa\gamma}$ (`drag_deepened_proximity`), so at deeper linear drag the cell distance potential dominates scoring and training.
+- **Entropy peaks → trefoil field**: von Neumann entropy peaks that clear the GARD floor $\delta^*$ (weighted by $\Psi_2$) are decayed by $v(t) = a v_0/((a + b v_0)e^{at} - b v_0)$ — $a$ from $\gamma$ (muonic/linear regime), $b$ from $1 - \text{coherence}$ (textile/quadratic regime) — along the (2,3) and (2,−3) trefoils and merged as a Weyl node pair.
+- **Gate → strengthening**: TheSeuScape/Perceptopoly supernova events (latent $g_{im}$) and the fleet's own `broaden` decision plus synaptic liveness (realised $g_{re}$) pass through `radam_step` and are intersected with the recursive-strengthening actionable potential; tokens on the field learn up to 10 % faster and edges along the same curve up to 5 %, only while the gate is open. Negative feedback: strengthening compacts the graph, moving the next entropy peaks. Verified via `viscous_merger_trend()`.
+
+### Loop 10: LiTaSb Bond-Shear Chain (v0.67.0)
+- The Morse rupture force of the weakest Li–Sb / Ta–Sb link enters only as the ratio $F/F_{rupture}$, spread over the seven axis planes by the rheology weights; the exciton-polariton condensate $\psi = \sqrt{R}e^{i\phi}$ survives each plane by the Landau rule $R(1 - \text{ratio}_k^2)$; the photonic fraction crosses into polycarbonate / CR-39 by Fresnel transmission; the asphalt decays by first-order Arrhenius pyrolysis. Published after each rheology reading, served at `GET /bond_shear`, offered to the viscous coupler as a bounded shear reading — never a learning rate or a cell write.
+
 ### Loop 8: Infodynamic Gravity & Analog Traveling-Wave Cognition (v0.31.0)
 - **Infodynamic Gravity Coupling (Vopson 2025)**: Negative feedback lift $\mu_{ig} = 1.0 + 0.05 \cdot \text{clamp01}(1.0 - \text{compression})$ accelerates early quipu bigram formation when vocabulary is diffuse, annealing into stable clusters as data compacts. Verified via `infodynamic_trend()`.
 - **Analog Traveling-Wave Stencil Gating (Miller et al. 2026)**: Macroscopic Kuramoto phase coherence modulates learning rates by $\pm 5\%$ ($\mu_{ac}$), while mobile traveling wave crests gate per-token embedding nudges by $\text{stencil\_gain} = 0.90 + 0.20 \cdot \text{interaction\_gain}[\text{cell}]$, performing spatial analog arithmetic. Verified via `analog_coherence_trend()`.
@@ -167,6 +175,8 @@ $$\text{Rupture} \iff (\text{coverage} < 0.30 \land \text{confidence} > 0.80) \l
 | `stp_diagnostic_trend()` | `QUIPU Python API` | Rolling P1 geodesic signature and $\Delta S$ anti-correlation |
 | `infodynamic_trend()` | `QUIPU Python API` | Second-law-of-infodynamics compression and bit-entropy trend |
 | `analog_coherence_trend()` | `QUIPU Python API` | Kuramoto coherence and wave-stencil contrast trend |
+| `viscous_merger_trend()` | `QUIPU Python API` | Knot-gain trend, drag depth, textile/muonic regime share, chiral balance |
+| `GET /bond_shear` | `QUIPU (:7100)` | LiTaSb rupture force, multiplanar shear ratio, condensate survival, PC/CR-39 throughput, pyrolysis yield |
 | `world_model_state()` | `QUIPU Python API` | Current cognitive phase, acquisition pressure, epistemic surprise, rupture events |
 
 ---
@@ -185,4 +195,6 @@ v0.22.x (SCB Base Lineage) ──► v0.24.1 (Paired Agent Gate) ──► v0.25
                               └──► v0.30.0 (Tri-Repo Epistemic Self-Annealing & Multi-Tenant Firewall)
                               │
                               └──► v0.31.0 (Infodynamic Gravity & Analog Traveling-Wave Cognition)
+                              │
+                              └──► v0.67.0 (Viscous Decay Merger, Supernova Gate & LiTaSb Bond-Shear Chain)
 ```

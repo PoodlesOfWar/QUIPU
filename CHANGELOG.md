@@ -4,6 +4,28 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.67.0] - 2026-11-06
+
+### Added
+- `ueqgm_engine.viscous_decay_merger(v0, a, b, t)`: decay under merged linear + quadratic drag, $v(t) = a v_0 / ((a + b v_0)e^{at} - b v_0)$ (Timmerman & van der Weele, *Am. J. Phys.* 67, 538 (1999)). Its two limits are each a measured decay and ground the regime constants: the **muonic decay of antimony** (`muonic_disappearance_rate`: $\Lambda = Q\,\Lambda_{free} + \Lambda_{capture}$, Huff factor $Q \approx 0.85$, capture $\sim 10^7\,\mathrm{s^{-1}}$ for $Z \approx 50$ — Primakoff 1959; Suzuki, Measday & Roalsvig 1987) is the memoryless linear regime; **textile cellulose decay** (`textile_ekenstam_decay`: $1/DP - 1/DP_0 = kt$, Ekenstam 1936; Zou, Uesaka & Gurnagul 1996) is the self-slowing quadratic regime. `decay_regime_comparison(a, b)` compares them by shape (textile fraction $b v_0/(a + b v_0)$, crossover amplitude $a/b$, half-life ratio 1 → 2) — rates 17 decades apart are never mixed numerically.
+- `ueqgm_engine.drag_deepened_proximity(d, N, \gamma)`: the torus distance potential $1 - (d/N)^{1 + \kappa\gamma}$, stronger at deeper linear drag $\gamma$ (the synaptic-wash relational gradient of `temporal_spatiality`); identical to the legacy $1 - d/N$ at $\gamma = 0$.
+- `ueqgm_engine.torus_knot_cells(N, 2, \pm 3)`, `coulomb_iterated_peaks`, `torus_knot_arc_field`, `weyl_chiral_merge`: von Neumann graph-entropy peaks that clear the GARD lossy floor $\delta^* = \sqrt{12\,\mathrm{CRB}}$, weighted by the Weyl $\Psi_2$ Coulomb bulk mass, decayed by the merger along the (2,3) trefoil and its (2,−3) mirror and merged as an opposite-chirality Weyl node pair (Nielsen & Ninomiya 1981; Armitage, Mele & Vishwanath 2018): amplitude adds, chirality cancels. ("vN" = von Neumann here; upstream "VNN" remains the Viscous Neural Network.)
+- `supernova_gate.py`: TheSeuScape / Perceptopoly supernova events as a typed contract (`meta.supernova` on `POST /observe` → `perceptopoly:supernova_events`, capped 200) and the expansion gate $\mathrm{clip}_{01}(\text{rADAM}(g_{re}, g_{im}) \times \text{actionable\_potential})$ with $g_{re} = 0.6\,\text{broaden} + 0.4\,\text{synaptic liveness}$, $g_{im}$ the decayed supernova magnitude and the event direction as external toroidal phase — the first production consumer of `radam_optimizer.radam_step`. Echoed on `GET /guidance` as `supernova_gate`.
+- `qpsi/bond_shear.py`: the force needed to break a LiTaSb bond as the weakest Morse link $F_{max} = a D_e/2$ (Li–Sb ≈ 1.7 nN, Ta–Sb ≈ 3.9 nN; generic M–Sb parameters flagged `estimate: true`, overridable via `QUIPU_BOND_SHEAR_*`), spread as a dimensionless ratio over the seven axis planes with the rheology weights (no plane exceeds 0.19 of rupture), Landau survival of the exciton-polariton condensate $\psi = \sqrt{R}e^{i\phi}$ ($R$ = analog Kuramoto coherence; Kasprzak et al. 2006, Amo et al. 2009), Fresnel transmission of the photonic Hopfield fraction into polycarbonate ($n = 1.586$) and CR-39 ($n = 1.498$), and first-order Arrhenius asphalt pyrolysis (the muonic limit of the merger). Published after the rheology reading in the self-organising step at `entirety:bond_shear:latest`; `GET /bond_shear`; `bond_shear` on `/guidance`; `shear_reading()` for `TypedViscousCoupler.step`. `UEQGM_MATH_MAP` gains `morse_rupture_force`, `landau_shear_survival`, `fresnel_transmission`, `arrhenius_pyrolysis_rate`.
+- `world_model.refraction_priors`: `cr39_n = 1.498` next to `pc_n`.
+- Docs: `docs/VISCOUS_DECAY_MERGER.md`, `docs/BOND_SHEAR_CHAIN.md`; `docs/SYSTEM_DYNAMICS.md` Loops 9–10; `docs/SYSTEM_DYNAMICS_SIGNALS.md` §2.12–2.13.
+- Tests: `tests/test_qpsi_bond_shear.py` (13), `tests/test_supernova_gate.py` (6), plus 8 in `test_ueqgm_engine.py`, 6 in `test_mesh_slm.py`, 3 in `test_observer_service.py` — 36 new tests.
+
+### Changed
+- **`mesh_slm.py` edited** (the first edit since v0.61.2): `QUIPU_VISCOUS_MERGER` kill-switch (default on); `_proximity(a, b, gamma=None)` deepens with the cached drag depth (`_drag_depth`, 5 s TTL) — scoring and training share the one kernel; `train_round` persists `holographic_entropy_history`, builds the trefoil vN-peak field once per round, scales each token's embedding nudge by `knot_gain = 1 + 0.10·amplitude[cell]·gate` and each bigram whose both ends sit on the field by `1 + 0.05·min(amplitude)·gate` — on the global **and** the region edge; new summary / meta / `state_summary` fields (`knot_gain_mean`, `knot_field_cells`, `vn_peak_count`, `supernova_gate`, `drag_gamma`, `drag_b`, `decay_textile_fraction`, `last_*`); `viscous_merger_trend(window)`. All of it is identically the v0.66.0 math when the switch is off, γ = 0, no peak clears the floor, or the gate is 0.
+- `observer_service._observe`: `meta.supernova` validated and recorded (400 on a malformed event); `_guidance` gains `supernova_gate` and `bond_shear`; `GET /bond_shear`.
+- `qpsi/self_organising.after_step`: publishes the bond-shear chain right after `pcm_cells.record` (own try/except, never blocks the cells).
+- `ueqgm_engine` tags/keywords gain `viscous`, `trefoil`, `chirality`, `muonic`, `textile`.
+
+### Not changed
+- Julia protocol peers: no change — every coupling is confined to `train_round` and `brain_kv` readings (the v0.31.0 precedent).
+- `mesh_slm_vocab` / `mesh_slm_quipu` schemas, eviction, regions, gates: untouched. The bond-shear chain writes no mesh table and no χ.
+
 ## [0.66.0] - 2026-10-27
 
 ### Added
