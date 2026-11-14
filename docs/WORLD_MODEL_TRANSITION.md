@@ -182,3 +182,10 @@ curl -X POST http://localhost:7100/world-model/transition \
     ]
   }'
 ```
+
+
+## v0.67.0 — Lexicon-Free Token-Transition Grounding & Entropy-Boundary Discovery
+
+- **`observe_token_transition(tokens, prev_state, next_state, residual)`**: Grounds arbitrary tokens in an EMA 6-D `WorldState` delta vector $(\Delta\text{inventory}, \Delta\text{backlog}, \Delta\text{load\_ratio}, \Delta\text{reliability}, \Delta\text{uncertainty}, \text{residual})$ stored in `brain_kv` (`world_model:token_signatures`).
+- **`match_dynamical_isomorphism(tokens, top_k)`**: Projects novel domain tokens into $\vec{\delta}_S$-space and ranks aligned dynamical regimes (`backlog_saturation`, `control_loop_damping`, `threshold_rupture`, `phase_synchronization`, `capacity_bottleneck`, `structural_compression`) by cosine similarity without static keyword or POS dictionaries.
+- **`entropy_boundary_chunks(token_sequences, min_pmi, min_count)`**: Discovers multi-token compound phrases via Pointwise Mutual Information (PMI) and constituent/predicate boundaries via conditional branching entropy $H(w_{t+1} \mid w_t)$.

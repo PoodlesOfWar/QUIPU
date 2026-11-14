@@ -387,3 +387,37 @@ def test_physical_invariants_across_30_step_random_shocks():
         # Invariant 7: Strict tick progression
         assert current.tick == step + 1
 
+
+
+def test_lexicon_free_token_transition_and_isomorphism(isolated_kv):
+    """Tokens are grounded directly in WorldState transition deltas and matched by dynamical isomorphism."""
+    s_prev = WorldState(inventory=100.0, backlog=0.0, load_ratio=0.3, reliability=0.98, capacity=100.0)
+    s_next = WorldState(inventory=30.0, backlog=70.0, load_ratio=0.95, reliability=0.65, capacity=100.0)
+    res = world_model.observe_token_transition(
+        ["x402", "martian", "vortex", "cycle"],
+        s_prev,
+        s_next,
+        residual=0.8,
+    )
+    assert res["updated"] == 4
+    assert res["vocab_grounded"] == 4
+
+    matches = world_model.match_dynamical_isomorphism(["martian", "vortex", "cycle"], top_k=3)
+    assert matches, "Expected dynamical isomorphism match for grounded tokens"
+    top_regimes = {m["regime"] for m in matches}
+    assert top_regimes & {"backlog_saturation", "threshold_rupture", "capacity_bottleneck"}
+
+
+def test_entropy_boundary_chunks_discovers_compounds_without_pos():
+    """High-PMI compound chunks and conditional entropy boundaries emerge purely from token streams."""
+    seqs = [
+        ["the", "control", "loop", "damps", "the", "vortex", "cycle"],
+        ["a", "control", "loop", "stabilizes", "the", "vortex", "cycle"],
+        ["this", "control", "loop", "guides", "the", "vortex", "cycle"],
+        ["another", "stop-word", "filter", "drops", "the", "negation"],
+    ]
+    out = world_model.entropy_boundary_chunks(seqs, min_pmi=0.4, min_count=2)
+    phrases = {c["phrase"] for c in out["chunks"]}
+    assert "control loop" in phrases
+    assert "vortex cycle" in phrases
+    assert out["boundary_entropy"].get("loop", 0.0) > 0.5

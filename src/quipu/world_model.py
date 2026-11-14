@@ -650,3 +650,159 @@ def record_transition_observation(actual: WorldState | dict[str, Any]) -> dict[s
     return eval_res
 
 
+# ============================================================================
+# Lexicon-Free World-Model Token Grounding & Entropy-Boundary Discovery
+# ============================================================================
+
+_REGIME_PROTOTYPES: dict[str, list[float]] = {
+    "backlog_saturation": [-0.35, 0.85, 0.70, -0.25, 0.55, 0.65],
+    "control_loop_damping": [0.15, -0.45, -0.30, 0.65, -0.50, -0.35],
+    "threshold_rupture": [-0.50, 0.45, 0.50, -0.80, 0.85, 0.90],
+    "phase_synchronization": [0.25, -0.20, -0.15, 0.55, -0.45, -0.25],
+    "capacity_bottleneck": [-0.20, 0.75, 0.90, -0.40, 0.45, 0.55],
+    "structural_compression": [0.30, -0.35, -0.20, 0.40, -0.60, -0.40],
+}
+
+
+def _state_delta_vector(
+    prev_state: WorldState | dict[str, Any],
+    next_state: WorldState | dict[str, Any],
+    residual: float = 0.0,
+) -> list[float]:
+    """Compute a normalized 6-D World Model transition delta vector."""
+    p = _to_dict(prev_state)
+    n = _to_dict(next_state)
+    cap = max(1.0, float(p.get("capacity") or n.get("capacity") or 100.0))
+    d_inv = math.tanh((float(n.get("inventory", 0.0)) - float(p.get("inventory", 0.0))) / cap)
+    d_bkl = math.tanh((float(n.get("backlog", 0.0)) - float(p.get("backlog", 0.0))) / cap)
+    d_load = math.tanh(float(n.get("load_ratio", 0.0)) - float(p.get("load_ratio", 0.0)))
+    d_rel = math.tanh((float(n.get("reliability", 1.0)) - float(p.get("reliability", 1.0))) * 4.0)
+    p_unc = sum(float(v) for v in (p.get("uncertainty") or {}).values())
+    n_unc = sum(float(v) for v in (n.get("uncertainty") or {}).values())
+    d_unc = math.tanh((n_unc - p_unc) * 0.5)
+    res_n = math.tanh(float(residual))
+    return [round(x, 6) for x in (d_inv, d_bkl, d_load, d_rel, d_unc, res_n)]
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na <= 1e-9 or nb <= 1e-9:
+        return 0.0
+    return sum(x * y for x, y in zip(a, b)) / (na * nb)
+
+
+def observe_token_transition(
+    tokens: list[str],
+    prev_state: WorldState | dict[str, Any],
+    next_state: WorldState | dict[str, Any],
+    residual: float = 0.0,
+    decay: float = 0.85,
+) -> dict[str, Any]:
+    """Ground arbitrary tokens in continuous World Model state-delta signatures (dS_t)."""
+    clean = [str(t).strip().lower() for t in tokens if isinstance(t, str) and len(str(t).strip()) >= 2]
+    if not clean:
+        return {"updated": 0, "delta": []}
+    delta = _state_delta_vector(prev_state, next_state, residual=residual)
+    sigs = brain_kv.kv_get_json("world_model:token_signatures", {}) or {}
+    if not isinstance(sigs, dict):
+        sigs = {}
+    updated = 0
+    for tok in set(clean):
+        prev_vec = sigs.get(tok)
+        if isinstance(prev_vec, list) and len(prev_vec) == len(delta):
+            new_vec = [round(decay * float(pv) + (1.0 - decay) * dv, 6) for pv, dv in zip(prev_vec, delta)]
+        else:
+            new_vec = list(delta)
+        sigs[tok] = new_vec
+        updated += 1
+    if len(sigs) > 4096:
+        # Keep most energetic signatures bounded
+        ranked = sorted(sigs.items(), key=lambda kv: sum(abs(x) for x in kv[1]), reverse=True)[:4096]
+        sigs = dict(ranked)
+    brain_kv.kv_set_json("world_model:token_signatures", sigs)
+    return {"updated": updated, "delta": delta, "vocab_grounded": len(sigs)}
+
+
+def match_dynamical_isomorphism(
+    tokens: list[str],
+    top_k: int = 3,
+) -> list[dict[str, Any]]:
+    """Project arbitrary tokens into World Model transition space and rank aligned dynamical regimes."""
+    clean = [str(t).strip().lower() for t in tokens if isinstance(t, str) and len(str(t).strip()) >= 2]
+    if not clean:
+        return []
+    sigs = brain_kv.kv_get_json("world_model:token_signatures", {}) or {}
+    acc = [0.0] * 6
+    matched_tokens = 0
+    for tok in clean:
+        vec = sigs.get(tok)
+        if isinstance(vec, list) and len(vec) == 6:
+            for i in range(6):
+                acc[i] += float(vec[i])
+            matched_tokens += 1
+    if matched_tokens == 0:
+        return []
+    mean_vec = [v / matched_tokens for v in acc]
+    scored = []
+    for regime, proto in _REGIME_PROTOTYPES.items():
+        sim = _cosine_sim(mean_vec, proto)
+        if sim > 0.1:
+            scored.append({"regime": regime, "similarity": round(sim, 4), "matched_tokens": matched_tokens})
+    scored.sort(key=lambda r: r["similarity"], reverse=True)
+    return scored[:max(1, top_k)]
+
+
+def entropy_boundary_chunks(
+    token_sequences: list[list[str]],
+    min_pmi: float = 0.5,
+    min_count: int = 2,
+) -> dict[str, Any]:
+    """Discover compound phrases (high PMI) and predicate boundaries (high conditional entropy)
+    directly from observed token streams without static POS dictionaries."""
+    unigram: dict[str, int] = {}
+    bigram: dict[tuple[str, str], int] = {}
+    total_uni = 0
+    total_bi = 0
+    for seq in token_sequences:
+        clean = [str(t).strip().lower() for t in seq if isinstance(t, str) and str(t).strip()]
+        for i, w in enumerate(clean):
+            unigram[w] = unigram.get(w, 0) + 1
+            total_uni += 1
+            if i + 1 < len(clean):
+                pair = (w, clean[i + 1])
+                bigram[pair] = bigram.get(pair, 0) + 1
+                total_bi += 1
+    if total_uni == 0 or total_bi == 0:
+        return {"chunks": [], "boundary_entropy": {}}
+
+    # Conditional entropy H(w_{t+1} | w_t)
+    outgoing: dict[str, dict[str, int]] = {}
+    for (u, v), cnt in bigram.items():
+        outgoing.setdefault(u, {})[v] = cnt
+
+    boundary_entropy: dict[str, float] = {}
+    for u, nexts in outgoing.items():
+        tot = sum(nexts.values())
+        h = 0.0
+        for cnt in nexts.values():
+            p = cnt / tot
+            if p > 0:
+                h -= p * math.log2(p)
+        boundary_entropy[u] = round(h, 4)
+
+    # High-PMI compound chunks
+    chunks: list[dict[str, Any]] = []
+    for (u, v), cnt in bigram.items():
+        if cnt < min_count:
+            continue
+        p_uv = cnt / total_bi
+        p_u = unigram[u] / total_uni
+        p_v = unigram[v] / total_uni
+        pmi = math.log2(max(1e-12, p_uv / (p_u * p_v)))
+        if pmi >= min_pmi:
+            chunks.append({"phrase": f"{u} {v}", "pmi": round(pmi, 4), "count": cnt})
+    chunks.sort(key=lambda c: (c["pmi"], c["count"]), reverse=True)
+    return {"chunks": chunks, "boundary_entropy": boundary_entropy}
+
+
