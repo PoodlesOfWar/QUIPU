@@ -141,7 +141,25 @@ def assess_observation(source: str, tokens: list[str], confidence: float | None,
     if new_phase != current_phase:
         phase_transition = {"from": current_phase, "to": new_phase}
         brain_kv.kv_set_json("world_model:phase", new_phase)
-        
+
+    if tokens:
+        novel_ratio = len(novel_tokens) / max(1, len(tokens))
+        prev_obs = WorldState(
+            inventory=100.0 * coverage, backlog=100.0 * surprise_ema,
+            load_ratio=novel_ratio, reliability=max(0.05, conf), capacity=100.0,
+        )
+        next_obs = WorldState(
+            inventory=100.0 * max(0.0, coverage - 0.5 * novel_ratio),
+            backlog=100.0 * (surprise + (0.25 if rupture_detected else 0.0)),
+            load_ratio=min(1.0, novel_ratio + 0.5 * surprise),
+            reliability=max(0.05, conf * (0.6 if rupture_detected else 1.0)),
+            capacity=100.0,
+        )
+        try:
+            observe_token_transition(tokens, prev_obs, next_obs, residual=surprise)
+        except Exception:
+            pass
+
     return {
         "surprise": round(surprise, 4),
         "rupture_detected": rupture_detected,
@@ -651,3 +669,435 @@ def record_transition_observation(actual: WorldState | dict[str, Any]) -> dict[s
     return eval_res
 
 
+# ============================================================================
+# Lexicon-Free World-Model Token Grounding & Entropy-Boundary Discovery
+# ============================================================================
+
+_REGIME_PROTOTYPES: dict[str, list[float]] = {
+    "backlog_saturation": [-0.35, 0.85, 0.70, -0.25, 0.55, 0.65],
+    "control_loop_damping": [0.15, -0.45, -0.30, 0.65, -0.50, -0.35],
+    "threshold_rupture": [-0.50, 0.45, 0.50, -0.80, 0.85, 0.90],
+    "phase_synchronization": [0.25, -0.20, -0.15, 0.55, -0.45, -0.25],
+    "capacity_bottleneck": [-0.20, 0.75, 0.90, -0.40, 0.45, 0.55],
+    "structural_compression": [0.30, -0.35, -0.20, 0.40, -0.60, -0.40],
+}
+
+
+def _state_delta_vector(
+    prev_state: WorldState | dict[str, Any],
+    next_state: WorldState | dict[str, Any],
+    residual: float = 0.0,
+) -> list[float]:
+    """Compute a normalized 6-D World Model transition delta vector."""
+    p = _to_dict(prev_state)
+    n = _to_dict(next_state)
+    cap = max(1.0, float(p.get("capacity") or n.get("capacity") or 100.0))
+    d_inv = math.tanh((float(n.get("inventory", 0.0)) - float(p.get("inventory", 0.0))) / cap)
+    d_bkl = math.tanh((float(n.get("backlog", 0.0)) - float(p.get("backlog", 0.0))) / cap)
+    d_load = math.tanh(float(n.get("load_ratio", 0.0)) - float(p.get("load_ratio", 0.0)))
+    d_rel = math.tanh((float(n.get("reliability", 1.0)) - float(p.get("reliability", 1.0))) * 4.0)
+    p_unc = sum(float(v) for v in (p.get("uncertainty") or {}).values())
+    n_unc = sum(float(v) for v in (n.get("uncertainty") or {}).values())
+    d_unc = math.tanh((n_unc - p_unc) * 0.5)
+    res_n = math.tanh(float(residual))
+    return [round(x, 6) for x in (d_inv, d_bkl, d_load, d_rel, d_unc, res_n)]
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na <= 1e-9 or nb <= 1e-9:
+        return 0.0
+    return sum(x * y for x, y in zip(a, b)) / (na * nb)
+
+
+def observe_token_transition(
+    tokens: list[str],
+    prev_state: WorldState | dict[str, Any],
+    next_state: WorldState | dict[str, Any],
+    residual: float = 0.0,
+    decay: float = 0.85,
+) -> dict[str, Any]:
+    """Ground arbitrary tokens in continuous World Model state-delta signatures (dS_t)."""
+    clean = [str(t).strip().lower() for t in tokens if isinstance(t, str) and len(str(t).strip()) >= 2]
+    if not clean:
+        return {"updated": 0, "delta": []}
+    delta = _state_delta_vector(prev_state, next_state, residual=residual)
+    sigs = brain_kv.kv_get_json("world_model:token_signatures", {}) or {}
+    if not isinstance(sigs, dict):
+        sigs = {}
+    updated = 0
+    for tok in set(clean):
+        prev_vec = sigs.get(tok)
+        if isinstance(prev_vec, list) and len(prev_vec) == len(delta):
+            new_vec = [round(decay * float(pv) + (1.0 - decay) * dv, 6) for pv, dv in zip(prev_vec, delta)]
+        else:
+            new_vec = list(delta)
+        sigs[tok] = new_vec
+        updated += 1
+    if len(sigs) > 4096:
+        # Keep most energetic signatures bounded
+        ranked = sorted(sigs.items(), key=lambda kv: sum(abs(x) for x in kv[1]), reverse=True)[:4096]
+        sigs = dict(ranked)
+    brain_kv.kv_set_json("world_model:token_signatures", sigs)
+    return {"updated": updated, "delta": delta, "vocab_grounded": len(sigs)}
+
+
+def match_dynamical_isomorphism(
+    tokens: list[str],
+    top_k: int = 3,
+) -> list[dict[str, Any]]:
+    """Project arbitrary tokens into World Model transition space, ranking both emergent
+    learned transition peers (lexicon-free) and structural regime orientations."""
+    clean = [str(t).strip().lower() for t in tokens if isinstance(t, str) and len(str(t).strip()) >= 2]
+    if not clean:
+        return []
+    sigs = brain_kv.kv_get_json("world_model:token_signatures", {}) or {}
+    acc = [0.0] * 6
+    matched_tokens = 0
+    clean_set = set(clean)
+    for tok in clean:
+        vec = sigs.get(tok)
+        if isinstance(vec, list) and len(vec) == 6:
+            for i in range(6):
+                acc[i] += float(vec[i])
+            matched_tokens += 1
+    if matched_tokens == 0:
+        return []
+    mean_vec = [v / matched_tokens for v in acc]
+    scored = []
+    # 1. Emergent lexicon-free peer tokens sharing transition trajectory dS_t
+    peer_tokens = []
+    for cand_tok, cvec in sigs.items():
+        if cand_tok in clean_set or not isinstance(cvec, list) or len(cvec) != 6:
+            continue
+        csim = _cosine_sim(mean_vec, [float(x) for x in cvec])
+        if csim > 0.55:
+            peer_tokens.append((csim, cand_tok))
+    peer_tokens.sort(reverse=True)
+    emergent_peers = [t for _, t in peer_tokens[:top_k]]
+
+    for regime, proto in _REGIME_PROTOTYPES.items():
+        sim = _cosine_sim(mean_vec, proto)
+        if sim > 0.1:
+            scored.append({
+                "regime": regime,
+                "similarity": round(sim, 4),
+                "matched_tokens": matched_tokens,
+                "emergent_peers": emergent_peers,
+            })
+    scored.sort(key=lambda r: r["similarity"], reverse=True)
+    if not scored and emergent_peers:
+        scored.append({
+            "regime": emergent_peers[0],
+            "similarity": round(peer_tokens[0][0], 4),
+            "matched_tokens": matched_tokens,
+            "emergent_peers": emergent_peers,
+        })
+    return scored[:max(1, top_k)]
+
+
+def pmi_boundary_profile(
+    token_sequences: list[list[str]],
+    extra_bigrams: dict[tuple[str, str], float] | None = None,
+    min_count: int = 1,
+) -> dict[str, Any]:
+    """Compute smoothed PMI, forward/backward conditional entropy H(W_{t+1}|w_t) and H(W_t|w_{t+1}),
+    and high-PMI compound chunks directly from observed token sequences without POS dictionaries."""
+    unigram: dict[str, float] = {}
+    bigram: dict[tuple[str, str], float] = {}
+    for seq in token_sequences:
+        clean = [str(t).strip().lower() for t in seq if isinstance(t, str) and str(t).strip()]
+        for i, w in enumerate(clean):
+            unigram[w] = unigram.get(w, 0.0) + 1.0
+            if i + 1 < len(clean):
+                pair = (w, clean[i + 1])
+                bigram[pair] = bigram.get(pair, 0.0) + 1.0
+    if extra_bigrams:
+        for (u, v), wt in extra_bigrams.items():
+            w = max(0.0, float(wt))
+            if w > 0.0:
+                u, v = str(u).strip().lower(), str(v).strip().lower()
+                unigram[u] = unigram.get(u, 0.0) + w
+                unigram[v] = unigram.get(v, 0.0) + w
+                bigram[(u, v)] = bigram.get((u, v), 0.0) + w
+
+    total_uni = sum(unigram.values())
+    total_bi = sum(bigram.values())
+    if total_uni <= 0.0 or total_bi <= 0.0:
+        return {
+            "unigram": {}, "bigram": {}, "total_uni": 0.0, "total_bi": 0.0,
+            "forward_entropy": {}, "backward_entropy": {}, "pmi": {}, "chunks": [],
+        }
+
+    outgoing: dict[str, dict[str, float]] = {}
+    incoming: dict[str, dict[str, float]] = {}
+    for (u, v), cnt in bigram.items():
+        outgoing.setdefault(u, {})[v] = cnt
+        incoming.setdefault(v, {})[u] = cnt
+
+    def _cond_ent(dist: dict[str, float]) -> float:
+        tot = sum(dist.values())
+        if tot <= 0.0:
+            return 0.0
+        h = 0.0
+        for c in dist.values():
+            p_c = c / tot
+            if p_c > 0.0:
+                h -= p_c * math.log2(p_c)
+        return round(h, 4)
+
+    fwd_h = {u: _cond_ent(nxt) for u, nxt in outgoing.items()}
+    bwd_h = {v: _cond_ent(prv) for v, prv in incoming.items()}
+
+    pmi_map: dict[tuple[str, str], float] = {}
+    chunks: list[dict[str, Any]] = []
+    eps = 0.25 / max(1.0, total_bi)
+    for (u, v), cnt in bigram.items():
+        if cnt < min_count:
+            continue
+        p_uv = cnt / total_bi
+        p_u = unigram.get(u, 1.0) / total_uni
+        p_v = unigram.get(v, 1.0) / total_uni
+        pmi = math.log2((p_uv + eps) / (max(1e-12, p_u * p_v) + eps))
+        pmi_map[(u, v)] = round(pmi, 4)
+        chunks.append({"phrase": f"{u} {v}", "pmi": round(pmi, 4), "count": cnt})
+    chunks.sort(key=lambda c: (c["pmi"], c["count"]), reverse=True)
+    return {
+        "unigram": unigram,
+        "bigram": bigram,
+        "total_uni": total_uni,
+        "total_bi": total_bi,
+        "forward_entropy": fwd_h,
+        "backward_entropy": bwd_h,
+        "pmi": pmi_map,
+        "chunks": chunks,
+    }
+
+
+def boundary_split_score(
+    left: str,
+    right: str,
+    profile: dict[str, Any],
+    token_sigs: dict[str, list[float]] | None = None,
+) -> float:
+    """Information-theoretic + World-Model state-delta boundary score between *left* and *right*.
+
+    Higher score indicates a predicate/constituent boundary (split); lower/negative score indicates
+    tight intra-constituent PMI binding (merge).
+    """
+    u = str(left).strip().lower()
+    v = str(right).strip().lower()
+    pmi = float((profile.get("pmi") or {}).get((u, v), -1.0))
+    h_fwd = float((profile.get("forward_entropy") or {}).get(u, 1.5))
+    h_bwd = float((profile.get("backward_entropy") or {}).get(v, 1.5))
+    delta_jump = 0.0
+    if token_sigs:
+        va = token_sigs.get(u)
+        vb = token_sigs.get(v)
+        if isinstance(va, list) and isinstance(vb, list) and len(va) == len(vb):
+            delta_jump = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(va, vb)))
+    return round(h_fwd + h_bwd - 1.5 * pmi + 0.5 * delta_jump, 4)
+
+
+def segment_constituents(
+    tokens: list[str],
+    profile: dict[str, Any],
+    token_sigs: dict[str, list[float]] | None = None,
+    split_threshold: float = 1.6,
+) -> list[list[str]]:
+    """Segment a raw token sequence into contiguous constituents without static POS tags."""
+    clean = [str(t).strip().lower() for t in tokens if isinstance(t, str) and str(t).strip()]
+    if not clean:
+        return []
+    if token_sigs is None:
+        raw_sigs = brain_kv.kv_get_json("world_model:token_signatures", {})
+        token_sigs = raw_sigs if isinstance(raw_sigs, dict) else {}
+    groups: list[list[str]] = [[clean[0]]]
+    for i in range(len(clean) - 1):
+        sc = boundary_split_score(clean[i], clean[i + 1], profile, token_sigs=token_sigs)
+        if sc >= split_threshold:
+            groups.append([clean[i + 1]])
+        else:
+            groups[-1].append(clean[i + 1])
+    return groups
+
+
+def entropy_boundary_chunks(
+    token_sequences: list[list[str]],
+    min_pmi: float = 0.5,
+    min_count: int = 2,
+) -> dict[str, Any]:
+    """Discover compound phrases (high PMI) and predicate boundaries (high conditional entropy)
+    directly from observed token streams without static POS dictionaries."""
+    prof = pmi_boundary_profile(token_sequences, min_count=min_count)
+    chunks = [c for c in prof["chunks"] if c["pmi"] >= min_pmi]
+    return {"chunks": chunks, "boundary_entropy": prof["forward_entropy"], "profile": prof}
+
+
+# ============================================================================
+# Non-Linear 6-Plane Shadow Tensor & Multiplicative Shearing
+# ============================================================================
+
+_PLANE_INDEX: dict[str, int] = {"I": 0, "II": 1, "III": 2, "IV": 3, "V": 4, "VI": 5}
+
+
+def _plane_idx(raw: Any) -> int:
+    if isinstance(raw, int):
+        return max(0, min(5, raw))
+    s = str(raw or "").strip().upper()
+    if s in _PLANE_INDEX:
+        return _PLANE_INDEX[s]
+    try:
+        return max(0, min(5, int(s) - 1))
+    except ValueError:
+        return 0
+
+
+def build_shadow_plane_tensor(
+    lambda_payload: dict[str, Any],
+    bond_shear_reading: dict[str, Any] | None = None,
+    relational_shear_reading: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Construct a 6-D non-linear plane tensor per token from QUIPU /lambda, bond_shear,
+    and relational_shear (preserving pulled_in vs held_back regime contrast and complex Im(Psi))."""
+    emission = lambda_payload.get("emission") or []
+    shadow_tokens = lambda_payload.get("shadow_tokens") or []
+    pot = lambda_payload.get("potential") or {}
+    pot_total = pot.get("total") or {}
+    pot_planes = {str(p.get("plane", "")).upper(): p for p in (pot.get("planes") or []) if isinstance(p, dict)}
+
+    imag_total = float(pot_total.get("imag", 0.0) or 0.0)
+    real_total = float(pot_total.get("real", 0.0) or 0.0)
+
+    landau_mean = 1.0
+    if isinstance(bond_shear_reading, dict):
+        cond = bond_shear_reading.get("condensate") or {}
+        if "survival" in cond:
+            landau_mean = max(0.1, min(1.5, float(cond.get("survival") or 1.0)))
+    lam_stp = 0.0
+    e_star = 0.0
+    if isinstance(relational_shear_reading, dict):
+        lam_stp = max(0.0, float(relational_shear_reading.get("lambda_rel_stp") or 0.0))
+        outl = relational_shear_reading.get("outlier") or {}
+        e_star = max(0.0, float(outl.get("energy", relational_shear_reading.get("energy", 0.0)) or 0.0))
+    shear_gain = round(max(0.5, (1.0 + lam_stp + e_star) * landau_mean), 6)
+
+    plane_snr = [0.0] * 6
+    vectors: dict[str, list[float]] = {}
+
+    for pl in emission:
+        if not isinstance(pl, dict):
+            continue
+        pi = _plane_idx(pl.get("plane"))
+        snr = max(0.0, float(pl.get("snr") or 0.0))
+        pw = (snr * snr) / (1.0 + snr * snr) if snr > 0.0 else 0.25
+        plane_snr[pi] = max(plane_snr[pi], snr)
+        for t in (pl.get("tokens") or []):
+            if isinstance(t, str) and t.strip():
+                tok = t.strip().lower()
+                vec = vectors.setdefault(tok, [0.0] * 6)
+                vec[pi] += pw
+        for pair in (pl.get("frequencies") or []):
+            if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+                tok = str(pair[0]).strip().lower()
+                freq = max(0.0, float(pair[1] or 0.0))
+                if tok and freq > 0.0:
+                    vec = vectors.setdefault(tok, [0.0] * 6)
+                    vec[pi] = max(vec[pi], freq * pw)
+
+    for st in shadow_tokens:
+        if not isinstance(st, dict):
+            continue
+        tok = str(st.get("token") or "").strip().lower()
+        if not tok:
+            continue
+        pname = str(st.get("plane") or "").upper()
+        pi = _plane_idx(pname)
+        wt = max(0.0, float(st.get("weight") or 0.0))
+        kind = str(st.get("kind") or "").lower()
+        p_pot = pot_planes.get(pname) or {}
+        p_im = float(p_pot.get("imag", imag_total) or 0.0)
+        p_re = float(p_pot.get("real", real_total) or 0.0)
+        sign = 1.0 if kind == "pulled_in" else -1.0
+        amp = wt * (1.0 + (p_im if sign > 0 else p_re)) * shear_gain
+        vec = vectors.setdefault(tok, [0.0] * 6)
+        base_em = 0.35 * vec[pi] if sign < 0 else vec[pi]
+        vec[pi] = math.tanh(base_em + sign * amp)
+
+    return {
+        "vectors": vectors,
+        "imag_potential": round(imag_total, 6),
+        "real_potential": round(real_total, 6),
+        "shear_gain": shear_gain,
+        "plane_snr": plane_snr,
+    }
+
+
+def diffuse_shadow_tensor(
+    tensor_state: dict[str, Any],
+    corpus_bigrams: dict[tuple[str, str], float],
+    steps: int = 2,
+) -> dict[str, list[float]]:
+    """Propagate 6-D non-linear shadow plane vectors through observed bigram / PMI neighbors
+    via tanh-saturated diffusion so novel domain tokens acquire multi-plane geometry."""
+    vectors: dict[str, list[float]] = {k: list(v) for k, v in (tensor_state.get("vectors") or {}).items()}
+    adj: dict[str, list[tuple[str, float]]] = {}
+    for (u, v), wt in corpus_bigrams.items():
+        w = max(0.0, float(wt))
+        if u != v and w > 0.0:
+            adj.setdefault(u, []).append((v, w))
+            adj.setdefault(v, []).append((u, w))
+
+    for _ in range(max(1, steps)):
+        nxt = {k: list(v) for k, v in vectors.items()}
+        for node, nbrs in adj.items():
+            acc = [0.0] * 6
+            wsum = 0.0
+            for nb, w in nbrs:
+                vec = vectors.get(nb)
+                if vec is not None:
+                    for p_i in range(6):
+                        acc[p_i] += w * vec[p_i]
+                    wsum += w
+            if wsum > 0.0:
+                cur = nxt.get(node, [0.0] * 6)
+                nxt[node] = [round(math.tanh(0.65 * cur[p_i] + 0.55 * (acc[p_i] / wsum)), 6) for p_i in range(6)]
+        vectors = nxt
+    return vectors
+
+
+def multiplicative_shear_coupling(
+    vec_a: list[float],
+    vec_b: list[float],
+    vec_pred: list[float] | None = None,
+    imag_potential: float = 0.0,
+    shear_gain: float = 1.0,
+) -> dict[str, float]:
+    """Compute exterior wedge cross-plane shear ||vec_a ^ vec_b|| and non-linear multiplicative
+    shear gain + annealed temperature (tau_eff) to replace flat additive softmax inside frames."""
+    a = [float(vec_a[p_i]) if p_i < len(vec_a) else 0.0 for p_i in range(6)]
+    b = [float(vec_b[p_i]) if p_i < len(vec_b) else 0.0 for p_i in range(6)]
+
+    wedge_sq = 0.0
+    for p_i in range(6):
+        for q_i in range(p_i + 1, 6):
+            comp = a[p_i] * b[q_i] - a[q_i] * b[p_i]
+            wedge_sq += comp * comp
+    wedge_norm = math.sqrt(wedge_sq)
+
+    pred_asym = 0.0
+    if vec_pred:
+        pr = [float(vec_pred[p_i]) if p_i < len(vec_pred) else 0.0 for p_i in range(6)]
+        pred_asym = abs(sum(pr[p_i] * (a[p_i] - b[p_i]) for p_i in range(6)))
+
+    shear_term = float(shear_gain) * math.tanh(wedge_norm)
+    imag_term = max(0.0, float(imag_potential)) * math.tanh(pred_asym)
+    multiplier = (1.0 + shear_term) * (1.0 + imag_term)
+    tau_eff = max(0.08, 0.25 / max(1.0, multiplier))
+    return {
+        "wedge_shear": round(wedge_norm, 6),
+        "pred_asymmetry": round(pred_asym, 6),
+        "multiplier": round(multiplier, 6),
+        "tau_eff": round(tau_eff, 6),
+    }

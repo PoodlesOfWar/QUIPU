@@ -4,6 +4,14 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.68.0] - 2026-11-16
+
+### Added
+- `world_model.pmi_boundary_profile`, `boundary_split_score`, `segment_constituents`: unsupervised information-theoretic + state-delta constituent/predicate boundary segmentation via smoothed $\mathrm{PMI}(w_t, w_{t+1})$, forward/backward conditional branching entropy $H(W_{t+1}\mid w_t) + H(W_t\mid w_{t+1})$, and $\|\vec{\delta}_S(w_t) - \vec{\delta}_S(w_{t+1})\|_2$ jump scoring without static POS dictionaries.
+- `world_model.build_shadow_plane_tensor`, `diffuse_shadow_tensor`, `multiplicative_shear_coupling`: builds 6-D non-linear plane tensors across Essay planes `I..VI` from `/lambda` (`emission`, signed `held_back`/`pulled_in` `shadow_tokens`, complex potential $\mathrm{Re}(\Psi)+i\,\mathrm{Im}(\Psi)$), `bond_shear` Landau survival, and `relational_shear` ($\lambda_{\mathrm{rel\_STP}}, E^*$), propagates across bigram edges via $\tanh$-saturated diffusion, and scores candidate pairs via exterior wedge cross-plane shear $\|\vec{\psi}(A)\wedge\vec{\psi}(B)\|_F$ with inverse shear-annealed selection temperature $\tau_{\mathrm{eff}}$.
+- `world_model.assess_observation` & `match_dynamical_isomorphism`: wired live token-transition delta grounding (`world_model:token_signatures`) and emergent lexicon-free peer alignment alongside regime orientations.
+- Tests: 4 new unit tests in `tests/test_world_model_transition.py`.
+
 ## [0.67.0] - 2026-11-06
 
 ### Added
