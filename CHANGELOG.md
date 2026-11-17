@@ -4,6 +4,12 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.70.0] - 2026-11-17
+
+### Added
+- `observer_service`: added external discovery endpoints `GET /.well-known/agent.json` (A2A v0.2 capability card) and `GET /capabilities` advertising live QUIPU World Model transition, `/synthesize`, `/lambda`, `/rheology`, `/bond_shear`, `/bathymetry`, `/slm`, `/guidance`, `/digest`, and `/entirety` routes without weakening `edge_admission` guards.
+- Docs & Tests: updated `docs/WORLD_MODEL_TRANSITION.md`; added `test_agent_card_and_capabilities_endpoints` in `tests/test_observer_service.py`.
+
 ## [0.69.0] - 2026-11-17
 
 ### Added

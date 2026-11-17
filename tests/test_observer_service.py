@@ -210,3 +210,27 @@ def test_synthesize_endpoint_get_and_post():
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_agent_card_and_capabilities_endpoints():
+    """GET /.well-known/agent.json and /capabilities advertise active QUIPU external endpoints."""
+    from http.server import HTTPServer
+    import threading
+    import urllib.request
+
+    srv = HTTPServer(("127.0.0.1", 0), observer_service.ObserverHandler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        for route in ("/.well-known/agent.json", "/capabilities"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=5) as resp:
+                assert resp.status == 200
+                data = json.loads(resp.read().decode("utf-8"))
+            assert data["ok"] is True
+            assert data["capabilities"]["quipu_discourse_synthesis"] is True
+            assert data["endpoints"]["synthesize_post"] == "POST /synthesize"
+            assert data["endpoints"]["transition"] == "POST /world-model/transition"
+    finally:
+        srv.shutdown()
+        srv.server_close()

@@ -847,6 +847,45 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path in ("/.well-known/agent.json", "/capabilities"):
+                self._send_json(200, {
+                    "ok": True,
+                    "name": "QUIPU World Model & Observer",
+                    "version": __version__,
+                    "protocol": "a2a/0.2",
+                    "description": (
+                        "Non-Markovian computational substrate combining deterministic forward state transitions, "
+                        "unsupervised PMI constituent segmentation, 6-plane non-linear shadow shearing, "
+                        "viscoelastic rheology, LiTaSb bond-shear Landau survival, and native QUIPU discourse synthesis."
+                    ),
+                    "capabilities": {
+                        "world_model_transition": True,
+                        "quipu_discourse_synthesis": True,
+                        "shadow_plane_tensor": True,
+                        "pmi_constituent_segmentation": True,
+                        "viscoelastic_rheology": True,
+                        "bond_shear_chain": True,
+                        "vnn_bathymetry": True,
+                        "mesh_slm_inference": True,
+                    },
+                    "endpoints": {
+                        "agent_card": "/.well-known/agent.json",
+                        "capabilities": "/capabilities",
+                        "health": "/health",
+                        "world_model": "/world-model",
+                        "transition": "POST /world-model/transition",
+                        "synthesize_get": "GET /synthesize?mode=comment|reply|post&target=...",
+                        "synthesize_post": "POST /synthesize",
+                        "lambda": "/lambda",
+                        "rheology": "/rheology",
+                        "bond_shear": "/bond_shear",
+                        "bathymetry": "/bathymetry",
+                        "guidance": "/guidance?source=...",
+                        "entirety": "/entirety",
+                        "slm": "POST /slm",
+                        "digest": "/digest",
+                    },
+                })
             elif parsed.path == "/synthesize":
                 qs = parse_qs(parsed.query)
                 mode = (qs.get("mode") or ["post"])[0]
