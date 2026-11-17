@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.70.1] - 2026-11-17
+
+### Fixed
+- `world_model.synthesize_quipu_discourse`: replaced full 1.56M-edge `mesh_slm.state_summary()` and sorted `_top_mesh_hubs()` queries with cached `<15ms` snapshot lookup inside `mode="post"` only, eliminating HTTP `/synthesize` timeouts from Herald (`1.2s` client timeout).
+
 ## [0.70.0] - 2026-11-17
 
 ### Added

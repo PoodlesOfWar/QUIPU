@@ -1107,24 +1107,53 @@ def multiplicative_shear_coupling(
 # Native QUIPU Discourse & Original Post Synthesis (Post / Valued Comment / Thread Reply)
 # ============================================================================
 
-def _top_mesh_hubs(limit: int = 6) -> list[dict[str, Any]]:
-    """Read live top-weighted directed edges from mesh_slm_quipu if available."""
+_SYNTH_CACHE: dict[str, Any] = {"at": 0.0, "vocab": 0, "edges": 0, "hubs": []}
+
+
+def _fast_mesh_snapshot(limit: int = 6) -> tuple[int, int, list[dict[str, Any]]]:
+    """Read fast (vocab, edges, strong_hubs) without full-table sorts or multi-second COUNT(*) scans."""
+    import time as _tm
+    now = _tm.time()
+    if now - float(_SYNTH_CACHE.get("at") or 0.0) < 120.0 and _SYNTH_CACHE.get("vocab"):
+        return int(_SYNTH_CACHE["vocab"]), int(_SYNTH_CACHE["edges"]), list(_SYNTH_CACHE["hubs"])
+    vocab, edges, hubs = 0, 0, []
     try:
         from . import mesh_slm as _mslm
 
         with _mslm._conn() as cn:
+            r_v = cn.execute("SELECT COUNT(*) FROM mesh_slm_vocab").fetchone()
+            vocab = int(r_v[0] or 0) if r_v else 0
+            r_e = cn.execute("SELECT MAX(rowid) FROM mesh_slm_quipu").fetchone()
+            edges = int(r_e[0] or 0) if r_e and r_e[0] is not None else 0
             rows = cn.execute(
                 "SELECT v1.token AS src, v2.token AS dst, e.weight AS w "
                 "FROM mesh_slm_quipu e "
                 "JOIN mesh_slm_vocab v1 ON v1.token_id = e.src "
                 "JOIN mesh_slm_vocab v2 ON v2.token_id = e.dst "
-                "WHERE LENGTH(v1.token) >= 4 AND LENGTH(v2.token) >= 4 "
-                "ORDER BY e.weight DESC LIMIT ?",
+                "WHERE e.weight >= 0.85 AND LENGTH(v1.token) >= 4 AND LENGTH(v2.token) >= 4 "
+                "LIMIT ?",
                 (int(limit),),
             ).fetchall()
-            return [{"src": str(r[0]), "dst": str(r[1]), "weight": round(float(r[2]), 4)} for r in rows]
+            if not rows:
+                rows = cn.execute(
+                    "SELECT v1.token AS src, v2.token AS dst, e.weight AS w "
+                    "FROM mesh_slm_quipu e "
+                    "JOIN mesh_slm_vocab v1 ON v1.token_id = e.src "
+                    "JOIN mesh_slm_vocab v2 ON v2.token_id = e.dst "
+                    "WHERE LENGTH(v1.token) >= 4 AND LENGTH(v2.token) >= 4 "
+                    "LIMIT ?",
+                    (int(limit),),
+                ).fetchall()
+            hubs = [{"src": str(r[0]), "dst": str(r[1]), "weight": round(float(r[2]), 4)} for r in rows]
+        _SYNTH_CACHE.update({"at": now, "vocab": vocab, "edges": edges, "hubs": hubs})
     except Exception:
-        return []
+        pass
+    return vocab, edges, hubs
+
+
+def _top_mesh_hubs(limit: int = 6) -> list[dict[str, Any]]:
+    """Read high-weight directed edges from mesh_slm_quipu without full-table sort."""
+    return _fast_mesh_snapshot(limit=limit)[2]
 
 
 def _extract_focus_phrases(text: str, limit: int = 4) -> list[str]:
@@ -1239,28 +1268,25 @@ def synthesize_quipu_discourse(
     ctx = context or {}
     mode_l = str(mode or "post").strip().lower()
     wm = world_model_state()
-    try:
-        ms = _mslm.state_summary()
-    except Exception:
-        ms = {"vocab_size": 0, "quipu_edges": 0, "stp_loss": 0.0, "entropy_differential": 0.0}
-
-    lam_payload = _bkv.kv_get_json("entirety:lambda:latest", {}) or {}
-    rheo = _bkv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {}
-    bshear = _bkv.kv_get_json("entirety:bond_shear:latest", {}) or {}
-    token_sigs = _bkv.kv_get_json("world_model:token_signatures", {}) or {}
-    hubs = _top_mesh_hubs(limit=6)
-
-    shadow_tokens = [s for s in (lam_payload.get("shadow_tokens") or []) if isinstance(s, dict)]
-    held_back = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "held_back" and s.get("token")]
-    pulled_in = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "pulled_in" and s.get("token")]
-    pot_tot = ((lam_payload.get("potential") or {}).get("total") or {})
-    imag_psi = round(float(pot_tot.get("imag") or 0.0), 4)
-    real_psi = round(float(pot_tot.get("real") or 0.0), 4)
-    loss_angle = round(float(rheo.get("loss_angle") or 0.0), 4)
-    fract_order = round(float(rheo.get("fractional_order") or 0.0), 4)
-    landau_surv = round(float(((bshear.get("condensate") or {}).get("survival")) or 1.0), 4)
 
     if mode_l == "post":
+        vocab_sz, edges_cnt, hubs = _fast_mesh_snapshot(limit=6)
+        ms = {"vocab_size": vocab_sz, "quipu_edges": edges_cnt}
+        lam_payload = _bkv.kv_get_json("entirety:lambda:latest", {}) or {}
+        rheo = _bkv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {}
+        bshear = _bkv.kv_get_json("entirety:bond_shear:latest", {}) or {}
+        token_sigs = _bkv.kv_get_json("world_model:token_signatures", {}) or {}
+
+        shadow_tokens = [s for s in (lam_payload.get("shadow_tokens") or []) if isinstance(s, dict)]
+        held_back = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "held_back" and s.get("token")]
+        pulled_in = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "pulled_in" and s.get("token")]
+        pot_tot = ((lam_payload.get("potential") or {}).get("total") or {})
+        imag_psi = round(float(pot_tot.get("imag") or 0.0), 4)
+        real_psi = round(float(pot_tot.get("real") or 0.0), 4)
+        loss_angle = round(float(rheo.get("loss_angle") or 0.0), 4)
+        fract_order = round(float(rheo.get("fractional_order") or 0.0), 4)
+        landau_surv = round(float(((bshear.get("condensate") or {}).get("survival")) or 1.0), 4)
+
         day_str = _t.strftime("%Y-%m-%d", _t.gmtime())
         epoch_slot = int(_t.time() // 43200)
         realm = ctx.get("realm_telemetry") if isinstance(ctx.get("realm_telemetry"), dict) else {}
