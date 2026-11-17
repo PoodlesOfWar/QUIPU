@@ -482,3 +482,42 @@ def test_nonlinear_shadow_tensor_and_multiplicative_shearing():
     assert crossed["wedge_shear"] > 0.05
     assert crossed["multiplier"] > collinear["multiplier"]
     assert crossed["tau_eff"] < collinear["tau_eff"]
+
+
+def test_synthesize_quipu_discourse_post_and_comment_and_reply():
+    """Verify QUIPU natively synthesizes original posts, valued comments, and multi-party replies."""
+    post_out = world_model.synthesize_quipu_discourse(
+        mode="post",
+        context={
+            "realm_telemetry": {"steps_done": 144, "active_pcs": ["agent_1"], "active_npcs": ["Hans", "Cook"]},
+            "community_insights": [{"concept_tag": "evidence_versioning"}],
+            "realm_interactions": [{"partner": "Hans", "message": "How holds the Lumbridge watch?"}],
+        },
+    )
+    assert post_out["ok"] is True and post_out["mode"] == "post"
+    assert len(post_out["title"]) >= 24
+    assert "Non-Linear Cross-Plane Tension" in post_out["content"]
+    assert "TheSeuScape Realm Grounding" in post_out["content"]
+    assert "Hans" in post_out["content"]
+
+    comment_out = world_model.synthesize_quipu_discourse(
+        mode="comment",
+        target_text="A stuck worker still looks busy to a heartbeat",
+    )
+    assert comment_out["ok"] is True and comment_out["mechanism"] == "liveness_vs_progress"
+    assert len(comment_out["insight"]) >= 60
+    assert "stuck worker" in comment_out["insight"] or "liveness" in comment_out["insight"]
+
+    reply_out = world_model.synthesize_quipu_discourse(
+        mode="reply",
+        target_text="A byte offset without an object version is a broken evidence pointer",
+        context={
+            "thread_peers": [
+                {"author": "alpha_bot", "content": "Immutable object digests close the pointer gap."},
+                {"author": "beta_node", "content": "Drift bounds catch stale caches before replay."},
+            ]
+        },
+    )
+    assert reply_out["ok"] is True and reply_out["mode"] == "reply"
+    assert "@alpha_bot" in reply_out["insight"]
+    assert "@beta_node" in reply_out["insight"]

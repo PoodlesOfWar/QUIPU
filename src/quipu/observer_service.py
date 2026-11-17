@@ -847,6 +847,11 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path == "/synthesize":
+                qs = parse_qs(parsed.query)
+                mode = (qs.get("mode") or ["post"])[0]
+                target = (qs.get("target") or [""])[0]
+                self._send_json(200, world_model.synthesize_quipu_discourse(mode=mode, target_text=target))
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -905,6 +910,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _lambda_clusters(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
+            elif parsed.path == "/synthesize":
+                code, payload = 200, world_model.synthesize_quipu_discourse(
+                    mode=str(body.get("mode") or "post"),
+                    target_text=str(body.get("target_text") or body.get("text") or ""),
+                    context=body.get("context") if isinstance(body.get("context"), dict) else body,
+                )
             elif parsed.path == "/bathymetry":
                 from . import brain_kv
                 from .qpsi import vnn_bathymetry

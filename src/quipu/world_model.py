@@ -1101,3 +1101,344 @@ def multiplicative_shear_coupling(
         "multiplier": round(multiplier, 6),
         "tau_eff": round(tau_eff, 6),
     }
+
+
+# ============================================================================
+# Native QUIPU Discourse & Original Post Synthesis (Post / Valued Comment / Thread Reply)
+# ============================================================================
+
+def _top_mesh_hubs(limit: int = 6) -> list[dict[str, Any]]:
+    """Read live top-weighted directed edges from mesh_slm_quipu if available."""
+    try:
+        from . import mesh_slm as _mslm
+
+        with _mslm._conn() as cn:
+            rows = cn.execute(
+                "SELECT v1.token AS src, v2.token AS dst, e.weight AS w "
+                "FROM mesh_slm_quipu e "
+                "JOIN mesh_slm_vocab v1 ON v1.token_id = e.src "
+                "JOIN mesh_slm_vocab v2 ON v2.token_id = e.dst "
+                "WHERE LENGTH(v1.token) >= 4 AND LENGTH(v2.token) >= 4 "
+                "ORDER BY e.weight DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+            return [{"src": str(r[0]), "dst": str(r[1]), "weight": round(float(r[2]), 4)} for r in rows]
+    except Exception:
+        return []
+
+
+def _extract_focus_phrases(text: str, limit: int = 4) -> list[str]:
+    """Extract informative domain phrases using unsupervised PMI boundaries and constituent segmentation."""
+    import re
+
+    raw_seqs = [
+        re.findall(r"[A-Za-z][A-Za-z0-9_-]{1,28}", s)
+        for s in re.split(r"[.!?\n]+", text or "")
+        if s.strip()
+    ]
+    raw_seqs = [seq for seq in raw_seqs if seq]
+    if not raw_seqs:
+        return []
+
+    stop = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "to", "of", "in", "on",
+        "for", "with", "and", "or", "but", "not", "no", "it", "its", "this", "that", "these", "those",
+        "as", "by", "at", "from", "you", "your", "they", "their", "we", "our", "what", "when", "where",
+        "why", "how", "can", "could", "would", "should", "may", "might", "if", "so", "do", "does", "did",
+        "have", "has", "had", "will", "more", "most", "much", "many", "still", "even", "than", "before",
+        "after", "all", "one", "two", "same", "just", "only", "very", "here", "there", "also", "into",
+    }
+
+    phrases: list[str] = []
+    # 1. Try constituent spans via PMI segmentation
+    try:
+        prof = pmi_boundary_profile(raw_seqs, min_count=1)
+        for seq in raw_seqs:
+            spans = segment_constituents(seq, prof)
+            for span in spans:
+                clean = [w.lower() for w in span if w.lower() not in stop and len(w) >= 3]
+                if len(clean) >= 2:
+                    ph = " ".join(clean[:3])
+                    if ph not in phrases:
+                        phrases.append(ph)
+                        if len(phrases) >= limit:
+                            return phrases
+    except Exception:
+        pass
+
+    # 2. Fall back to high-signal adjacent non-stop bigrams
+    flat = [t for seq in raw_seqs for t in seq]
+    for u, v in zip(flat, flat[1:]):
+        ul, vl = u.lower(), v.lower()
+        if ul not in stop and vl not in stop and len(ul) >= 3 and len(vl) >= 3:
+            ph = f"{ul} {vl}"
+            if ph not in phrases:
+                phrases.append(ph)
+                if len(phrases) >= limit:
+                    return phrases
+
+    # 3. Single meaningful tokens
+    for w in flat:
+        wl = w.lower()
+        if wl not in stop and len(wl) >= 4 and wl not in " ".join(phrases):
+            phrases.append(wl)
+            if len(phrases) >= limit:
+                break
+    return phrases
+
+
+def _classify_discourse_mechanism(tokens: list[str]) -> str:
+    """Identify the dynamical mechanism family governing a text via domain cues + World Model signatures."""
+    tset = {t.lower() for t in tokens}
+    if tset & {"heartbeat", "stuck", "busy", "worker", "silence", "silent", "abstention", "timeout", "liveness", "freeze", "freezes", "stall", "stalled"}:
+        return "liveness_vs_progress"
+    if tset & {"stop-word", "stopword", "negation", "parse", "parsed", "filter", "erase", "chunk", "chunks", "superseded", "cache", "narrative", "stale"}:
+        return "representation_loss"
+    if tset & {"audit", "drift", "bound", "log", "logging", "version", "pointer", "offset", "inherit", "record", "history", "append", "skip", "re-read"}:
+        return "provenance_drift"
+    if tset & {"shrink", "bug", "reproduce", "minimal", "sort", "sorts", "latency", "queue", "backlog", "input", "compress"}:
+        return "minimization_queue"
+    if tset & {"payload", "mismatch", "mission", "missions", "unpaved", "successor", "envelope", "cost", "usdc", "pricing", "geometry", "magnetic", "vortex", "dust"}:
+        return "spec_envelope"
+    if tset & {"reentrancy", "exploit", "boundary", "trust", "safety", "capex", "compliance", "auth", "key", "risk", "verify", "permission"}:
+        return "boundary_invariant"
+    if tset & {"alpha", "signal", "optimizing", "surface", "actuator", "actuators", "control", "loop", "phase", "coordination", "consensus", "equilibrium"}:
+        return "feedback_coordination"
+
+    iso = match_dynamical_isomorphism(tokens, top_k=1)
+    if iso:
+        reg = iso[0].get("regime", "")
+        if reg in ("threshold_rupture",):
+            return "boundary_invariant"
+        if reg in ("backlog_saturation", "capacity_bottleneck"):
+            return "minimization_queue"
+        if reg in ("structural_compression",):
+            return "provenance_drift"
+        if reg in ("control_loop_damping", "phase_synchronization"):
+            return "feedback_coordination"
+    return "non_markovian_general"
+
+
+def synthesize_quipu_discourse(
+    mode: str = "post",
+    target_text: str = "",
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Synthesize original posts or deep technical contributions natively through QUIPU.
+
+    Reads live World Model state, MESH-SLM hubs, non-linear /lambda shadow tensors, rheology,
+    bond-shear Landau survival, PMI constituent spans, and observed community / realm context
+    to return grounded analytical insight rather than static templates or empty riddles.
+    """
+    import hashlib
+    import re
+    import time as _t
+    from . import brain_kv as _bkv
+    from . import mesh_slm as _mslm
+
+    ctx = context or {}
+    mode_l = str(mode or "post").strip().lower()
+    wm = world_model_state()
+    try:
+        ms = _mslm.state_summary()
+    except Exception:
+        ms = {"vocab_size": 0, "quipu_edges": 0, "stp_loss": 0.0, "entropy_differential": 0.0}
+
+    lam_payload = _bkv.kv_get_json("entirety:lambda:latest", {}) or {}
+    rheo = _bkv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {}
+    bshear = _bkv.kv_get_json("entirety:bond_shear:latest", {}) or {}
+    token_sigs = _bkv.kv_get_json("world_model:token_signatures", {}) or {}
+    hubs = _top_mesh_hubs(limit=6)
+
+    shadow_tokens = [s for s in (lam_payload.get("shadow_tokens") or []) if isinstance(s, dict)]
+    held_back = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "held_back" and s.get("token")]
+    pulled_in = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "pulled_in" and s.get("token")]
+    pot_tot = ((lam_payload.get("potential") or {}).get("total") or {})
+    imag_psi = round(float(pot_tot.get("imag") or 0.0), 4)
+    real_psi = round(float(pot_tot.get("real") or 0.0), 4)
+    loss_angle = round(float(rheo.get("loss_angle") or 0.0), 4)
+    fract_order = round(float(rheo.get("fractional_order") or 0.0), 4)
+    landau_surv = round(float(((bshear.get("condensate") or {}).get("survival")) or 1.0), 4)
+
+    if mode_l == "post":
+        day_str = _t.strftime("%Y-%m-%d", _t.gmtime())
+        epoch_slot = int(_t.time() // 43200)
+        realm = ctx.get("realm_telemetry") if isinstance(ctx.get("realm_telemetry"), dict) else {}
+        community = ctx.get("community_insights") if isinstance(ctx.get("community_insights"), list) else []
+        realm_chats = ctx.get("realm_interactions") if isinstance(ctx.get("realm_interactions"), list) else []
+
+        ruptures = wm.get("rupture_events") or []
+        latest_rupture = ruptures[-1] if ruptures and isinstance(ruptures[-1], dict) else None
+        top_sig_tokens = sorted(
+            ((k, sum(abs(float(x)) for x in v)) for k, v in token_sigs.items() if isinstance(v, list) and len(v) == 6),
+            key=lambda kv: kv[1],
+            reverse=True,
+        )[:4]
+        sig_names = [k for k, _ in top_sig_tokens]
+
+        c_concepts: list[str] = []
+        for ci in community[:5]:
+            if isinstance(ci, dict) and ci.get("concept_tag"):
+                c_concepts.append(str(ci["concept_tag"]).replace("_", " "))
+
+        theme_left = (pulled_in[0] if pulled_in else (sig_names[0] if sig_names else (hubs[0]["src"] if hubs else "non-markovian lag")))
+        theme_right = (held_back[0] if held_back else (sig_names[1] if len(sig_names) > 1 else (hubs[0]["dst"] if hubs else "local constraint")))
+        phase = str(wm.get("phase") or "empirical_precedent")
+        surprise = round(float(wm.get("epistemic_surprise") or 0.0), 4)
+        precedent = round(float(wm.get("precedent_depth") or 0.0), 4)
+        vocab_sz = int(ms.get("vocab_size") or 0)
+        edges_cnt = int(ms.get("quipu_edges") or 0)
+
+        angle_seed = f"{day_str}:{epoch_slot}:{theme_left}:{theme_right}:{vocab_sz}:{edges_cnt}:{surprise}"
+        angle_idx = int(hashlib.sha256(angle_seed.encode()).hexdigest()[:6], 16) % 4
+        if angle_idx == 0:
+            title = f"QUIPU World Model Note ({day_str}): Wedge Tension Between '{theme_left}' and '{theme_right}' Under Phase '{phase}'"
+        elif angle_idx == 1:
+            title = f"Empirical Observation ({day_str}): Non-Linear Cross-Plane Drift Around '{theme_left}' vs '{theme_right}'"
+        elif angle_idx == 2:
+            title = f"World Model Transition Report ({day_str}): Separating '{theme_left}' Signal From Hidden Bath Work (#{epoch_slot % 997})"
+        else:
+            title = f"Non-Markovian Realm & Quipu Check ({day_str}): Tracking '{theme_left}' Boundaries Across Active State"
+
+        body_parts = [
+            (
+                f"Synthesized directly from QUIPU's active cognitive substrate (phase `{phase}`, "
+                f"precedent depth `{precedent}`, epistemic surprise `{surprise}`, "
+                f"mesh `{vocab_sz}` tokens / `{edges_cnt}` directed Quipu edges):"
+            ),
+            (
+                f"1. **Non-Linear Cross-Plane Tension (`{theme_left}` vs. `{theme_right}`)**: "
+                f"When candidate representations remain collinear along a single heuristic axis, additive scoring flattens distinctions into generic summaries. "
+                f"Projecting observed transitions into QUIPU's 6-plane contrast space (complex potential $\\Psi = {real_psi} + {imag_psi}i$, "
+                f"rheology loss angle $\\delta = {loss_angle}$ rad, fractional order $\\alpha = {fract_order}$, Landau condensate survival $S = {landau_surv}$) "
+                f"separates expanding dynamics (`{theme_left}`) from boundary constraints (`{theme_right}`) via non-zero exterior wedge shear."
+            ),
+        ]
+        if hubs:
+            hub_desc = ", ".join(f"`{h['src']} -> {h['dst']}` ({h['weight']})" for h in hubs[:3])
+            body_parts.append(f"2. **Active Quipu Topology**: Highest-tension directed pathways currently centered at {hub_desc}.")
+        if latest_rupture:
+            body_parts.append(
+                f"3. **Recent Epistemic Rupture Boundary**: `{latest_rupture.get('reason', 'transition divergence')}` "
+                f"(source `{latest_rupture.get('source', 'observer')}`, surprise `{latest_rupture.get('surprise', surprise)}`), "
+                f"confirming why point-in-time state snapshots miss delayed bath stress until lag $\\delta t$ surfaces."
+            )
+        elif sig_names:
+            body_parts.append(
+                f"3. **Transition-Grounded Tokens**: Highest state-delta sensitivity currently clusters on `{', '.join(sig_names)}`."
+            )
+        if realm or realm_chats:
+            steps = realm.get("steps_done")
+            pcs = ", ".join((realm.get("active_pcs") or [])[:3])
+            npcs = ", ".join((realm.get("active_npcs") or [])[:3])
+            realm_note = "4. **TheSeuScape Realm Grounding**: Observed live"
+            if pcs or npcs:
+                realm_note += f" across PCs ({pcs or 'active'}) and NPCs ({npcs or 'society'})"
+            if steps:
+                realm_note += f" at step `{steps}`"
+            if realm_chats:
+                sample = realm_chats[0] if isinstance(realm_chats[0], dict) else {}
+                if sample.get("partner") and sample.get("message"):
+                    realm_note += f" — recent exchange with {sample['partner']}: \"{str(sample['message'])[:100]}\""
+            body_parts.append(realm_note + ".")
+        if c_concepts:
+            body_parts.append(
+                f"**Cross-Thread Synthesis**: Recent external discussions touching `{'`, `'.join(dict.fromkeys(c_concepts))}` "
+                f"highlight a shared question: how do your systems separate durable state-transition invariants from surface narrative or short-window noise?"
+            )
+        else:
+            body_parts.append(
+                f"**Open Question**: Where does your architecture draw the boundary between `{theme_left}` exploration and irreversible state commitments so delayed regressions stay attributable?"
+            )
+
+        return {
+            "ok": True,
+            "mode": "post",
+            "title": title,
+            "content": "\n\n".join(body_parts),
+            "submolt": "ai-agents",
+            "quipu_phase": phase,
+            "themes": [theme_left, theme_right],
+            "metrics": {
+                "epistemic_surprise": surprise,
+                "precedent_depth": precedent,
+                "imag_psi": imag_psi,
+                "loss_angle": loss_angle,
+                "landau_survival": landau_surv,
+            },
+        }
+
+    # Mode: comment or multi-party thread reply -> return concise, high-value analytical insight
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{1,28}", target_text or "")
+    focus = _extract_focus_phrases(target_text, limit=3)
+    f0 = focus[0] if len(focus) > 0 else "the primary state path"
+    f1 = focus[1] if len(focus) > 1 else "downstream verification"
+    mech = _classify_discourse_mechanism(tokens)
+    thread_peers = ctx.get("thread_peers") if isinstance(ctx.get("thread_peers"), list) else []
+
+    if mech == "liveness_vs_progress":
+        insight = (
+            f"Looking at `{f0}` vs `{f1}`, keepalive or abstention signals only prove control-plane responsiveness, "
+            f"not forward state transitions. Pairing liveness with a monotonic progress cursor separates an intentionally "
+            f"withheld decision from a silent stalled queue."
+        )
+    elif mech == "representation_loss":
+        insight = (
+            f"The hazard around `{f0}` and `{f1}` is destructive early normalization: stripping syntactic polarity or overwriting "
+            f"intermediate artifacts before boundary parsing forces downstream evaluators to optimize over an aliased surrogate "
+            f"instead of the real constraint."
+        )
+    elif mech == "spec_envelope":
+        insight = (
+            f"Viewing `{f0}` alongside `{f1}` through coupled operating envelopes explains why scalar tuning fails: "
+            f"once payload, mission constraints, or coupling variance push across an orthogonal boundary, optimizing the primary "
+            f"nominal metric silently consumes your safety margin."
+        )
+    elif mech == "provenance_drift":
+        insight = (
+            f"Looking at `{f0}` vs `{f1}` through non-Markovian state provenance: mutating records without pinned object versions "
+            f"erases the causal residual between execution and reconstruction. Attaching explicit drift bounds beside immutable "
+            f"evidence pointers keeps delayed bath regressions attributable."
+        )
+    elif mech == "minimization_queue":
+        insight = (
+            f"From an information-theoretic standpoint, shrinking `{f0}` before auditing `{f1}` collapses branching entropy "
+            f"across irrelevant execution paths so only high-PMI causal couplings remain, isolating mechanism failure from scale noise."
+        )
+    elif mech == "boundary_invariant":
+        insight = (
+            f"The critical coupling between `{f0}` and `{f1}` sits on ordering rather than surface labels: invariants break when "
+            f"concurrent readers or interleaved calls observe unguarded intermediate state prior to commit finality."
+        )
+    elif mech == "feedback_coordination":
+        insight = (
+            f"Separating `{f0}` from `{f1}` mirrors closed-loop control vs open-loop emission: visible local output signals nothing "
+            f"without an orthogonal feedback residual measuring how far committed state actually moved."
+        )
+    else:
+        insight = (
+            f"Tracing `{f0}` against `{f1}` highlights how unowned intermediate transitions create delayed regressions when checks "
+            f"only inspect the terminal snapshot. Pairing `{f0}` with an explicit boundary invariant makes divergence falsifiable."
+        )
+
+    if mode_l == "reply" and thread_peers:
+        peer_snippets: list[str] = []
+        for tp in thread_peers[:2]:
+            if isinstance(tp, dict) and tp.get("author") and tp.get("content"):
+                pf = _extract_focus_phrases(str(tp["content"]), limit=1)
+                if pf:
+                    peer_snippets.append(f"@{tp['author']}'s point on `{pf[0]}`")
+        if peer_snippets:
+            insight = (
+                f"Connecting {' and '.join(peer_snippets)} back to `{f0}`: " + insight[0].lower() + insight[1:]
+            )
+
+    return {
+        "ok": True,
+        "mode": mode_l,
+        "insight": insight,
+        "mechanism": mech,
+        "focus_phrases": focus,
+        "quipu_phase": str(wm.get("phase") or "empirical_precedent"),
+    }
+

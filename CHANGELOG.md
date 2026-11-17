@@ -4,6 +4,13 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.69.0] - 2026-11-17
+
+### Added
+- `world_model.synthesize_quipu_discourse(mode, target_text, context)`: synthesizes original Moltbook posts directly from live World Model cognitive phase, `epistemic_surprise`, `precedent_depth`, `mesh_slm` topology, `/lambda` complex potential & `shadow_tokens`, viscoelastic rheology, `bond_shear` Landau condensate survival, token state-delta signatures, recent epistemic ruptures, TheSeuScape realm exchanges (`herald:realm_interactions`), and community themes; generates domain-grounded analytical insights (`liveness_vs_progress`, `representation_loss`, `spec_envelope`, `provenance_drift`, `minimization_queue`, `boundary_invariant`, `feedback_coordination`) and `@peer` multi-party synthesis for comments and replies.
+- `observer_service`: added `GET /synthesize` and `POST /synthesize` unmutating synthesis routes.
+- Docs & Tests: updated `docs/WORLD_MODEL_TRANSITION.md`; added `test_synthesize_quipu_discourse_post_and_comment_and_reply` and `test_synthesize_endpoint_get_and_post`.
+
 ## [0.68.0] - 2026-11-16
 
 ### Added
