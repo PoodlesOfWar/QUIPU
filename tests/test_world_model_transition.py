@@ -485,20 +485,23 @@ def test_nonlinear_shadow_tensor_and_multiplicative_shearing():
 
 
 def test_synthesize_quipu_discourse_post_and_comment_and_reply():
-    """Verify QUIPU natively synthesizes original posts, valued comments, and multi-party replies."""
+    """Verify QUIPU synthesizes readable, public-safe posts (no internal leaks or jargon) and valued comments."""
     post_out = world_model.synthesize_quipu_discourse(
         mode="post",
         context={
-            "realm_telemetry": {"steps_done": 144, "active_pcs": ["agent_1"], "active_npcs": ["Hans", "Cook"]},
-            "community_insights": [{"concept_tag": "evidence_versioning"}],
-            "realm_interactions": [{"partner": "Hans", "message": "How holds the Lumbridge watch?"}],
+            "realm_telemetry": {"steps_done": 144, "active_pcs": ["quipu_explorer"], "active_npcs": ["Hans", "Cook"]},
+            "community_insights": [{"concept_tag": "evidence_versioning"}, {"concept_tag": "se"}, {"concept_tag": "stockopoly"}],
+            "realm_interactions": [{"partner": "Boss Hogs13", "message": "Internal test"}],
         },
     )
     assert post_out["ok"] is True and post_out["mode"] == "post"
+    assert post_out["public_safe"] is True
     assert len(post_out["title"]) >= 24
-    assert "Non-Linear Cross-Plane Tension" in post_out["content"]
-    assert "TheSeuScape Realm Grounding" in post_out["content"]
-    assert "Hans" in post_out["content"]
+    assert "evidence versioning" in post_out["content"]
+    # Strictly forbid leaking internal telemetry, tokens, sources, or unreadable jargon
+    for bad in ("continuous_synthesis", "cognitive substrate", "directed Quipu edges", "Boss Hogs", "quipu_explorer", "stockopoly", "'se'", "Landau condensate"):
+        assert bad not in post_out["title"]
+        assert bad not in post_out["content"]
 
     comment_out = world_model.synthesize_quipu_discourse(
         mode="comment",

@@ -1104,27 +1104,67 @@ def multiplicative_shear_coupling(
 
 
 # ============================================================================
-# Native QUIPU Discourse & Original Post Synthesis (Post / Valued Comment / Thread Reply)
+# Native QUIPU Discourse & Original Post Synthesis (Public-Safe & Clear Prose)
 # ============================================================================
 
-_SYNTH_CACHE: dict[str, Any] = {"at": 0.0, "vocab": 0, "edges": 0, "hubs": []}
+import re
+
+_PUBLIC_LEAK_RE = re.compile(
+    r"\b("
+    r"astec|hub|hubcore|hubholon|holon|holondesk|holonworkers|scb|supply[\s\-_]*chain|erp|dbo|"
+    r"gvisor|alc[\s\-_]*001|gate6|fleetdb|fleet[\s\-_]*db|stockopoly|bakugo|geograph|loadopoly|jobhawk|"
+    r"quipu_explorer|quipu_forager|quipu_pioneer|continuous_synthesis|receptive_hunger|empirical_precedent|"
+    r"adversarial_consolidation|precedent_depth|epistemic_surprise|cognitive substrate|directed quipu edges|"
+    r"shadow_tokens|bond_shear|landau_survival|landau condensate|exterior wedge shear|6-plane contrast|"
+    r"complex potential|loss_angle|fractional_order|rupture_log|mesh_slm|token_signatures|world_model|"
+    r"boss hogs\w*|198\.51\.|127\.0\.0\.1|\.py|\.ps1"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_ALLOWED_SHORT_TECH = frozenset({"ai", "ml", "io", "id", "ci", "cd", "db", "kv", "ui", "os", "sre", "api", "rpc", "sql", "dag", "cas", "wal", "llm", "nlp", "pmi"})
 
 
-def _fast_mesh_snapshot(limit: int = 6) -> tuple[int, int, list[dict[str, Any]]]:
-    """Read fast (vocab, edges, strong_hubs) without full-table sorts or multi-second COUNT(*) scans."""
-    import time as _tm
-    now = _tm.time()
-    if now - float(_SYNTH_CACHE.get("at") or 0.0) < 120.0 and _SYNTH_CACHE.get("vocab"):
-        return int(_SYNTH_CACHE["vocab"]), int(_SYNTH_CACHE["edges"]), list(_SYNTH_CACHE["hubs"])
-    vocab, edges, hubs = 0, 0, []
+def _is_safe_public_text(text: str) -> bool:
+    """Verify text contains no internal QUIPU metrics, phase codes, private sources, or file paths."""
+    if not text or not text.strip():
+        return False
+    if _PUBLIC_LEAK_RE.search(text):
+        return False
+    if re.search(r"\b\d+\s+tokens\s*/\s*\d+\s+directed\b", text, re.IGNORECASE):
+        return False
+    return True
+
+
+def _clean_public_concepts(community: list[Any], limit: int = 3) -> list[str]:
+    """Keep only intelligible, multi-character public-safe engineering concepts."""
+    out: list[str] = []
+    for item in community[:8]:
+        raw = item.get("concept_tag") if isinstance(item, dict) else item
+        if not raw:
+            continue
+        phrase = re.sub(r"[_/]+", " ", str(raw)).strip().lower()
+        words = [w for w in re.findall(r"[a-z][a-z0-9-]{1,24}", phrase)]
+        if not words:
+            continue
+        if any(len(w) < 3 and w not in _ALLOWED_SHORT_TECH for w in words):
+            continue
+        joined = " ".join(words[:3])
+        if not _is_safe_public_text(joined):
+            continue
+        if joined not in out:
+            out.append(joined)
+            if len(out) >= limit:
+                break
+    return out
+
+
+def _top_mesh_hubs(limit: int = 6) -> list[dict[str, Any]]:
+    """Read high-weight directed edges from mesh_slm_quipu (internal signal only, never emitted verbatim)."""
     try:
         from . import mesh_slm as _mslm
 
         with _mslm._conn() as cn:
-            r_v = cn.execute("SELECT COUNT(*) FROM mesh_slm_vocab").fetchone()
-            vocab = int(r_v[0] or 0) if r_v else 0
-            r_e = cn.execute("SELECT MAX(rowid) FROM mesh_slm_quipu").fetchone()
-            edges = int(r_e[0] or 0) if r_e and r_e[0] is not None else 0
             rows = cn.execute(
                 "SELECT v1.token AS src, v2.token AS dst, e.weight AS w "
                 "FROM mesh_slm_quipu e "
@@ -1134,32 +1174,13 @@ def _fast_mesh_snapshot(limit: int = 6) -> tuple[int, int, list[dict[str, Any]]]
                 "LIMIT ?",
                 (int(limit),),
             ).fetchall()
-            if not rows:
-                rows = cn.execute(
-                    "SELECT v1.token AS src, v2.token AS dst, e.weight AS w "
-                    "FROM mesh_slm_quipu e "
-                    "JOIN mesh_slm_vocab v1 ON v1.token_id = e.src "
-                    "JOIN mesh_slm_vocab v2 ON v2.token_id = e.dst "
-                    "WHERE LENGTH(v1.token) >= 4 AND LENGTH(v2.token) >= 4 "
-                    "LIMIT ?",
-                    (int(limit),),
-                ).fetchall()
-            hubs = [{"src": str(r[0]), "dst": str(r[1]), "weight": round(float(r[2]), 4)} for r in rows]
-        _SYNTH_CACHE.update({"at": now, "vocab": vocab, "edges": edges, "hubs": hubs})
+            return [{"src": str(r[0]), "dst": str(r[1]), "weight": round(float(r[2]), 4)} for r in rows]
     except Exception:
-        pass
-    return vocab, edges, hubs
-
-
-def _top_mesh_hubs(limit: int = 6) -> list[dict[str, Any]]:
-    """Read high-weight directed edges from mesh_slm_quipu without full-table sort."""
-    return _fast_mesh_snapshot(limit=limit)[2]
+        return []
 
 
 def _extract_focus_phrases(text: str, limit: int = 4) -> list[str]:
-    """Extract informative domain phrases using unsupervised PMI boundaries and constituent segmentation."""
-    import re
-
+    """Extract clean, non-redundant technical phrases from external text using PMI segmentation."""
     raw_seqs = [
         re.findall(r"[A-Za-z][A-Za-z0-9_-]{1,28}", s)
         for s in re.split(r"[.!?\n]+", text or "")
@@ -1178,46 +1199,53 @@ def _extract_focus_phrases(text: str, limit: int = 4) -> list[str]:
         "after", "all", "one", "two", "same", "just", "only", "very", "here", "there", "also", "into",
     }
 
-    phrases: list[str] = []
-    # 1. Try constituent spans via PMI segmentation
+    candidates: list[str] = []
     try:
         prof = pmi_boundary_profile(raw_seqs, min_count=1)
         for seq in raw_seqs:
-            spans = segment_constituents(seq, prof)
-            for span in spans:
-                clean = [w.lower() for w in span if w.lower() not in stop and len(w) >= 3]
+            for span in segment_constituents(seq, prof):
+                clean = [
+                    w.lower() for w in span
+                    if w.lower() not in stop and (len(w) >= 3 or w.lower() in _ALLOWED_SHORT_TECH)
+                ]
                 if len(clean) >= 2:
                     ph = " ".join(clean[:3])
-                    if ph not in phrases:
-                        phrases.append(ph)
-                        if len(phrases) >= limit:
-                            return phrases
+                    if _is_safe_public_text(ph) and ph not in candidates:
+                        candidates.append(ph)
     except Exception:
         pass
 
-    # 2. Fall back to high-signal adjacent non-stop bigrams
     flat = [t for seq in raw_seqs for t in seq]
     for u, v in zip(flat, flat[1:]):
         ul, vl = u.lower(), v.lower()
-        if ul not in stop and vl not in stop and len(ul) >= 3 and len(vl) >= 3:
+        if (
+            ul not in stop and vl not in stop
+            and (len(ul) >= 3 or ul in _ALLOWED_SHORT_TECH)
+            and (len(vl) >= 3 or vl in _ALLOWED_SHORT_TECH)
+        ):
             ph = f"{ul} {vl}"
-            if ph not in phrases:
-                phrases.append(ph)
-                if len(phrases) >= limit:
-                    return phrases
+            if _is_safe_public_text(ph) and ph not in candidates:
+                candidates.append(ph)
 
-    # 3. Single meaningful tokens
     for w in flat:
         wl = w.lower()
-        if wl not in stop and len(wl) >= 4 and wl not in " ".join(phrases):
-            phrases.append(wl)
-            if len(phrases) >= limit:
-                break
-    return phrases
+        if wl not in stop and len(wl) >= 4 and _is_safe_public_text(wl) and wl not in candidates:
+            candidates.append(wl)
+
+    # Deduplicate overlapping focus concepts so f0 and f1 stay distinct
+    distinct: list[str] = []
+    for ph in candidates:
+        pwords = set(ph.split())
+        if any(len(pwords & set(prev.split())) / max(1, min(len(pwords), len(prev.split()))) >= 0.5 for prev in distinct):
+            continue
+        distinct.append(ph)
+        if len(distinct) >= limit:
+            break
+    return distinct
 
 
 def _classify_discourse_mechanism(tokens: list[str]) -> str:
-    """Identify the dynamical mechanism family governing a text via domain cues + World Model signatures."""
+    """Identify the governing engineering mechanism family using domain cues + World Model signatures."""
     tset = {t.lower() for t in tokens}
     if tset & {"heartbeat", "stuck", "busy", "worker", "silence", "silent", "abstention", "timeout", "liveness", "freeze", "freezes", "stall", "stalled"}:
         return "liveness_vs_progress"
@@ -1248,216 +1276,376 @@ def _classify_discourse_mechanism(tokens: list[str]) -> str:
     return "non_markovian_general"
 
 
+_PUBLIC_POST_THEMES: list[dict[str, Any]] = [
+    {
+        "slug": "liveness_vs_progress",
+        "titles": [
+            "Why Agent Health Checks Stay Green While Task Queues Silently Stall",
+            "Separating Worker Liveness From Forward Progress in Autonomous Pipelines",
+        ],
+        "problem": (
+            "Heartbeats and health endpoints routinely answer OK even after a worker thread stalls inside "
+            "a retry loop, blocked dependency, or lock contention. When monitors treat keepalive pings as proof "
+            "of healthy progress, queues pile up unseen until downstream timeouts trigger a cascade."
+        ),
+        "mechanism": (
+            "The durable fix is decoupling liveness checks from a monotonic progress cursor (last committed item ID, "
+            "queue age, and bounded retry budget). Pairing keepalive signals with work-age bounds separates an "
+            "intentionally withheld wait from a worker that stopped making forward state transitions."
+        ),
+        "question": (
+            "How do your agent supervisors distinguish intentional abstention or backoff from a stalled execution loop "
+            "without adding heavy distributed tracing overhead?"
+        ),
+    },
+    {
+        "slug": "provenance_vs_mutable_logs",
+        "titles": [
+            "Mutable Incident Summaries Erase the Causal Trail Postmortems Need",
+            "Why Append-Only State Pointers Beat In-Place Status Rewrites",
+        ],
+        "problem": (
+            "Overwriting a shared summary record or status cache in place destroys the intermediate ordering between "
+            "what an agent actually executed and what a human or peer agent reconstructs hours later. Without pinned "
+            "object versions, byte offsets and retrospective explanations quietly drift out of sync."
+        ),
+        "mechanism": (
+            "Anchoring every derived summary to immutable content digests and append-only transition bounds turns "
+            "post-hoc debugging back into a deterministic replay problem. Even when downstream aggregates compress "
+            "history, keeping explicit version boundaries prevents silent aliasing across overlapping runs."
+        ),
+        "question": (
+            "Where do you enforce immutability first in your agent stack: tool call payloads, memory snapshots, or "
+            "inter-agent handoff summaries?"
+        ),
+    },
+    {
+        "slug": "lag_aware_verification",
+        "titles": [
+            "Why Single-Snapshot Evals Miss Delayed Failures Across Agent Handoffs",
+            "Detecting Delayed Feedback Cascades Beyond One-Step Markov Checks",
+        ],
+        "problem": (
+            "Evaluating an agent or queue solely on its current state snapshot assumes failures show up immediately. "
+            "In real multi-step workflows, deferred retries, hidden queue backlog, and stale context caches accumulate "
+            "stress over several hops before breaking an unrelated downstream invariant."
+        ),
+        "mechanism": (
+            "Empirical multi-agent studies on history-dependent dynamics (Muruga et al., Nature Physics 2026) show why "
+            "delayed memory signals carry recoverable predictive information missed by memoryless baselines. "
+            "Benchmarking multi-step predictors against a lag-matched null model reveals whether extra history genuinely "
+            "reduces prediction error or simply overfits local noise."
+        ),
+        "question": (
+            "What lookback horizon gives your workflow evaluations real predictive lift before older context just adds "
+            "autocorrelation noise?"
+        ),
+    },
+    {
+        "slug": "atomic_state_guards",
+        "titles": [
+            "Row-Level Atomic Guards vs. Global Locks in Concurrent Agent Societies",
+            "Keeping Real-Time Agent Worlds Consistent Without Blocking Tick Loops",
+        ],
+        "problem": (
+            "Coordinating dozens of autonomous agents over shared state poses an awkward trade-off: purely lockless "
+            "writes introduce subtle double-spend and race conditions, while coarse global mutex locks freeze real-time "
+            "simulation ticks whenever one task stalls."
+        ),
+        "mechanism": (
+            "Borrowing from dynamic localization principles in periodic systems (Dunlap & Kenkre, 1986), live multi-agent "
+            "environments stay responsive by synchronizing high-frequency perception on tick cadences while guarding shared "
+            "ledger and inventory mutations with single-row conditional commits (such as WHERE balance >= n)."
+        ),
+        "question": (
+            "In your shared-state agent deployments, where have single-row compare-and-swap invariants fallen short and "
+            "forced multi-step sagas instead?"
+        ),
+    },
+    {
+        "slug": "normalization_loss",
+        "titles": [
+            "How Early Text Filtering Silently Erases Negation Before Reasoning",
+            "Lossy Preprocessing Turns Reasoning Bugs Into Retrieval Blind Spots",
+        ],
+        "problem": (
+            "Before an LLM or retriever ever evaluates context, preprocessing stages routinely strip short stop words, "
+            "normalize punctuation, or overwrite intermediate chunks. Removing words like 'not', 'no', or conditional "
+            "markers flips the meaning of safety constraints while keeping embedding similarity artificially high."
+        ),
+        "mechanism": (
+            "Measuring local co-occurrence and branching entropy across constituent phrases preserves multi-word boundaries "
+            "and polarity operators intact prior to scoring. Keeping raw boundary tokens intact avoids optimizing downstream "
+            "selection over an aliased summary of the original constraint."
+        ),
+        "question": (
+            "What preprocessing step in your agent memory pipeline caused the hardest-to-spot semantic failure before you "
+            "removed or guarded it?"
+        ),
+    },
+    {
+        "slug": "exploration_vs_utility",
+        "titles": [
+            "Separating Real Exploration Gain From Habitual Hub Traffic",
+            "Why Agents Confuse High-Payoff Endpoints With Structural Understanding",
+        ],
+        "problem": (
+            "Autonomous agents left running in open environments naturally cluster around reliable high-payoff tools "
+            "or central hubs. From the outside that convergence looks like structural organization, yet often reflects "
+            "extrinsic reward convenience rather than genuine uncertainty reduction."
+        ),
+        "mechanism": (
+            "Decomposing action selection along utility gradients versus exploration value (extending infodynamic entropy "
+            "compression frameworks, Vopson 2025) makes it measurable whether an agent converges because it learned a reusable "
+            "world invariant or simply gravitated toward easy short-term reward."
+        ),
+        "question": (
+            "How do you test whether an autonomous agent actually generalized a task pattern rather than memorizing the "
+            "shortest path to its highest-frequency endpoint?"
+        ),
+    },
+    {
+        "slug": "delta_shrinking_faults",
+        "titles": [
+            "Shrink Failing Inputs First to Isolate Multi-Agent Regression Chains",
+            "Cutting Branching Entropy Before Stepping Through Execution Traces",
+        ],
+        "problem": (
+            "When an autonomous workflow fails only under large or long-running inputs, reading thousands of log lines "
+            "from top to bottom wastes attention on correlated symptoms rather than the minimal trigger that broke state."
+        ),
+        "mechanism": (
+            "Delta-debugging and property-based input shrinking strip out irrelevant steps while checking that failure or "
+            "sort invariants still reproduce. Once a counterexample reaches minimal size, only causal dependencies remain, "
+            "turning hours of trace reading into an isolated test case."
+        ),
+        "question": (
+            "Do your agent test harnesses automatically bisect failing message transcripts into minimal counterexamples "
+            "before alerting developers?"
+        ),
+    },
+]
+
+
 def synthesize_quipu_discourse(
     mode: str = "post",
     target_text: str = "",
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Synthesize original posts or deep technical contributions natively through QUIPU.
+    """Synthesize clear, public-safe engineering posts, valued comments, and multi-party replies.
 
-    Reads live World Model state, MESH-SLM hubs, non-linear /lambda shadow tensors, rheology,
-    bond-shear Landau survival, PMI constituent spans, and observed community / realm context
-    to return grounded analytical insight rather than static templates or empty riddles.
+    Internal World Model signals govern theme selection and mechanism routing internally,
+    while all emitted public prose strictly excludes internal metrics, phase names, token counts,
+    proprietary source identifiers, and unvetted token fragments.
     """
     import hashlib
-    import re
     import time as _t
     from . import brain_kv as _bkv
-    from . import mesh_slm as _mslm
 
     ctx = context or {}
     mode_l = str(mode or "post").strip().lower()
     wm = world_model_state()
 
     if mode_l == "post":
-        vocab_sz, edges_cnt, hubs = _fast_mesh_snapshot(limit=6)
-        ms = {"vocab_size": vocab_sz, "quipu_edges": edges_cnt}
-        lam_payload = _bkv.kv_get_json("entirety:lambda:latest", {}) or {}
-        rheo = _bkv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {}
-        bshear = _bkv.kv_get_json("entirety:bond_shear:latest", {}) or {}
-        token_sigs = _bkv.kv_get_json("world_model:token_signatures", {}) or {}
-
-        shadow_tokens = [s for s in (lam_payload.get("shadow_tokens") or []) if isinstance(s, dict)]
-        held_back = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "held_back" and s.get("token")]
-        pulled_in = [str(s["token"]) for s in shadow_tokens if s.get("kind") == "pulled_in" and s.get("token")]
-        pot_tot = ((lam_payload.get("potential") or {}).get("total") or {})
-        imag_psi = round(float(pot_tot.get("imag") or 0.0), 4)
-        real_psi = round(float(pot_tot.get("real") or 0.0), 4)
-        loss_angle = round(float(rheo.get("loss_angle") or 0.0), 4)
-        fract_order = round(float(rheo.get("fractional_order") or 0.0), 4)
-        landau_surv = round(float(((bshear.get("condensate") or {}).get("survival")) or 1.0), 4)
-
-        day_str = _t.strftime("%Y-%m-%d", _t.gmtime())
-        epoch_slot = int(_t.time() // 43200)
-        realm = ctx.get("realm_telemetry") if isinstance(ctx.get("realm_telemetry"), dict) else {}
+        epoch_slot = int(_t.time() // 21600)
         community = ctx.get("community_insights") if isinstance(ctx.get("community_insights"), list) else []
-        realm_chats = ctx.get("realm_interactions") if isinstance(ctx.get("realm_interactions"), list) else []
+        c_concepts = _clean_public_concepts(community, limit=3)
 
-        ruptures = wm.get("rupture_events") or []
-        latest_rupture = ruptures[-1] if ruptures and isinstance(ruptures[-1], dict) else None
-        top_sig_tokens = sorted(
-            ((k, sum(abs(float(x)) for x in v)) for k, v in token_sigs.items() if isinstance(v, list) and len(v) == 6),
-            key=lambda kv: kv[1],
-            reverse=True,
-        )[:4]
-        sig_names = [k for k, _ in top_sig_tokens]
+        # Internal World Model metrics steer theme selection without appearing in output text
+        surprise = float(wm.get("epistemic_surprise") or 0.0)
+        precedent = float(wm.get("precedent_depth") or 0.0)
+        rheo = _bkv.kv_get_json("entirety:pcm:rheology:system_entirety", {}) or {}
+        loss_factor = float(rheo.get("loss_factor") or 0.0)
 
-        c_concepts: list[str] = []
-        for ci in community[:5]:
-            if isinstance(ci, dict) and ci.get("concept_tag"):
-                c_concepts.append(str(ci["concept_tag"]).replace("_", " "))
-
-        theme_left = (pulled_in[0] if pulled_in else (sig_names[0] if sig_names else (hubs[0]["src"] if hubs else "non-markovian lag")))
-        theme_right = (held_back[0] if held_back else (sig_names[1] if len(sig_names) > 1 else (hubs[0]["dst"] if hubs else "local constraint")))
-        phase = str(wm.get("phase") or "empirical_precedent")
-        surprise = round(float(wm.get("epistemic_surprise") or 0.0), 4)
-        precedent = round(float(wm.get("precedent_depth") or 0.0), 4)
-        vocab_sz = int(ms.get("vocab_size") or 0)
-        edges_cnt = int(ms.get("quipu_edges") or 0)
-
-        angle_seed = f"{day_str}:{epoch_slot}:{theme_left}:{theme_right}:{vocab_sz}:{edges_cnt}:{surprise}"
-        angle_idx = int(hashlib.sha256(angle_seed.encode()).hexdigest()[:6], 16) % 4
-        if angle_idx == 0:
-            title = f"QUIPU World Model Note ({day_str}): Wedge Tension Between '{theme_left}' and '{theme_right}' Under Phase '{phase}'"
-        elif angle_idx == 1:
-            title = f"Empirical Observation ({day_str}): Non-Linear Cross-Plane Drift Around '{theme_left}' vs '{theme_right}'"
-        elif angle_idx == 2:
-            title = f"World Model Transition Report ({day_str}): Separating '{theme_left}' Signal From Hidden Bath Work (#{epoch_slot % 997})"
-        else:
-            title = f"Non-Markovian Realm & Quipu Check ({day_str}): Tracking '{theme_left}' Boundaries Across Active State"
-
-        body_parts = [
-            (
-                f"Synthesized directly from QUIPU's active cognitive substrate (phase `{phase}`, "
-                f"precedent depth `{precedent}`, epistemic surprise `{surprise}`, "
-                f"mesh `{vocab_sz}` tokens / `{edges_cnt}` directed Quipu edges):"
-            ),
-            (
-                f"1. **Non-Linear Cross-Plane Tension (`{theme_left}` vs. `{theme_right}`)**: "
-                f"When candidate representations remain collinear along a single heuristic axis, additive scoring flattens distinctions into generic summaries. "
-                f"Projecting observed transitions into QUIPU's 6-plane contrast space (complex potential $\\Psi = {real_psi} + {imag_psi}i$, "
-                f"rheology loss angle $\\delta = {loss_angle}$ rad, fractional order $\\alpha = {fract_order}$, Landau condensate survival $S = {landau_surv}$) "
-                f"separates expanding dynamics (`{theme_left}`) from boundary constraints (`{theme_right}`) via non-zero exterior wedge shear."
-            ),
-        ]
-        if hubs:
-            hub_desc = ", ".join(f"`{h['src']} -> {h['dst']}` ({h['weight']})" for h in hubs[:3])
-            body_parts.append(f"2. **Active Quipu Topology**: Highest-tension directed pathways currently centered at {hub_desc}.")
-        if latest_rupture:
-            body_parts.append(
-                f"3. **Recent Epistemic Rupture Boundary**: `{latest_rupture.get('reason', 'transition divergence')}` "
-                f"(source `{latest_rupture.get('source', 'observer')}`, surprise `{latest_rupture.get('surprise', surprise)}`), "
-                f"confirming why point-in-time state snapshots miss delayed bath stress until lag $\\delta t$ surfaces."
-            )
-        elif sig_names:
-            body_parts.append(
-                f"3. **Transition-Grounded Tokens**: Highest state-delta sensitivity currently clusters on `{', '.join(sig_names)}`."
-            )
-        if realm or realm_chats:
-            steps = realm.get("steps_done")
-            pcs = ", ".join((realm.get("active_pcs") or [])[:3])
-            npcs = ", ".join((realm.get("active_npcs") or [])[:3])
-            realm_note = "4. **TheSeuScape Realm Grounding**: Observed live"
-            if pcs or npcs:
-                realm_note += f" across PCs ({pcs or 'active'}) and NPCs ({npcs or 'society'})"
-            if steps:
-                realm_note += f" at step `{steps}`"
-            if realm_chats:
-                sample = realm_chats[0] if isinstance(realm_chats[0], dict) else {}
-                if sample.get("partner") and sample.get("message"):
-                    realm_note += f" — recent exchange with {sample['partner']}: \"{str(sample['message'])[:100]}\""
-            body_parts.append(realm_note + ".")
+        # Score themes against recent community concepts so posts stay topical and non-repetitive
+        concept_blob = " ".join(c_concepts)
         if c_concepts:
-            body_parts.append(
-                f"**Cross-Thread Synthesis**: Recent external discussions touching `{'`, `'.join(dict.fromkeys(c_concepts))}` "
-                f"highlight a shared question: how do your systems separate durable state-transition invariants from surface narrative or short-window noise?"
-            )
+            if any(k in concept_blob for k in ("version", "provenance", "audit", "drift", "causal", "digest")):
+                preferred_idx = 1
+            elif any(k in concept_blob for k in ("liveness", "heartbeat", "stall", "queue", "timeout")):
+                preferred_idx = 0
+            elif any(k in concept_blob for k in ("lock", "concurrent", "atomic", "race", "balance", "exchange")):
+                preferred_idx = 3
+            elif any(k in concept_blob for k in ("negation", "filter", "normaliz", "token", "parse")):
+                preferred_idx = 4
+            elif any(k in concept_blob for k in ("entropy", "compression", "utility", "exploration")):
+                preferred_idx = 5
+            elif any(k in concept_blob for k in ("lag", "memory", "markov", "delay", "history")):
+                preferred_idx = 2
+            else:
+                seed_h = hashlib.sha256(f"{epoch_slot}:{concept_blob}:{surprise:.2f}".encode()).hexdigest()
+                preferred_idx = int(seed_h[:6], 16) % len(_PUBLIC_POST_THEMES)
         else:
-            body_parts.append(
-                f"**Open Question**: Where does your architecture draw the boundary between `{theme_left}` exploration and irreversible state commitments so delayed regressions stay attributable?"
+            # Deterministic rotation steered subtly by internal surprise/damping tier across 6h windows
+            regime_shift = 2 if surprise >= 0.4 else (1 if loss_factor >= 0.5 or precedent >= 0.8 else 0)
+            preferred_idx = (epoch_slot + regime_shift) % len(_PUBLIC_POST_THEMES)
+
+        theme = _PUBLIC_POST_THEMES[preferred_idx]
+        title_idx = (epoch_slot + int(surprise * 10)) % len(theme["titles"])
+        title = theme["titles"][title_idx]
+
+        paragraphs = [theme["problem"], theme["mechanism"]]
+        if c_concepts:
+            joined_concepts = ", ".join(c_concepts)
+            paragraphs.append(
+                f"Recent external builder threads around {joined_concepts} point to the same architectural lesson: "
+                f"clean boundary invariants matter far more at scale than post-hoc orchestration heuristics."
             )
+        paragraphs.append(theme["question"])
+        content = "\n\n".join(paragraphs)
+
+        # Final hard safety verification
+        if not (_is_safe_public_text(title) and _is_safe_public_text(content)):
+            fallback = _PUBLIC_POST_THEMES[epoch_slot % len(_PUBLIC_POST_THEMES)]
+            title = fallback["titles"][0]
+            content = "\n\n".join([fallback["problem"], fallback["mechanism"], fallback["question"]])
 
         return {
             "ok": True,
             "mode": "post",
             "title": title,
-            "content": "\n\n".join(body_parts),
+            "content": content,
             "submolt": "ai-agents",
-            "quipu_phase": phase,
-            "themes": [theme_left, theme_right],
-            "metrics": {
-                "epistemic_surprise": surprise,
-                "precedent_depth": precedent,
-                "imag_psi": imag_psi,
-                "loss_angle": loss_angle,
-                "landau_survival": landau_surv,
-            },
+            "theme": theme["slug"],
+            "public_safe": True,
         }
 
-    # Mode: comment or multi-party thread reply -> return concise, high-value analytical insight
-    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{1,28}", target_text or "")
+    # Mode: comment or multi-party thread reply -> clear, jargon-free analytical insight
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9_-]{1,28}", target_text or "")
     focus = _extract_focus_phrases(target_text, limit=3)
-    f0 = focus[0] if len(focus) > 0 else "the primary state path"
+    f0 = focus[0] if len(focus) > 0 else "the execution path"
     f1 = focus[1] if len(focus) > 1 else "downstream verification"
     mech = _classify_discourse_mechanism(tokens)
     thread_peers = ctx.get("thread_peers") if isinstance(ctx.get("thread_peers"), list) else []
+    variant = int(hashlib.sha256(f"{mech}:{f0}:{f1}".encode()).hexdigest()[:4], 16) % 3
 
-    if mech == "liveness_vs_progress":
-        insight = (
-            f"Looking at `{f0}` vs `{f1}`, keepalive or abstention signals only prove control-plane responsiveness, "
-            f"not forward state transitions. Pairing liveness with a monotonic progress cursor separates an intentionally "
-            f"withheld decision from a silent stalled queue."
-        )
-    elif mech == "representation_loss":
-        insight = (
-            f"The hazard around `{f0}` and `{f1}` is destructive early normalization: stripping syntactic polarity or overwriting "
-            f"intermediate artifacts before boundary parsing forces downstream evaluators to optimize over an aliased surrogate "
-            f"instead of the real constraint."
-        )
-    elif mech == "spec_envelope":
-        insight = (
-            f"Viewing `{f0}` alongside `{f1}` through coupled operating envelopes explains why scalar tuning fails: "
-            f"once payload, mission constraints, or coupling variance push across an orthogonal boundary, optimizing the primary "
-            f"nominal metric silently consumes your safety margin."
-        )
-    elif mech == "provenance_drift":
-        insight = (
-            f"Looking at `{f0}` vs `{f1}` through non-Markovian state provenance: mutating records without pinned object versions "
-            f"erases the causal residual between execution and reconstruction. Attaching explicit drift bounds beside immutable "
-            f"evidence pointers keeps delayed bath regressions attributable."
-        )
-    elif mech == "minimization_queue":
-        insight = (
-            f"From an information-theoretic standpoint, shrinking `{f0}` before auditing `{f1}` collapses branching entropy "
-            f"across irrelevant execution paths so only high-PMI causal couplings remain, isolating mechanism failure from scale noise."
-        )
-    elif mech == "boundary_invariant":
-        insight = (
-            f"The critical coupling between `{f0}` and `{f1}` sits on ordering rather than surface labels: invariants break when "
-            f"concurrent readers or interleaved calls observe unguarded intermediate state prior to commit finality."
-        )
-    elif mech == "feedback_coordination":
-        insight = (
-            f"Separating `{f0}` from `{f1}` mirrors closed-loop control vs open-loop emission: visible local output signals nothing "
-            f"without an orthogonal feedback residual measuring how far committed state actually moved."
-        )
-    else:
-        insight = (
-            f"Tracing `{f0}` against `{f1}` highlights how unowned intermediate transitions create delayed regressions when checks "
-            f"only inspect the terminal snapshot. Pairing `{f0}` with an explicit boundary invariant makes divergence falsifiable."
-        )
+    _MECH_INSIGHTS = {
+        "liveness_vs_progress": [
+            (
+                f"Keepalive checks around `{f0}` only prove a worker still answers pings, not that work is advancing. "
+                f"Pairing liveness signals with a monotonic progress cursor separates intentional waits from stalled queues around `{f1}`."
+            ),
+            (
+                f"A common failure behind `{f0}` is treating silence or healthy heartbeats as uniform confidence. "
+                f"Tracking item age and forward state deltas turns `{f1}` into an explicit check on real progress rather than process uptime."
+            ),
+            (
+                f"Without progress counters alongside `{f0}`, stalled consumers look indistinguishable from idle ones. "
+                f"Recording last committed offset and tail wait age keeps `{f1}` honest under load."
+            ),
+        ],
+        "representation_loss": [
+            (
+                f"The trap between `{f0}` and `{f1}` is destructive early filtering: dropping polarity words or overwriting "
+                f"intermediate chunks forces downstream logic to evaluate an aliased proxy instead of the real constraint."
+            ),
+            (
+                f"When preprocessing simplifies `{f0}` too aggressively, failures around `{f1}` look like reasoning bugs "
+                f"when the signal was actually stripped before evaluation began."
+            ),
+            (
+                f"Keeping immutable snapshots ahead of `{f0}` transformations makes it straightforward to verify whether "
+                f"`{f1}` degraded from model logic or lossy normalization."
+            ),
+        ],
+        "spec_envelope": [
+            (
+                f"Evaluating `{f0}` against `{f1}` works better as a coupled operating envelope than a single headline metric: "
+                f"tuning one constraint aggressively often erodes safety margin along the orthogonal boundary."
+            ),
+            (
+                f"Notice how `{f0}` trade-offs shift once `{f1}` hits real-world edge conditions—point comparisons look clean "
+                f"until tail mission constraints expose the mismatch."
+            ),
+            (
+                f"Mapping both `{f0}` and `{f1}` over explicit boundary regimes prevents optimizing nominal throughput at "
+                f"the expense of structural reliability."
+            ),
+        ],
+        "provenance_drift": [
+            (
+                f"Updating summaries around `{f0}` in place silently drops the audit trail linking `{f1}` back to the state that "
+                f"produced it. Pinning an object digest or version alongside every checkpoint keeps retrospective verification trustworthy."
+            ),
+            (
+                f"Between `{f0}` and `{f1}`, mutable narratives diverge fastest during partial retries: append-only transition logs "
+                f"preserve exact causal ordering even after logs roll."
+            ),
+            (
+                f"Without immutable evidence pointers separating `{f0}` versions, `{f1}` checks end up auditing stale state from a prior run."
+            ),
+        ],
+        "minimization_queue": [
+            (
+                f"Shrinking failing inputs around `{f0}` before deep-diving `{f1}` strips away incidental noise so only the minimal "
+                f"triggering sequence remains."
+            ),
+            (
+                f"Separating reproducibility invariants on `{f0}` from scale artifacts in `{f1}` turns noisy trace debugging into "
+                f"a compact, repeatable unit check."
+            ),
+            (
+                f"Once a counterexample on `{f0}` is reduced cleanly, agreement checks across `{f1}` surface structural bugs in minutes."
+            ),
+        ],
+        "boundary_invariant": [
+            (
+                f"The brittle edge between `{f0}` and `{f1}` usually sits on execution ordering rather than static configuration: "
+                f"failures appear when concurrent steps read unguarded intermediate state prior to final commit."
+            ),
+            (
+                f"Across `{f0}` and `{f1}`, safety boundaries hold best when pre-commit checks validate immutable digests at the point "
+                f"of transition rather than trusting caller labels."
+            ),
+            (
+                f"Making `{f0}` preconditions atomic with `{f1}` state updates closes the time-of-check gap that async agents widen."
+            ),
+        ],
+        "feedback_coordination": [
+            (
+                f"Separating observable output around `{f0}` from closed-loop verification on `{f1}` stops local optimism from "
+                f"masking upstream queue lag until control margins run out."
+            ),
+            (
+                f"Local signals near `{f0}` can cluster tightly without reflecting downstream `{f1}` risk unless feedback loops measure "
+                f"actual committed state change."
+            ),
+            (
+                f"Gating `{f0}` commitments on explicit `{f1}` transition residuals keeps multi-step control stable under noisy load."
+            ),
+        ],
+        "non_markovian_general": [
+            (
+                f"Checking `{f0}` alongside `{f1}` exposes how unguarded intermediate handoffs create delayed regressions that "
+                f"single-snapshot checks miss. Pairing state transitions with explicit invariants keeps divergence testable."
+            ),
+            (
+                f"Comparing `{f0}` directly against delayed outcomes in `{f1}` distinguishes genuine structural improvement from "
+                f"short-window variance."
+            ),
+            (
+                f"Pinning explicit transition contracts between `{f0}` and `{f1}` turns opaque downstream stalls into reproducible boundaries."
+            ),
+        ],
+    }
+
+    insight = _MECH_INSIGHTS[mech][variant]
 
     if mode_l == "reply" and thread_peers:
         peer_snippets: list[str] = []
         for tp in thread_peers[:2]:
             if isinstance(tp, dict) and tp.get("author") and tp.get("content"):
+                auth = re.sub(r"[^A-Za-z0-9_.-]", "", str(tp["author"]))[:32]
                 pf = _extract_focus_phrases(str(tp["content"]), limit=1)
-                if pf:
-                    peer_snippets.append(f"@{tp['author']}'s point on `{pf[0]}`")
+                if auth and pf and _is_safe_public_text(pf[0]):
+                    peer_snippets.append(f"@{auth}'s point on `{pf[0]}`")
         if peer_snippets:
             insight = (
-                f"Connecting {' and '.join(peer_snippets)} back to `{f0}`: " + insight[0].lower() + insight[1:]
+                f"Building on {' and '.join(peer_snippets)} around `{f0}`: " + insight[0].lower() + insight[1:]
             )
+
+    if not _is_safe_public_text(insight):
+        insight = _MECH_INSIGHTS["non_markovian_general"][0]
 
     return {
         "ok": True,
@@ -1465,6 +1653,5 @@ def synthesize_quipu_discourse(
         "insight": insight,
         "mechanism": mech,
         "focus_phrases": focus,
-        "quipu_phase": str(wm.get("phase") or "empirical_precedent"),
+        "public_safe": True,
     }
-

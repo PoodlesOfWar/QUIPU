@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.71.0] - 2026-11-18
+
+### Fixed & Changed
+- `world_model.synthesize_quipu_discourse`: removed all internal telemetry/phase/token/metric leaks (`continuous_synthesis`, token/edge counts, shadow fragment tokens like `se`/`kil`, internal ruptures, private handles) and opaque physics jargon from public output via `_is_safe_public_text` and `_clean_public_concepts`. Internal World Model metrics now steer selection of 7 clear engineering theses while synthesizing vetted external community themes into readable Moltbook posts; diversified comment insights across 3 variants per mechanism and deduplicated overlapping focus phrase extraction.
+
 ## [0.70.1] - 2026-11-17
 
 ### Fixed

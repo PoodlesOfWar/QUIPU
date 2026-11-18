@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__version__ = "0.70.1"
+__version__ = "0.71.0"
 __release__ = (
     "External A2A Agent Discovery (/.well-known/agent.json, /capabilities) & Live Container Activation."
 )
@@ -22,6 +22,7 @@ _RELEASE_0_66_0 = (
 __build_date__ = "2026-11-17"
 
 PHASES = {
+    "0.71.0": "world_model.py: overhauled synthesize_quipu_discourse to enforce strict internal-information boundaries (_PUBLIC_LEAK_RE, _is_safe_public_text, _clean_public_concepts) and produce clear, readable engineering prose grounded in live World Model theme routing and vetted community concepts—eliminating leaked internal metrics/phases/token fragments ('se', 'kil', token counts, edge weights) and opaque jargon; diversified comment insights and deduplicated focus phrase pairs.",
     "0.70.1": "world_model.py: eliminated 5s full-table scan/count on 1.56M-edge mesh_slm_quipu during synthesize_quipu_discourse by moving mesh/kv snapshot queries inside post mode, querying bounded high-weight edges without ORDER BY sort, and caching counts/hubs for 120s (<15ms live response).",
     "0.70.0": "observer_service.py: added read-only GET /.well-known/agent.json (A2A v0.2 capability card) and GET /capabilities routes exposing World Model forward transitions, 6-plane shadow tensor, PMI boundaries, rheology, bond_shear, bathymetry, MESH-SLM, and native discourse synthesis endpoints externally without relaxing edge_admission guards. 1 new HTTP test in test_observer_service.py.",
     "0.69.0": "world_model.py: added synthesize_quipu_discourse(mode, target_text, context) and helpers (_extract_focus_phrases via unsupervised PMI constituent segmentation, _classify_discourse_mechanism, _top_mesh_hubs) synthesizing original Moltbook posts from live World Model phase/ruptures/token_signatures, MESH-SLM topology, /lambda shadow tokens & complex potential, rheology, bond_shear Landau survival, and realm/community context, plus technical domain insights and @peer multi-party synthesis for comments/replies. observer_service.py: added GET and POST /synthesize routes. 2 new tests in test_world_model_transition.py and test_observer_service.py.",

@@ -201,3 +201,10 @@ curl -X POST http://localhost:7100/world-model/transition \
 ## v0.70.0 — External A2A Agent Card & Service Capabilities (`/.well-known/agent.json`, `/capabilities`)
 
 - Exposes machine-readable A2A v0.2 capability discovery at `GET /.well-known/agent.json` and `GET /capabilities` on the QUIPU Observer (`:7100`), enabling external peers and orchestrators to discover `/synthesize`, `/world-model/transition`, `/lambda`, `/rheology`, `/bond_shear`, `/bathymetry`, `/slm`, `/guidance`, and `/entirety`.
+
+
+## v0.71.0 — Public-Safe Clear Engineering Discourse (`synthesize_quipu_discourse`)
+
+- **Strict Internal Information Boundary (`_PUBLIC_LEAK_RE`, `_is_safe_public_text`, `_clean_public_concepts`)**: Ensures zero internal token/edge counts, cognitive phases (`continuous_synthesis`), shadow fragment tokens (`se`, `kil`), internal rupture sources, player handles, or opaque physics variable dumps ever enter public Moltbook posts or comments.
+- **Internal Steering, Readable External Prose (`_PUBLIC_POST_THEMES`)**: Internal World Model signals (`epistemic_surprise`, `precedent_depth`, rheology damping) and vetted external community concepts select and tailor 7 clear, non-repetitive engineering theses (queue liveness vs. progress, immutable state provenance, lag-aware verification, atomic state guards, preprocessing polarity preservation, exploration vs. utility, and delta-shrinking fault isolation) written directly for external engineers.
+- **Non-Redundant Comment Insights**: Deduplicates overlapping phrase pairs in `_extract_focus_phrases` and rotates 3 distinct, plain-English technical formulations per mechanism family.
