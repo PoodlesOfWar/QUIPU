@@ -128,32 +128,18 @@ def test_observer_world_model_transition_route():
 
 
 
-def test_observe_records_supernova_event_and_guidance_carries_the_gate(monkeypatch):
-    from quipu import supernova_gate
-    monkeypatch.setattr(supernova_gate, "_LAST_TS", 0.0)
+def test_observe_ignores_meta_supernova_and_guidance_keeps_bond_shear():
+    # Supernova decisions reach the held ACRE tool through /relational, not /observe.
     code, res = observer_service._observe({
         "source": "supply-chain-brain",
-        "text": "theseuscape npc local expansion supernova decision",
-        "meta": {"supernova": {"magnitude": 0.6, "direction": 1.2, "label": "npc-7 expands"}},
+        "text": "theseuscape npc local expansion decision",
+        "meta": {"supernova": {"magnitude": "not even a number"}},
     })
     assert code == 200 and res["ok"] is True
-    assert res["supernova"]["magnitude"] == 0.6
-    assert res["supernova"]["source"] == "theseuscape"
-    assert "supernova_gate" in res and 0.0 <= res["supernova_gate"]["gate"] <= 1.0
+    assert "supernova" not in res and "supernova_gate" not in res
     guidance = observer_service._guidance("supply-chain-brain", limit=10)
-    assert guidance["supernova_gate"]["events_in_window"] >= 1
-    assert guidance["supernova_gate"]["recent_events"][-1]["label"] == "npc-7 expands"
+    assert "supernova_gate" not in guidance
     assert set(guidance["bond_shear"]) == {"yield", "shear_ratio", "litasb_rupture_nn"}
-
-
-def test_observe_rejects_a_malformed_supernova_event():
-    code, res = observer_service._observe({
-        "source": "supply-chain-brain",
-        "text": "malformed supernova payload",
-        "meta": {"supernova": {"magnitude": "enormous"}},
-    })
-    assert code == 400 and res["ok"] is False
-    assert "supernova" in res["error"]
 
 
 def test_bond_shear_payload_reflects_the_published_chain():

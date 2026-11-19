@@ -60,7 +60,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import brain_kv, hideout_mesh, mesh_slm, supernova_gate, world_model, security
+from . import brain_kv, hideout_mesh, mesh_slm, world_model, security
 from .qpsi import edge_admission
 from ._version import __version__
 from .local_store import db_path
@@ -341,7 +341,6 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "coherence": float(last_osc.get("coherence", 0.0)),
             "temperature_bias": float(last_osc.get("temperature", 0.7)),
         },
-        "supernova_gate": _supernova_gate_payload(),
         "bond_shear": _bond_shear_payload(),
     }
 
@@ -359,20 +358,6 @@ def _bond_shear_payload() -> dict[str, Any]:
     }
 
 
-def _supernova_gate_payload() -> dict[str, Any]:
-    """Current TheSeuScape/Perceptopoly expansion gate plus the recent event tail."""
-    try:
-        state = supernova_gate.get_expansion_gate_state()
-        events = supernova_gate.get_supernova_events(5)
-    except Exception:
-        state, events = {}, []
-    return {
-        "gate": float(state.get("gate", 0.0) or 0.0),
-        "radam_pressure": float(state.get("radam_pressure", 0.0) or 0.0),
-        "actionable_potential": float(state.get("actionable_potential", 0.0) or 0.0),
-        "events_in_window": int(state.get("events_in_window", 0) or 0),
-        "recent_events": events,
-    }
 
 
 def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
@@ -469,17 +454,6 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     stats = _record_observation(source, len(tokens), confidence)
     _bump_pending()
 
-    supernova = (body.get("meta") or {}).get("supernova") or None
-    supernova_record: dict[str, Any] | None = None
-    if supernova is not None:
-        try:
-            supernova_record = supernova_gate.record_supernova_event(supernova)
-            supernova_gate.expansion_gate(force=True)
-        except ValueError as exc:
-            return 400, {"ok": False, "error": f"invalid supernova event: {exc}"}
-        except Exception:
-            supernova_record = None
-
     osc = (body.get("meta") or {}).get("oscillation") or {}
     if osc:
         _last_oscillation.clear()
@@ -548,9 +522,6 @@ def _observe(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     }
     if osc:
         res_body["oscillation"] = osc
-    if supernova_record is not None:
-        res_body["supernova"] = supernova_record
-        res_body["supernova_gate"] = _supernova_gate_payload()
     return 200, res_body
 
 

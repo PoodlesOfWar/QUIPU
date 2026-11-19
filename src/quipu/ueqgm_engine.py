@@ -2778,7 +2778,6 @@ _UEQGM_TAGS: tuple[str, ...] = (
     '"ueqgm"', '"wavefunction"', '"quantum field"',
     '"quantum dynamics"', '"holographic"', '"floquet"', '"entanglement"',
     '"infodynamics"', '"infodynamic"', '"analog cognition"', '"analog_coherence"',
-    '"viscous"', '"trefoil"', '"weyl semimetal"', '"muonic"',
 )
 
 # Feature keywords for the bag-of-words feature vector.
@@ -2786,7 +2785,6 @@ _UEQGM_KEYWORDS: list[str] = [
     "quantum", "wavefunction", "holographic", "floquet",
     "entanglement", "ueqgm", "topological", "entropy",
     "infodynamics", "infodynamic", "analog", "coherence",
-    "viscous", "trefoil", "chirality", "muonic", "textile",
 ]
 
 
