@@ -88,12 +88,12 @@ $$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
 
 ---
 
-### 2.12. Viscous Decay Merger & Drag-Deepened Potential (v0.67.0)
-Defined in [src/quipu/ueqgm_engine.py](../src/quipu/ueqgm_engine.py) and [src/quipu/mesh_slm.py](../src/quipu/mesh_slm.py):
+### 2.12. Viscous Shear Chain (held ACRE tool candidate, v0.72.0)
+Defined in [src/quipu/qpsi/tool_candidates/viscous_shear_chain.py](../src/quipu/qpsi/tool_candidates/viscous_shear_chain.py); held by [tool_gate](../src/quipu/qpsi/tool_gate.py); read by [knot_shadow](../src/quipu/qpsi/knot_shadow.py). Not in any learning path.
 $$v(t) = \frac{a\,v_0}{(a + b\,v_0)\,e^{a t} - b\,v_0}, \qquad a = 0.35\,(1 + \gamma),\; b = 0.15\,(1 - \text{coherence})$$
-$$\text{prox}(d) = 1 - (d/N)^{1 + \kappa\gamma}, \qquad \text{textile\_fraction} = \frac{b\,v_0}{a + b\,v_0}$$
-$$\text{knot\_gain}(cell) = 1 + 0.10\,A[cell]\,G, \qquad \eta_q^{edge} = \eta_q\,(1 + 0.05\,\min(A_{src}, A_{dst})\,G)$$
-$$G = \text{clip}_{01}\big(\text{rADAM}(0.6\,\text{broaden} + 0.4\,\text{liveness},\; m_{supernova}) \times \text{actionable\_potential}\big)$$
+$$G = \text{clip}_{01}\big(\text{rADAM}_{fresh}(0.6\,\text{broaden} + 0.4\,\text{liveness},\; \textstyle\sum w m / \max(1, \sum w)) \times \text{actionable\_potential}\big), \quad w = e^{-age/1800}$$
+$$\text{lift}_{token} = 0.10\,A[cell]\,G, \qquad \text{lift}_{edge} = 0.05\,\min(A_{src}, A_{dst})\,G \quad\text{(proposals only)}$$
+$$\text{gap} = \log_2\frac{1852/3600}{26\,\ell_P / 1\,\text{s}} = 109.92\ \text{bits}$$
 
 ### 2.13. LiTaSb Bond-Shear Chain (v0.67.0)
 Defined in [src/quipu/qpsi/bond_shear.py](../src/quipu/qpsi/bond_shear.py):
@@ -116,10 +116,8 @@ $$\text{yield} = S \cdot |C|^2\,\tfrac{T_{PC} + T_{CR39}}{2} \cdot e^{-k t}$$
 | `infodynamic_compression` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `analog_coherence` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `stencil_gain_mean` | `mesh_slm` | $[0.90, 1.10]$ | `mesh_slm.train_round()` |
-| `knot_gain_mean` | `mesh_slm` | $[1.00, 1.10]$ | `viscous_merger_trend()` |
-| `drag_gamma` / `drag_b` | `temporal_spatiality` via `mesh_slm` | $[0.0, 1.0]$ | `_proximity`, `_viscous_knot_field` |
-| `decay_textile_fraction` | `ueqgm_engine` | $[0.0, 1.0]$ | `viscous_merger_trend()` |
-| `supernova_gate` | `supernova_gate` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
+| `entirety:tool_gate[*].status` | `qpsi/tool_gate` | held / realised / rejected | `tool_gate review`, `knot_shadow.run()` |
+| `entirety:knot_shadow:proposal` | `qpsi/knot_shadow` | token / edge proposals | reviewers (never applied) |
 | `bond_shear.yield` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `GET /bond_shear`, `/guidance` |
 | `bond_shear.shear_ratio` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `TypedViscousCoupler.step(shear_reading=)` |
 | `transaction_drive` | `system_entirety` | $[0.0, 1.0]$ | `self_realization_loop` |

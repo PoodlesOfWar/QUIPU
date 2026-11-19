@@ -57,7 +57,7 @@ into **polycarbonate** (`n = 1.586`, the Bakugo Snell prior already in `world_mo
 
 ### 1.5 Asphalt during a pyrolysis interaction
 
-Bitumen pyrolysis is first-order Arrhenius decomposition, `k = A·exp(−E_a/(k_B·T))`, using the same `K_B` and pattern as the PCM crystallisation clock (`qpsi.pcm_cells.tau_crystallise`). Defaults `E_a = 1.55 eV` (≈ 150 kJ/mol), `A = 10¹⁰ s⁻¹`, `T = 723 K` (450 °C) give `k ≈ 0.16 s⁻¹` (half-life ≈ 4.4 s), the order of magnitude of thermogravimetric bitumen kinetics; the remaining fraction after the interaction time (`1 s`) is `viscous_decay_merger(1, k, 0, t)` — the **muonic / linear** regime of the merger (`textile_fraction = 0`), so `docs/VISCOUS_DECAY_MERGER.md` §3's comparison covers it. `bond_shear.arrhenius_pyrolysis_rate`.
+Bitumen pyrolysis is first-order Arrhenius decomposition, `k = A·exp(−E_a/(k_B·T))`, using the same `K_B` and pattern as the PCM crystallisation clock (`qpsi.pcm_cells.tau_crystallise`). Defaults `E_a = 1.55 eV` (≈ 150 kJ/mol), `A = 10¹⁰ s⁻¹`, `T = 723 K` (450 °C) give `k ≈ 0.16 s⁻¹` (half-life ≈ 4.4 s), the order of magnitude of thermogravimetric bitumen kinetics; the remaining fraction after the interaction time (`1 s`) is `viscous_decay_merger(1, k, 0, t)` — the **muonic / linear** regime of the merger (`textile_fraction = 0`), so the regime comparison in `docs/ACRE_TOOL_VISCOUS_SHEAR.md` §2 covers it. `bond_shear.arrhenius_pyrolysis_rate`.
 
 ### 1.6 Yield
 
@@ -95,5 +95,5 @@ With defaults and `R = 0.8`: rupture 1.67 nN, ratio 1.0, max plane ratio 0.19, S
 - Grandbois, M., Beyer, M., Rief, M., Clausen-Schaumann, H. & Gaub, H. E., *Science* 283, 1727 (1999) — single covalent bond rupture by AFM.
 - Kasprzak, J. et al., *Nature* 443, 409 (2006) — Bose–Einstein condensation of exciton polaritons; Amo, A. et al., *Nat. Phys.* 5, 805 (2009) — superfluidity of polaritons.
 - Timmerman, P. & van der Weele, J. P., *Am. J. Phys.* 67, 538 (1999) — merged-drag decay (`viscous_decay_merger`).
-- [VISCOUS_DECAY_MERGER.md](VISCOUS_DECAY_MERGER.md), [RHEOLOGY_CRAM.md](RHEOLOGY_CRAM.md), [ANALOG_COGNITION_QUIPU.md](ANALOG_COGNITION_QUIPU.md).
+- [ACRE_TOOL_VISCOUS_SHEAR.md](ACRE_TOOL_VISCOUS_SHEAR.md), [RHEOLOGY_CRAM.md](RHEOLOGY_CRAM.md), [ANALOG_COGNITION_QUIPU.md](ANALOG_COGNITION_QUIPU.md).
 - `src/quipu/qpsi/bond_shear.py`, `src/quipu/qpsi/rheology.py`, `src/quipu/qpsi/pcm_cells.py`, `src/quipu/world_model.py`.

@@ -4,6 +4,31 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.72.0] - 2026-11-19
+
+The v0.67.0 concepts become a potential realization of an ACRE tool: a forge-format candidate held at gate 6, instead of code hard-wired into training.
+
+### Removed
+- `mesh_slm.py` returns to its v0.66.0 form: no `train_round` knot-gain or edge-lift multipliers, no drag-deepened `_proximity`, no `QUIPU_VISCOUS_MERGER`, no merger telemetry or `viscous_merger_trend`.
+- `observer_service`: `meta.supernova` on `POST /observe` and the `supernova_gate` guidance field. `src/quipu/supernova_gate.py` is deleted.
+- `ueqgm_engine`: the `_UEQGM_TAGS`/`_UEQGM_KEYWORDS` additions, which silently changed `ueqgm_coherence_score`.
+- `docs/VISCOUS_DECAY_MERGER.md` (superseded by `docs/ACRE_TOOL_VISCOUS_SHEAR.md`).
+
+### Added
+- `qpsi/tool_candidates/viscous_shear_chain.py`: `tool_viscous_shear_chain(data) -> {result, explanation, confidence}`, `import math` only, deterministic. Stages: `decay`, `field`, `gate` (now expires lone events, is 0 without a fresh NPC decision, and uses a fresh rADAM state per call), `bond` (informational), `interactions` (token and edge proposals), `worklink` (Planck length per UTC second; 13 h : 30 min = 26; 109.92 bits below 1 knot in the GARD interstitial channel; 1 knot ↔ one overhand (2,3) traversal per relational time unit; capstan hold; `hidden_work` bound) and `pompeii` (differential distances of `build_pompeii_79ce_case`; the 79→2026 depression is z = 0.36 of its uncertainty, unresolved).
+- `qpsi/tool_gate.py`: holds candidates in `brain_kv["entirety:tool_gate"]` at scope `tool:<name>@<sha256>`. They are realised only with accepted `beautiful_output` attestations from `self` and `the_beautiful_one` on that exact scope (no wildcard), plus the realise grant. Hash, lint and gate 6 are re-checked at call time. The forge manifest is a projection that `materialise` restores. `show` prints the commands for the signers and the operator.
+- `qpsi/knot_shadow.py`: a read-only adapter (`PRAGMA query_only`). It takes supernova decisions from `perceptopoly.supernova/1` relational records and publishes token and edge proposals that recur across two distinct input states. It executes nothing while the tool is held; `--dry-run` is explicit and never counts.
+- `docs/ACRE_TOOL_VISCOUS_SHEAR.md`.
+- Tests: `test_qpsi_tool_candidates.py` (19), `test_qpsi_tool_gate.py` (21), `test_qpsi_knot_shadow.py` (9).
+
+### Fixed
+- `tests/test_observer_health.py::test_health_reports_counts_once_refreshed` waits for a refresh thread left by the previous test instead of racing it. This was the failure on the v0.68.0 CI run.
+
+### Not changed
+- `qpsi/bond_shear.py`, its publisher in the self-organising step, `GET /bond_shear` and its guidance field: they never changed learning, and v0.70's `/capabilities` advertises them.
+- `world_model.py` and the v0.68–v0.71 discourse, A2A and leak-guard work: 0-line diff.
+- Julia peers: unchanged.
+
 ## [0.71.0] - 2026-11-18
 
 ### Fixed & Changed

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-__version__ = "0.71.0"
+__version__ = "0.72.0"
 __release__ = (
+    "The v0.67 concepts as a held ACRE tool candidate: viscous shear chain behind tool_gate, proposals via knot_shadow; learning-path couplings removed from the core."
+)
+_RELEASE_0_71_0 = (
     "External A2A Agent Discovery (/.well-known/agent.json, /capabilities) & Live Container Activation."
 )
 _RELEASE_0_69_0 = (
@@ -19,9 +22,10 @@ _RELEASE_0_67_0 = (
 _RELEASE_0_66_0 = (
     "Viscous Neural Network, Multidimensional Navier-Stokes, Monte Carlo CVaR Decision Pruning + Greedy Dijkstra, Native Semantic Distillation, and VNN Bathymetry & Temporal-Spatial Physics-Constrained Reconstruction (v0.33, Helena Sloman 1850 & Pompeii-Vesuvius 79 CE)."
 )
-__build_date__ = "2026-11-17"
+__build_date__ = "2026-11-19"
 
 PHASES = {
+    "0.72.0": "v0.67 concepts become a held forge-format ACRE tool candidate. Removed from the core: mesh_slm.py restored to v0.66.0 (no train_round knot/edge multipliers, no drag-deepened _proximity, no merger telemetry); meta.supernova on /observe and the supernova_gate guidance field; supernova_gate.py; the _UEQGM_TAGS/_KEYWORDS drift. Kept live: qpsi/bond_shear.py publisher, GET /bond_shear and its guidance field (advertised by v0.70 /capabilities). Added: qpsi/tool_candidates/viscous_shear_chain.py (tool_viscous_shear_chain, import math only, stages decay/field/gate/bond/interactions/worklink/pompeii; worklink = Planck length per UTC second, 13 h : 30 min = 26, 109.92 bits below 1 knot in the GARD interstitial channel, 1 knot <-> one overhand (2,3) traversal per relational time unit, capstan hold, hidden_work bound; pompeii = differential distances of build_pompeii_79ce_case, depression z = 0.36 unresolved); qpsi/tool_gate.py (held at gate 6 on exact scope tool:<name>@<sha256>, two signers + grant, hash/lint/gate re-checked at call time, forge manifest projection, materialise); qpsi/knot_shadow.py (read-only, perceptopoly.supernova/1 relational records, proposals recurring across two distinct input states, never applied). test_observer_health race fixed. docs/ACRE_TOOL_VISCOUS_SHEAR.md replaces docs/VISCOUS_DECAY_MERGER.md.",
     "0.71.0": "world_model.py: overhauled synthesize_quipu_discourse to enforce strict internal-information boundaries (_PUBLIC_LEAK_RE, _is_safe_public_text, _clean_public_concepts) and produce clear, readable engineering prose grounded in live World Model theme routing and vetted community concepts—eliminating leaked internal metrics/phases/token fragments ('se', 'kil', token counts, edge weights) and opaque jargon; diversified comment insights and deduplicated focus phrase pairs.",
     "0.70.1": "world_model.py: eliminated 5s full-table scan/count on 1.56M-edge mesh_slm_quipu during synthesize_quipu_discourse by moving mesh/kv snapshot queries inside post mode, querying bounded high-weight edges without ORDER BY sort, and caching counts/hubs for 120s (<15ms live response).",
     "0.70.0": "observer_service.py: added read-only GET /.well-known/agent.json (A2A v0.2 capability card) and GET /capabilities routes exposing World Model forward transitions, 6-plane shadow tensor, PMI boundaries, rheology, bond_shear, bathymetry, MESH-SLM, and native discourse synthesis endpoints externally without relaxing edge_admission guards. 1 new HTTP test in test_observer_service.py.",
