@@ -710,4 +710,3 @@ def test_coupling_kill_switches_restore_legacy(isolated_slm_db, monkeypatch):
     assert summary["ig_multiplier"] == 1.0
     assert summary["ac_multiplier"] == 1.0
     assert summary["stencil_gain_mean"] == 1.0
-

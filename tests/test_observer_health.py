@@ -53,6 +53,10 @@ def test_health_does_not_wait_on_a_busy_brain(monkeypatch):
 def test_health_reports_counts_once_refreshed(monkeypatch):
     monkeypatch.setattr(O.mesh_slm, "_conn", lambda: _Counts())
     monkeypatch.setattr(O, "_health_counts", {"vocab": None, "edges": None, "at": None})
+    # A refresh thread left by the previous test may still hold the lock; the
+    # refresh below gives up rather than wait, so wait for it here.
+    assert O._health_refreshing.acquire(timeout=10)
+    O._health_refreshing.release()
     O._refresh_health_counts()
     snap = O._health_snapshot()
     assert snap["vocab"] == 7 and snap["edges"] == 11

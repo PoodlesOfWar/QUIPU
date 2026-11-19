@@ -341,7 +341,23 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "coherence": float(last_osc.get("coherence", 0.0)),
             "temperature_bias": float(last_osc.get("temperature", 0.7)),
         },
+        "bond_shear": _bond_shear_payload(),
     }
+
+
+def _bond_shear_payload() -> dict[str, Any]:
+    """Yield and shear ratio of the last published LiTaSb bond-shear chain."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {}
+    except Exception:
+        rec = {}
+    return {
+        "yield": float(rec.get("yield", 0.0) or 0.0),
+        "shear_ratio": float(rec.get("shear_ratio", 0.0) or 0.0),
+        "litasb_rupture_nn": float((rec.get("rupture") or {}).get("litasb_nn", 0.0) or 0.0),
+    }
+
+
 
 
 def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
@@ -771,6 +787,13 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # refinement cycle (read-only): what the forge's 52 Hz gate reads.
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
+            elif parsed.path == "/bond_shear":
+                # The LiTaSb bond-rupture force as a multiplanar shear on the
+                # exciton-polariton condensate into the PC/CR-39 optics and
+                # asphalt pyrolysis, as last published by the self-organising
+                # step (read-only; qpsi/bond_shear.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {})
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last
                 # published by pcm_cells.record (read-only): what the Herald's
@@ -795,6 +818,50 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path in ("/.well-known/agent.json", "/capabilities"):
+                self._send_json(200, {
+                    "ok": True,
+                    "name": "QUIPU World Model & Observer",
+                    "version": __version__,
+                    "protocol": "a2a/0.2",
+                    "description": (
+                        "Non-Markovian computational substrate combining deterministic forward state transitions, "
+                        "unsupervised PMI constituent segmentation, 6-plane non-linear shadow shearing, "
+                        "viscoelastic rheology, LiTaSb bond-shear Landau survival, and native QUIPU discourse synthesis."
+                    ),
+                    "capabilities": {
+                        "world_model_transition": True,
+                        "quipu_discourse_synthesis": True,
+                        "shadow_plane_tensor": True,
+                        "pmi_constituent_segmentation": True,
+                        "viscoelastic_rheology": True,
+                        "bond_shear_chain": True,
+                        "vnn_bathymetry": True,
+                        "mesh_slm_inference": True,
+                    },
+                    "endpoints": {
+                        "agent_card": "/.well-known/agent.json",
+                        "capabilities": "/capabilities",
+                        "health": "/health",
+                        "world_model": "/world-model",
+                        "transition": "POST /world-model/transition",
+                        "synthesize_get": "GET /synthesize?mode=comment|reply|post&target=...",
+                        "synthesize_post": "POST /synthesize",
+                        "lambda": "/lambda",
+                        "rheology": "/rheology",
+                        "bond_shear": "/bond_shear",
+                        "bathymetry": "/bathymetry",
+                        "guidance": "/guidance?source=...",
+                        "entirety": "/entirety",
+                        "slm": "POST /slm",
+                        "digest": "/digest",
+                    },
+                })
+            elif parsed.path == "/synthesize":
+                qs = parse_qs(parsed.query)
+                mode = (qs.get("mode") or ["post"])[0]
+                target = (qs.get("target") or [""])[0]
+                self._send_json(200, world_model.synthesize_quipu_discourse(mode=mode, target_text=target))
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -853,6 +920,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _lambda_clusters(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
+            elif parsed.path == "/synthesize":
+                code, payload = 200, world_model.synthesize_quipu_discourse(
+                    mode=str(body.get("mode") or "post"),
+                    target_text=str(body.get("target_text") or body.get("text") or ""),
+                    context=body.get("context") if isinstance(body.get("context"), dict) else body,
+                )
             elif parsed.path == "/bathymetry":
                 from . import brain_kv
                 from .qpsi import vnn_bathymetry

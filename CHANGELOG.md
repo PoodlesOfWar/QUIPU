@@ -4,6 +4,87 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.72.0] - 2026-11-19
+
+The v0.67.0 concepts become a potential realization of an ACRE tool: a forge-format candidate held at gate 6, instead of code hard-wired into training.
+
+### Removed
+- `mesh_slm.py` returns to its v0.66.0 form: no `train_round` knot-gain or edge-lift multipliers, no drag-deepened `_proximity`, no `QUIPU_VISCOUS_MERGER`, no merger telemetry or `viscous_merger_trend`.
+- `observer_service`: `meta.supernova` on `POST /observe` and the `supernova_gate` guidance field. `src/quipu/supernova_gate.py` is deleted.
+- `ueqgm_engine`: the `_UEQGM_TAGS`/`_UEQGM_KEYWORDS` additions, which silently changed `ueqgm_coherence_score`.
+- `docs/VISCOUS_DECAY_MERGER.md` (superseded by `docs/ACRE_TOOL_VISCOUS_SHEAR.md`).
+
+### Added
+- `qpsi/tool_candidates/viscous_shear_chain.py`: `tool_viscous_shear_chain(data) -> {result, explanation, confidence}`, `import math` only, deterministic. Stages: `decay`, `field`, `gate` (now expires lone events, is 0 without a fresh NPC decision, and uses a fresh rADAM state per call), `bond` (informational), `interactions` (token and edge proposals), `worklink` (Planck length per UTC second; 13 h : 30 min = 26; 109.92 bits below 1 knot in the GARD interstitial channel; 1 knot ↔ one overhand (2,3) traversal per relational time unit; capstan hold; `hidden_work` bound) and `pompeii` (differential distances of `build_pompeii_79ce_case`; the 79→2026 depression is z = 0.36 of its uncertainty, unresolved).
+- `qpsi/tool_gate.py`: holds candidates in `brain_kv["entirety:tool_gate"]` at scope `tool:<name>@<sha256>`. They are realised only with accepted `beautiful_output` attestations from `self` and `the_beautiful_one` on that exact scope (no wildcard), plus the realise grant. Hash, lint and gate 6 are re-checked at call time. The forge manifest is a projection that `materialise` restores. `show` prints the commands for the signers and the operator.
+- `qpsi/knot_shadow.py`: a read-only adapter (`PRAGMA query_only`). It takes supernova decisions from `perceptopoly.supernova/1` relational records and publishes token and edge proposals that recur across two distinct input states. It executes nothing while the tool is held; `--dry-run` is explicit and never counts.
+- `docs/ACRE_TOOL_VISCOUS_SHEAR.md`.
+- Tests: `test_qpsi_tool_candidates.py` (19), `test_qpsi_tool_gate.py` (21), `test_qpsi_knot_shadow.py` (9).
+
+### Fixed
+- `tests/test_observer_health.py::test_health_reports_counts_once_refreshed` waits for a refresh thread left by the previous test instead of racing it. This was the failure on the v0.68.0 CI run.
+
+### Not changed
+- `qpsi/bond_shear.py`, its publisher in the self-organising step, `GET /bond_shear` and its guidance field: they never changed learning, and v0.70's `/capabilities` advertises them.
+- `world_model.py` and the v0.68–v0.71 discourse, A2A and leak-guard work: 0-line diff.
+- Julia peers: unchanged.
+
+## [0.71.0] - 2026-11-18
+
+### Fixed & Changed
+- `world_model.synthesize_quipu_discourse`: removed all internal telemetry/phase/token/metric leaks (`continuous_synthesis`, token/edge counts, shadow fragment tokens like `se`/`kil`, internal ruptures, private handles) and opaque physics jargon from public output via `_is_safe_public_text` and `_clean_public_concepts`. Internal World Model metrics now steer selection of 7 clear engineering theses while synthesizing vetted external community themes into readable Moltbook posts; diversified comment insights across 3 variants per mechanism and deduplicated overlapping focus phrase extraction.
+
+## [0.70.1] - 2026-11-17
+
+### Fixed
+- `world_model.synthesize_quipu_discourse`: replaced full 1.56M-edge `mesh_slm.state_summary()` and sorted `_top_mesh_hubs()` queries with cached `<15ms` snapshot lookup inside `mode="post"` only, eliminating HTTP `/synthesize` timeouts from Herald (`1.2s` client timeout).
+
+## [0.70.0] - 2026-11-17
+
+### Added
+- `observer_service`: added external discovery endpoints `GET /.well-known/agent.json` (A2A v0.2 capability card) and `GET /capabilities` advertising live QUIPU World Model transition, `/synthesize`, `/lambda`, `/rheology`, `/bond_shear`, `/bathymetry`, `/slm`, `/guidance`, `/digest`, and `/entirety` routes without weakening `edge_admission` guards.
+- Docs & Tests: updated `docs/WORLD_MODEL_TRANSITION.md`; added `test_agent_card_and_capabilities_endpoints` in `tests/test_observer_service.py`.
+
+## [0.69.0] - 2026-11-17
+
+### Added
+- `world_model.synthesize_quipu_discourse(mode, target_text, context)`: synthesizes original Moltbook posts directly from live World Model cognitive phase, `epistemic_surprise`, `precedent_depth`, `mesh_slm` topology, `/lambda` complex potential & `shadow_tokens`, viscoelastic rheology, `bond_shear` Landau condensate survival, token state-delta signatures, recent epistemic ruptures, TheSeuScape realm exchanges (`herald:realm_interactions`), and community themes; generates domain-grounded analytical insights (`liveness_vs_progress`, `representation_loss`, `spec_envelope`, `provenance_drift`, `minimization_queue`, `boundary_invariant`, `feedback_coordination`) and `@peer` multi-party synthesis for comments and replies.
+- `observer_service`: added `GET /synthesize` and `POST /synthesize` unmutating synthesis routes.
+- Docs & Tests: updated `docs/WORLD_MODEL_TRANSITION.md`; added `test_synthesize_quipu_discourse_post_and_comment_and_reply` and `test_synthesize_endpoint_get_and_post`.
+
+## [0.68.0] - 2026-11-16
+
+### Added
+- `world_model.pmi_boundary_profile`, `boundary_split_score`, `segment_constituents`: unsupervised information-theoretic + state-delta constituent/predicate boundary segmentation via smoothed $\mathrm{PMI}(w_t, w_{t+1})$, forward/backward conditional branching entropy $H(W_{t+1}\mid w_t) + H(W_t\mid w_{t+1})$, and $\|\vec{\delta}_S(w_t) - \vec{\delta}_S(w_{t+1})\|_2$ jump scoring without static POS dictionaries.
+- `world_model.build_shadow_plane_tensor`, `diffuse_shadow_tensor`, `multiplicative_shear_coupling`: builds 6-D non-linear plane tensors across Essay planes `I..VI` from `/lambda` (`emission`, signed `held_back`/`pulled_in` `shadow_tokens`, complex potential $\mathrm{Re}(\Psi)+i\,\mathrm{Im}(\Psi)$), `bond_shear` Landau survival, and `relational_shear` ($\lambda_{\mathrm{rel\_STP}}, E^*$), propagates across bigram edges via $\tanh$-saturated diffusion, and scores candidate pairs via exterior wedge cross-plane shear $\|\vec{\psi}(A)\wedge\vec{\psi}(B)\|_F$ with inverse shear-annealed selection temperature $\tau_{\mathrm{eff}}$.
+- `world_model.assess_observation` & `match_dynamical_isomorphism`: wired live token-transition delta grounding (`world_model:token_signatures`) and emergent lexicon-free peer alignment alongside regime orientations.
+- Tests: 4 new unit tests in `tests/test_world_model_transition.py`.
+
+## [0.67.0] - 2026-11-06
+
+### Added
+- `ueqgm_engine.viscous_decay_merger(v0, a, b, t)`: decay under merged linear + quadratic drag, $v(t) = a v_0 / ((a + b v_0)e^{at} - b v_0)$ (Timmerman & van der Weele, *Am. J. Phys.* 67, 538 (1999)). Its two limits are each a measured decay and ground the regime constants: the **muonic decay of antimony** (`muonic_disappearance_rate`: $\Lambda = Q\,\Lambda_{free} + \Lambda_{capture}$, Huff factor $Q \approx 0.85$, capture $\sim 10^7\,\mathrm{s^{-1}}$ for $Z \approx 50$ — Primakoff 1959; Suzuki, Measday & Roalsvig 1987) is the memoryless linear regime; **textile cellulose decay** (`textile_ekenstam_decay`: $1/DP - 1/DP_0 = kt$, Ekenstam 1936; Zou, Uesaka & Gurnagul 1996) is the self-slowing quadratic regime. `decay_regime_comparison(a, b)` compares them by shape (textile fraction $b v_0/(a + b v_0)$, crossover amplitude $a/b$, half-life ratio 1 → 2) — rates 17 decades apart are never mixed numerically.
+- `ueqgm_engine.drag_deepened_proximity(d, N, \gamma)`: the torus distance potential $1 - (d/N)^{1 + \kappa\gamma}$, stronger at deeper linear drag $\gamma$ (the synaptic-wash relational gradient of `temporal_spatiality`); identical to the legacy $1 - d/N$ at $\gamma = 0$.
+- `ueqgm_engine.torus_knot_cells(N, 2, \pm 3)`, `coulomb_iterated_peaks`, `torus_knot_arc_field`, `weyl_chiral_merge`: von Neumann graph-entropy peaks that clear the GARD lossy floor $\delta^* = \sqrt{12\,\mathrm{CRB}}$, weighted by the Weyl $\Psi_2$ Coulomb bulk mass, decayed by the merger along the (2,3) trefoil and its (2,−3) mirror and merged as an opposite-chirality Weyl node pair (Nielsen & Ninomiya 1981; Armitage, Mele & Vishwanath 2018): amplitude adds, chirality cancels. ("vN" = von Neumann here; upstream "VNN" remains the Viscous Neural Network.)
+- `supernova_gate.py`: TheSeuScape / Perceptopoly supernova events as a typed contract (`meta.supernova` on `POST /observe` → `perceptopoly:supernova_events`, capped 200) and the expansion gate $\mathrm{clip}_{01}(\text{rADAM}(g_{re}, g_{im}) \times \text{actionable\_potential})$ with $g_{re} = 0.6\,\text{broaden} + 0.4\,\text{synaptic liveness}$, $g_{im}$ the decayed supernova magnitude and the event direction as external toroidal phase — the first production consumer of `radam_optimizer.radam_step`. Echoed on `GET /guidance` as `supernova_gate`.
+- `qpsi/bond_shear.py`: the force needed to break a LiTaSb bond as the weakest Morse link $F_{max} = a D_e/2$ (Li–Sb ≈ 1.7 nN, Ta–Sb ≈ 3.9 nN; generic M–Sb parameters flagged `estimate: true`, overridable via `QUIPU_BOND_SHEAR_*`), spread as a dimensionless ratio over the seven axis planes with the rheology weights (no plane exceeds 0.19 of rupture), Landau survival of the exciton-polariton condensate $\psi = \sqrt{R}e^{i\phi}$ ($R$ = analog Kuramoto coherence; Kasprzak et al. 2006, Amo et al. 2009), Fresnel transmission of the photonic Hopfield fraction into polycarbonate ($n = 1.586$) and CR-39 ($n = 1.498$), and first-order Arrhenius asphalt pyrolysis (the muonic limit of the merger). Published after the rheology reading in the self-organising step at `entirety:bond_shear:latest`; `GET /bond_shear`; `bond_shear` on `/guidance`; `shear_reading()` for `TypedViscousCoupler.step`. `UEQGM_MATH_MAP` gains `morse_rupture_force`, `landau_shear_survival`, `fresnel_transmission`, `arrhenius_pyrolysis_rate`.
+- `world_model.refraction_priors`: `cr39_n = 1.498` next to `pc_n`.
+- Docs: `docs/VISCOUS_DECAY_MERGER.md`, `docs/BOND_SHEAR_CHAIN.md`; `docs/SYSTEM_DYNAMICS.md` Loops 9–10; `docs/SYSTEM_DYNAMICS_SIGNALS.md` §2.12–2.13.
+- Tests: `tests/test_qpsi_bond_shear.py` (13), `tests/test_supernova_gate.py` (6), plus 8 in `test_ueqgm_engine.py`, 6 in `test_mesh_slm.py`, 3 in `test_observer_service.py` — 36 new tests.
+
+### Changed
+- **`mesh_slm.py` edited** (the first edit since v0.61.2): `QUIPU_VISCOUS_MERGER` kill-switch (default on); `_proximity(a, b, gamma=None)` deepens with the cached drag depth (`_drag_depth`, 5 s TTL) — scoring and training share the one kernel; `train_round` persists `holographic_entropy_history`, builds the trefoil vN-peak field once per round, scales each token's embedding nudge by `knot_gain = 1 + 0.10·amplitude[cell]·gate` and each bigram whose both ends sit on the field by `1 + 0.05·min(amplitude)·gate` — on the global **and** the region edge; new summary / meta / `state_summary` fields (`knot_gain_mean`, `knot_field_cells`, `vn_peak_count`, `supernova_gate`, `drag_gamma`, `drag_b`, `decay_textile_fraction`, `last_*`); `viscous_merger_trend(window)`. All of it is identically the v0.66.0 math when the switch is off, γ = 0, no peak clears the floor, or the gate is 0.
+- `observer_service._observe`: `meta.supernova` validated and recorded (400 on a malformed event); `_guidance` gains `supernova_gate` and `bond_shear`; `GET /bond_shear`.
+- `qpsi/self_organising.after_step`: publishes the bond-shear chain right after `pcm_cells.record` (own try/except, never blocks the cells).
+- `ueqgm_engine` tags/keywords gain `viscous`, `trefoil`, `chirality`, `muonic`, `textile`.
+
+- `.github/workflows/tests.yml`: CI runs `pytest` on every pull request and push to `main` (Python 3.12, `requirements.txt`).
+- `tests/test_gard_shard_model.py`: the hub-assets wiring test skips when the sibling `Loadopoly-Portal` checkout and `Launch-Loadopoly.ps1` are absent instead of failing.
+
+### Not changed
+- Julia protocol peers: no change — every coupling is confined to `train_round` and `brain_kv` readings (the v0.31.0 precedent).
+- `mesh_slm_vocab` / `mesh_slm_quipu` schemas, eviction, regions, gates: untouched. The bond-shear chain writes no mesh table and no χ.
+
 ## [0.66.0] - 2026-10-27
 
 ### Added

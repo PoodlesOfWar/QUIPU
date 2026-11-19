@@ -88,6 +88,19 @@ $$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
 
 ---
 
+### 2.12. Viscous Shear Chain (held ACRE tool candidate, v0.72.0)
+Defined in [src/quipu/qpsi/tool_candidates/viscous_shear_chain.py](../src/quipu/qpsi/tool_candidates/viscous_shear_chain.py); held by [tool_gate](../src/quipu/qpsi/tool_gate.py); read by [knot_shadow](../src/quipu/qpsi/knot_shadow.py). Not in any learning path.
+$$v(t) = \frac{a\,v_0}{(a + b\,v_0)\,e^{a t} - b\,v_0}, \qquad a = 0.35\,(1 + \gamma),\; b = 0.15\,(1 - \text{coherence})$$
+$$G = \text{clip}_{01}\big(\text{rADAM}_{fresh}(0.6\,\text{broaden} + 0.4\,\text{liveness},\; \textstyle\sum w m / \max(1, \sum w)) \times \text{actionable\_potential}\big), \quad w = e^{-age/1800}$$
+$$\text{lift}_{token} = 0.10\,A[cell]\,G, \qquad \text{lift}_{edge} = 0.05\,\min(A_{src}, A_{dst})\,G \quad\text{(proposals only)}$$
+$$\text{gap} = \log_2\frac{1852/3600}{26\,\ell_P / 1\,\text{s}} = 109.92\ \text{bits}$$
+
+### 2.13. LiTaSb Bond-Shear Chain (v0.67.0)
+Defined in [src/quipu/qpsi/bond_shear.py](../src/quipu/qpsi/bond_shear.py):
+$$F_{max} = \tfrac{1}{2} a D_e, \quad F_{LiTaSb} = \min(F_{LiSb}, F_{TaSb}), \quad \text{ratio}_k = w_k\,F/F_{LiTaSb}$$
+$$S = \sum_k w_k\, R\,(1 - \text{ratio}_k^2), \quad T = 1 - \Big(\frac{n_1 - n_2}{n_1 + n_2}\Big)^2, \quad k = A\,e^{-E_a/k_B T}$$
+$$\text{yield} = S \cdot |C|^2\,\tfrac{T_{PC} + T_{CR39}}{2} \cdot e^{-k t}$$
+
 ## 3. Measurable Signal Inventory
 
 | Signal Name | Source | Type / Bounds | Primary Consumer |
@@ -103,6 +116,10 @@ $$\eta_{\text{eff}}(token) = \eta \cdot \text{stencil\_gain}(cell)$$
 | `infodynamic_compression` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `analog_coherence` | `ueqgm_engine` | $[0.0, 1.0]$ | `mesh_slm.train_round()` |
 | `stencil_gain_mean` | `mesh_slm` | $[0.90, 1.10]$ | `mesh_slm.train_round()` |
+| `entirety:tool_gate[*].status` | `qpsi/tool_gate` | held / realised / rejected | `tool_gate review`, `knot_shadow.run()` |
+| `entirety:knot_shadow:proposal` | `qpsi/knot_shadow` | token / edge proposals | reviewers (never applied) |
+| `bond_shear.yield` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `GET /bond_shear`, `/guidance` |
+| `bond_shear.shear_ratio` | `qpsi/bond_shear` | $[0.0, 1.0]$ | `TypedViscousCoupler.step(shear_reading=)` |
 | `transaction_drive` | `system_entirety` | $[0.0, 1.0]$ | `self_realization_loop` |
 | `structural_fingerprint` | `doc_annealing` | SHA-256 hex | `doc_annealing` map trigger |
 

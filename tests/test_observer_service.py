@@ -1,6 +1,9 @@
 """Tests for quipu.observer_service — endpoints, source routing, and /slm inference."""
 
 import json
+
+import pytest
+
 from quipu import observer_service, mesh_slm
 
 
@@ -123,3 +126,97 @@ def test_observer_world_model_transition_route():
     assert len(res["trajectory"]) == 3
 
 
+
+
+def test_observe_ignores_meta_supernova_and_guidance_keeps_bond_shear():
+    # Supernova decisions reach the held ACRE tool through /relational, not /observe.
+    code, res = observer_service._observe({
+        "source": "supply-chain-brain",
+        "text": "theseuscape npc local expansion decision",
+        "meta": {"supernova": {"magnitude": "not even a number"}},
+    })
+    assert code == 200 and res["ok"] is True
+    assert "supernova" not in res and "supernova_gate" not in res
+    guidance = observer_service._guidance("supply-chain-brain", limit=10)
+    assert "supernova_gate" not in guidance
+    assert set(guidance["bond_shear"]) == {"yield", "shear_ratio", "litasb_rupture_nn"}
+
+
+def test_bond_shear_payload_reflects_the_published_chain():
+    import sqlite3
+    from quipu import brain_kv, local_store
+    from quipu.qpsi import bond_shear
+    cn = sqlite3.connect(local_store.db_path())
+    rec = bond_shear.publish(cn, now=5.0)
+    cn.commit()
+    cn.close()
+    payload = observer_service._bond_shear_payload()
+    assert payload["yield"] == pytest.approx(rec["yield"])
+    assert payload["shear_ratio"] == pytest.approx(rec["shear_ratio"])
+    assert payload["litasb_rupture_nn"] == pytest.approx(rec["rupture"]["litasb_nn"])
+    assert brain_kv.kv_get_json("entirety:bond_shear:latest", {})["yield"] == rec["yield"]
+
+
+
+def test_synthesize_endpoint_get_and_post():
+    """GET and POST /synthesize expose native QUIPU discourse synthesis over HTTP."""
+    from http.server import HTTPServer
+    import threading
+    import urllib.parse
+    import urllib.request
+
+    srv = HTTPServer(("127.0.0.1", 0), observer_service.ObserverHandler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        q = urllib.parse.urlencode({"mode": "comment", "target": "A stop-word filter can erase a decision's negation"})
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/synthesize?{q}", timeout=5) as resp:
+            assert resp.status == 200
+            get_data = json.loads(resp.read().decode("utf-8"))
+        assert get_data["ok"] is True
+        assert get_data["mechanism"] == "representation_loss"
+        assert len(get_data["insight"]) >= 50
+
+        req_body = json.dumps({
+            "mode": "post",
+            "context": {"community_insights": [{"concept_tag": "causal_provenance"}]},
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/synthesize",
+            data=req_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            assert resp.status == 200
+            post_data = json.loads(resp.read().decode("utf-8"))
+        assert post_data["ok"] is True and post_data["mode"] == "post"
+        assert "causal provenance" in post_data["content"]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_agent_card_and_capabilities_endpoints():
+    """GET /.well-known/agent.json and /capabilities advertise active QUIPU external endpoints."""
+    from http.server import HTTPServer
+    import threading
+    import urllib.request
+
+    srv = HTTPServer(("127.0.0.1", 0), observer_service.ObserverHandler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        for route in ("/.well-known/agent.json", "/capabilities"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=5) as resp:
+                assert resp.status == 200
+                data = json.loads(resp.read().decode("utf-8"))
+            assert data["ok"] is True
+            assert data["capabilities"]["quipu_discourse_synthesis"] is True
+            assert data["endpoints"]["synthesize_post"] == "POST /synthesize"
+            assert data["endpoints"]["transition"] == "POST /world-model/transition"
+    finally:
+        srv.shutdown()
+        srv.server_close()

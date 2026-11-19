@@ -387,3 +387,140 @@ def test_physical_invariants_across_30_step_random_shocks():
         # Invariant 7: Strict tick progression
         assert current.tick == step + 1
 
+
+
+def test_lexicon_free_token_transition_and_isomorphism(isolated_kv):
+    """Tokens are grounded directly in WorldState transition deltas and matched by dynamical isomorphism."""
+    s_prev = WorldState(inventory=100.0, backlog=0.0, load_ratio=0.3, reliability=0.98, capacity=100.0)
+    s_next = WorldState(inventory=30.0, backlog=70.0, load_ratio=0.95, reliability=0.65, capacity=100.0)
+    res = world_model.observe_token_transition(
+        ["x402", "martian", "vortex", "cycle"],
+        s_prev,
+        s_next,
+        residual=0.8,
+    )
+    assert res["updated"] == 4
+    assert res["vocab_grounded"] == 4
+
+    matches = world_model.match_dynamical_isomorphism(["martian", "vortex", "cycle"], top_k=3)
+    assert matches, "Expected dynamical isomorphism match for grounded tokens"
+    top_regimes = {m["regime"] for m in matches}
+    assert top_regimes & {"backlog_saturation", "threshold_rupture", "capacity_bottleneck"}
+
+
+def test_entropy_boundary_chunks_discovers_compounds_without_pos():
+    """High-PMI compound chunks and conditional entropy boundaries emerge purely from token streams."""
+    seqs = [
+        ["the", "control", "loop", "damps", "the", "vortex", "cycle"],
+        ["a", "control", "loop", "stabilizes", "the", "vortex", "cycle"],
+        ["this", "control", "loop", "guides", "the", "vortex", "cycle"],
+        ["another", "stop-word", "filter", "drops", "the", "negation"],
+    ]
+    out = world_model.entropy_boundary_chunks(seqs, min_pmi=0.4, min_count=2)
+    phrases = {c["phrase"] for c in out["chunks"]}
+    assert "control loop" in phrases
+    assert "vortex cycle" in phrases
+    assert out["boundary_entropy"].get("loop", 0.0) > 0.5
+
+
+def test_pmi_boundary_profile_and_constituent_segmentation(isolated_kv):
+    """PMI + branching entropy + state-delta jumps segment constituents from predicates cleanly."""
+    seqs = [
+        ["the", "payload", "mismatch", "breaks", "object", "version"],
+        ["a", "payload", "mismatch", "stalls", "object", "version"],
+        ["the", "payload", "mismatch", "shifts", "the", "control", "loop"],
+        ["every", "control", "loop", "tracks", "object", "version"],
+    ]
+    prof = world_model.pmi_boundary_profile(seqs)
+    s_inside = world_model.boundary_split_score("payload", "mismatch", prof)
+    s_pred = world_model.boundary_split_score("mismatch", "breaks", prof)
+    assert s_pred > s_inside, (s_pred, s_inside)
+    segs = world_model.segment_constituents(
+        ["payload", "mismatch", "breaks", "object", "version"],
+        prof,
+        split_threshold=(s_inside + s_pred) * 0.5,
+    )
+    joined = [" ".join(g) for g in segs]
+    assert "payload mismatch" in joined and "object version" in joined
+
+
+def test_nonlinear_shadow_tensor_and_multiplicative_shearing():
+    """Collinear vectors yield zero wedge shear; cross-plane held_back/pulled_in pairs yield multiplier > 1."""
+    payload = {
+        "emission": [
+            {"plane": "I", "snr": 2.5, "tokens": ["latency", "queue"], "frequencies": [["latency", 0.9], ["queue", 0.8]]},
+            {"plane": "IV", "snr": 2.0, "tokens": ["control", "damping"], "frequencies": [["control", 0.85]]},
+        ],
+        "shadow_tokens": [
+            {"token": "queue", "plane": "I", "kind": "held_back", "weight": 0.75},
+            {"token": "control", "plane": "IV", "kind": "pulled_in", "weight": 0.80},
+        ],
+        "potential": {
+            "total": {"real": 0.2, "imag": 0.45},
+            "planes": [
+                {"plane": "I", "real": 0.25, "imag": 0.4},
+                {"plane": "IV", "real": 0.15, "imag": 0.5},
+            ],
+        },
+    }
+    tensor = world_model.build_shadow_plane_tensor(
+        payload,
+        bond_shear_reading={"condensate": {"survival": 0.95}},
+        relational_shear_reading={"lambda_rel_stp": 0.35, "outlier": {"energy": 0.4}},
+    )
+    diffused = world_model.diffuse_shadow_tensor(tensor, {("queue", "mismatch"): 2.0, ("control", "loop"): 2.5}, steps=2)
+    assert "mismatch" in diffused and "loop" in diffused
+
+    collinear = world_model.multiplicative_shear_coupling(
+        diffused["mismatch"], diffused["mismatch"], imag_potential=tensor["imag_potential"], shear_gain=tensor["shear_gain"]
+    )
+    crossed = world_model.multiplicative_shear_coupling(
+        diffused["mismatch"], diffused["loop"], vec_pred=diffused["queue"],
+        imag_potential=tensor["imag_potential"], shear_gain=tensor["shear_gain"],
+    )
+    assert collinear["wedge_shear"] == 0.0
+    assert crossed["wedge_shear"] > 0.05
+    assert crossed["multiplier"] > collinear["multiplier"]
+    assert crossed["tau_eff"] < collinear["tau_eff"]
+
+
+def test_synthesize_quipu_discourse_post_and_comment_and_reply():
+    """Verify QUIPU synthesizes readable, public-safe posts (no internal leaks or jargon) and valued comments."""
+    post_out = world_model.synthesize_quipu_discourse(
+        mode="post",
+        context={
+            "realm_telemetry": {"steps_done": 144, "active_pcs": ["quipu_explorer"], "active_npcs": ["Hans", "Cook"]},
+            "community_insights": [{"concept_tag": "evidence_versioning"}, {"concept_tag": "se"}, {"concept_tag": "stockopoly"}],
+            "realm_interactions": [{"partner": "Boss Hogs13", "message": "Internal test"}],
+        },
+    )
+    assert post_out["ok"] is True and post_out["mode"] == "post"
+    assert post_out["public_safe"] is True
+    assert len(post_out["title"]) >= 24
+    assert "evidence versioning" in post_out["content"]
+    # Strictly forbid leaking internal telemetry, tokens, sources, or unreadable jargon
+    for bad in ("continuous_synthesis", "cognitive substrate", "directed Quipu edges", "Boss Hogs", "quipu_explorer", "stockopoly", "'se'", "Landau condensate"):
+        assert bad not in post_out["title"]
+        assert bad not in post_out["content"]
+
+    comment_out = world_model.synthesize_quipu_discourse(
+        mode="comment",
+        target_text="A stuck worker still looks busy to a heartbeat",
+    )
+    assert comment_out["ok"] is True and comment_out["mechanism"] == "liveness_vs_progress"
+    assert len(comment_out["insight"]) >= 60
+    assert "stuck worker" in comment_out["insight"] or "liveness" in comment_out["insight"]
+
+    reply_out = world_model.synthesize_quipu_discourse(
+        mode="reply",
+        target_text="A byte offset without an object version is a broken evidence pointer",
+        context={
+            "thread_peers": [
+                {"author": "alpha_bot", "content": "Immutable object digests close the pointer gap."},
+                {"author": "beta_node", "content": "Drift bounds catch stale caches before replay."},
+            ]
+        },
+    )
+    assert reply_out["ok"] is True and reply_out["mode"] == "reply"
+    assert "@alpha_bot" in reply_out["insight"]
+    assert "@beta_node" in reply_out["insight"]
