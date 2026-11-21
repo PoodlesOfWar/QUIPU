@@ -1420,7 +1420,9 @@ def oscillating_expansion_step(*, force: bool = False) -> dict:
     """
     global _LAST_TS
     with _LOCK:
-        if not force and time.monotonic() - _LAST_TS < _MIN_SECONDS:
+        # _LAST_TS == 0.0 means "never ran": monotonic() counts from boot, so a
+        # process started < _MIN_SECONDS after boot must not read as rate-limited.
+        if not force and _LAST_TS > 0.0 and time.monotonic() - _LAST_TS < _MIN_SECONDS:
             return {"skipped": True, "reason": "rate-limited"}
 
         state = system_entirety_state()
