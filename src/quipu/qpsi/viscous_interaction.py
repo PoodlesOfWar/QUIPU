@@ -33,7 +33,7 @@ Mathematical specification
      optional Ricci/Weyl trace-free split (`weyl_channel.split`).
 
    Graph stability invariant (Gershgorin bound λ_max(L_G) ≤ 2 max_i d_i):
-         Stab_G = Δt · (ν_s λ_max(L_G) + 2 κ_s d_max) ≤ graph_cfl_max (default 1.8 < 2.0)
+         Stab_G = Δt · (ν_s λ_max(L_G) + 2 κ_s d_max) ≤ graph_cfl_max (default φ ≈ 1.618 < 2.0)
 
 3. **Typed Coupling Interface (`TypedViscousCoupler`)**:
    Connects the D-dimensional physical flow (u, p) and the 7-D semantic graph Z
@@ -41,6 +41,19 @@ Mathematical specification
    variance, rheology loss angle δ_G from `qpsi.rheology`, and relational shear
    λ_rel_STP from `qpsi.relational_shear`) without assuming that QUIPU's 7
    semantic dimensions are physical spatial coordinates.
+
+   Every coupling factor is capped by the golden ratio φ = (1 + √5)/2 and
+   rises through a *cantilevered* nonlinear Bayesian weight (see
+   :func:`cantilever_weight`): a normalised load s ∈ [0, 1] deflects a
+   cantilever, δ(s) = s²(3 − s)/2, and that deflection is the likelihood in an
+   odds update whose prior is the muonic-decay branch of antimony,
+   π = QΛ_free / (QΛ_free + Λ_capture) ≈ 0.037 (`ueqgm_engine.muonic_disappearance_rate`):
+
+         c(s)   = π δ / (π δ + (1 − π)(1 − δ))
+         factor = 1 + (φ − 1) · c(s)    ∈ [1, φ]
+
+   A muon bound to Sb is mostly captured, not decayed, so an input is mostly
+   held back until its load reaches the cantilever tip.
 
 Governance
 ----------
@@ -60,6 +73,55 @@ from typing import Any, Mapping, Optional, Sequence
 import numpy as np
 
 from .cat_residual import SENSES, SENSE_WEIGHTS
+from ..ueqgm_engine import (
+    _MUON_FREE_LIFETIME_S,
+    _SB_HUFF_FACTOR,
+    muonic_disappearance_rate,
+)
+
+PHI: float = (1.0 + math.sqrt(5.0)) / 2.0
+"""Golden ratio φ: the graph stability number and the cap on every coupling factor."""
+
+
+def muonic_decay_prior(
+    capture_rate: Optional[float] = None,
+    huff_factor: float = _SB_HUFF_FACTOR,
+    free_lifetime: float = _MUON_FREE_LIFETIME_S,
+) -> float:
+    """Branch fraction π = QΛ_free / Λ_total of a bound μ⁻ that decays rather than is captured.
+
+    Defaults are antimony (Z = 51), the same constants as
+    ``ueqgm_engine.muonic_disappearance_rate``: π ≈ 0.037.
+    """
+    kw = {} if capture_rate is None else {"capture_rate": capture_rate}
+    total = muonic_disappearance_rate(huff_factor=huff_factor, free_lifetime=free_lifetime, **kw)
+    decay = max(0.0, float(huff_factor)) / max(1e-18, float(free_lifetime))
+    return min(1.0, max(0.0, decay / total)) if total > 0.0 else 0.0
+
+
+def cantilever_weight(load: float, prior: Optional[float] = None) -> float:
+    """Cantilevered nonlinear Bayesian weight c ∈ [0, 1] for a normalised load.
+
+    The load s = clip(load, 0, 1) deflects an end-loaded cantilever,
+    δ(s) = s²(3 − s)/2 (0 at the anchor with zero slope, 1 at the tip), and δ is
+    the likelihood in an odds update on the muonic prior π:
+    c = πδ / (πδ + (1 − π)(1 − δ)). c(0) = 0 and c(1) = 1 for any 0 < π < 1.
+    Non-finite loads (and complex ones, via ``float``) are refused.
+    """
+    s = float(load)
+    if not math.isfinite(s):
+        raise ValueError("load must be finite")
+    s = min(1.0, max(0.0, s))
+    pi = muonic_decay_prior() if prior is None else min(1.0, max(0.0, float(prior)))
+    d = s * s * (3.0 - s) / 2.0
+    num = pi * d
+    den = num + (1.0 - pi) * (1.0 - d)
+    return 1.0 if den <= 0.0 else num / den
+
+
+def phi_capped_factor(load: float, prior: Optional[float] = None) -> float:
+    """Coupling factor 1 + (φ − 1)·c(load) ∈ [1, φ]."""
+    return 1.0 + (PHI - 1.0) * cantilever_weight(load, prior)
 from .weyl_channel import split as weyl_split
 
 AXES_7D: tuple[str, ...] = (
@@ -299,7 +361,7 @@ class VNNConfig:
     kappa_s: float = 0.04              # nonlinear graph convection κ_s ≥ 0
     forcing_gain: float = 0.05         # semantic forcing gain toward target state
     dt: float = 0.10                   # integration step Δt > 0
-    graph_cfl_max: float = 1.80        # stability ceiling on Δt·(ν_s λ_max + 2 κ_s d_max) < 2
+    graph_cfl_max: float = PHI         # stability number φ on Δt·(ν_s λ_max + 2 κ_s d_max) < 2
     weyl_trace_free: bool = True       # project forcing through (I − ŵŵ*) on the 6 sense axes
     max_substeps: int = 32
 
@@ -310,6 +372,8 @@ class VNNConfig:
             raise ValueError("kappa_s must be finite and >= 0")
         if not (math.isfinite(self.dt) and self.dt > 0.0):
             raise ValueError("dt must be finite and > 0")
+        if not (math.isfinite(self.graph_cfl_max) and 0.0 < self.graph_cfl_max <= PHI):
+            raise ValueError("graph_cfl_max must be in (0, φ]")
 
 
 @dataclass
@@ -495,6 +559,7 @@ class CoupledStepReport:
     vnn_diagnostics: dict[str, Any]
     bathymetric_feature_dims: int = 6
     bathymetry_features: Optional[dict[str, float]] = None
+    cantilever: Optional[dict[str, Any]] = None
 
 
 class TypedViscousCoupler:
@@ -505,23 +570,30 @@ class TypedViscousCoupler:
     Enforces dimensional separation: physical velocity vectors u(x) ∈ ℝ^{D_phys}
     and 6-D bathymetric features are never added to or dot-producted with semantic
     state vectors Z_i ∈ ℝ^7.
-    All coupling occurs exclusively through dimensionless scalar invariants:
+    All coupling occurs exclusively through dimensionless scalar invariants, each
+    entering as a φ-capped cantilevered weight F(s) = 1 + (φ − 1)·c(s) ∈ [1, φ]
+    (:func:`phi_capped_factor`, muonic-antimony prior):
     - From QUIPU rheology (`rheology.reading`) & relational shear (`relational_shear`):
-          ν_s = ν_{s,0} · (1 + w_r / 0.125)
-          κ_s = κ_{s,0} · (1 + λ_rel_STP)
+          ν_s = ν_{s,0} · F(w_r / 0.25)
+          κ_s = κ_{s,0} · F(λ_rel_STP)
     - From physical enstrophy Ω, kinetic energy E_k, and optional seabed slope s:
-          forcing_scale = (1 + tanh(Ω / (E_k + 1))) · (1 + 0.1 tanh(s))
+          forcing_scale = F((tanh(Ω / (E_k + 1)) + 0.1 tanh(s)) / 1.1)
+    - Physical viscosity: ν = ν_0 · min(φ, (0.5 + sin δ_G) · (1 + 0.1 tanh(s)))
     """
 
     def __init__(
         self,
         ns_cfg: NavierStokesConfig = NavierStokesConfig(),
         vnn_cfg: VNNConfig = VNNConfig(),
+        muonic_prior: Optional[float] = None,
     ) -> None:
         ns_cfg.validate()
         vnn_cfg.validate()
         self.ns_cfg = ns_cfg
         self.vnn_cfg = vnn_cfg
+        self.muonic_prior = muonic_decay_prior() if muonic_prior is None else float(muonic_prior)
+        if not (math.isfinite(self.muonic_prior) and 0.0 < self.muonic_prior < 1.0):
+            raise ValueError("muonic_prior must be in (0, 1)")
 
     def step(
         self,
@@ -544,27 +616,41 @@ class TypedViscousCoupler:
         loss_angle = float((rheology_reading or {}).get("loss_angle", math.pi / 4.0))
         lam_stp = float((shear_reading or {}).get("lambda_rel_stp", 0.0))
 
+        for name, val in (("edge_weight", w_r), ("loss_angle", loss_angle), ("lambda_rel_stp", lam_stp)):
+            if not math.isfinite(val):
+                raise ValueError(f"{name} must be finite")
+
         bathy_dict: Optional[dict[str, float]] = None
-        slope_factor = 1.0
+        slope_tanh = 0.0
         if bathymetry_features is not None:
             bathy_dict = {str(k): float(v) for k, v in bathymetry_features.items()}
             slope_val = max(0.0, float(bathy_dict.get("seabed_slope", 0.0)))
-            slope_factor = 1.0 + 0.10 * math.tanh(slope_val)
+            slope_tanh = math.tanh(slope_val) if math.isfinite(slope_val) else 1.0
+        slope_factor = 1.0 + 0.10 * slope_tanh
 
-        # Modulate physical viscosity by viscoelastic loss factor sin(δ_G) in [0.5, 1.5]
+        # Modulate physical viscosity by viscoelastic loss factor sin(δ_G), capped by φ
         visc_factor = 0.5 + math.sin(max(0.0, min(math.pi / 2.0, loss_angle)))
-        eff_nu_phys = self.ns_cfg.nu * visc_factor * slope_factor
+        eff_nu_phys = self.ns_cfg.nu * min(PHI, visc_factor * slope_factor)
         ns_cfg_eff = dataclasses.replace(self.ns_cfg, nu=eff_nu_phys)
 
         # Step 1: Advance physical Navier-Stokes field
         ns_next, ns_diag = ns_step(ns_state, ns_cfg_eff, forcing=physical_forcing)
 
         # Step 2: Map physical invariants + rheology/shear to semantic VNN coefficients
-        eff_nu_sem = self.vnn_cfg.nu_s * (1.0 + max(0.0, min(0.25, w_r)) / 0.125)
-        eff_kappa_sem = self.vnn_cfg.kappa_s * (1.0 + max(0.0, min(1.0, lam_stp)))
-        forcing_scale = (
-            1.0 + math.tanh(ns_diag["enstrophy"] / (ns_diag["kinetic_energy"] + 1.0))
-        ) * slope_factor
+        # (φ-capped cantilevered Bayesian weights, muonic-antimony prior)
+        prior = self.muonic_prior
+        s_nu = max(0.0, min(0.25, w_r)) / 0.25
+        s_kappa = max(0.0, min(1.0, lam_stp))
+        s_force = (
+            math.tanh(max(0.0, ns_diag["enstrophy"]) / (ns_diag["kinetic_energy"] + 1.0))
+            + 0.10 * slope_tanh
+        ) / 1.10
+        loads = {"nu_sem": s_nu, "kappa_sem": s_kappa, "forcing": s_force}
+        weights = {k: cantilever_weight(v, prior) for k, v in loads.items()}
+        factors = {k: 1.0 + (PHI - 1.0) * c for k, c in weights.items()}
+        eff_nu_sem = self.vnn_cfg.nu_s * factors["nu_sem"]
+        eff_kappa_sem = self.vnn_cfg.kappa_s * factors["kappa_sem"]
+        forcing_scale = factors["forcing"]
         vnn_cfg_eff = dataclasses.replace(
             self.vnn_cfg, nu_s=eff_nu_sem, kappa_s=eff_kappa_sem
         )
@@ -604,6 +690,14 @@ class TypedViscousCoupler:
             vnn_diagnostics=vnn_diag,
             bathymetric_feature_dims=6,
             bathymetry_features=bathy_dict,
+            cantilever={
+                "phi": PHI,
+                "muonic_prior": prior,
+                "loads": loads,
+                "weights": weights,
+                "factors": factors,
+                "graph_cfl_max": self.vnn_cfg.graph_cfl_max,
+            },
         )
         return ns_next, vnn_next, report
 
@@ -655,6 +749,7 @@ def publish_vnn_report(cn: sqlite3.Connection, report: CoupledStepReport) -> dic
         "forcing_scale": report.forcing_scale,
         "ns_diagnostics": report.ns_diagnostics,
         "vnn_diagnostics": report.vnn_diagnostics,
+        "cantilever": report.cantilever,
     }
     cn.execute(
         "CREATE TABLE IF NOT EXISTS brain_kv (key TEXT PRIMARY KEY, value TEXT, updated_at REAL)"
@@ -668,6 +763,10 @@ def publish_vnn_report(cn: sqlite3.Connection, report: CoupledStepReport) -> dic
 
 
 __all__ = [
+    "PHI",
+    "muonic_decay_prior",
+    "cantilever_weight",
+    "phi_capped_factor",
     "AXES_7D",
     "KV_VNN_LATEST",
     "NavierStokesConfig",

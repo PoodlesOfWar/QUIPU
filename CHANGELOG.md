@@ -4,6 +4,27 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.73.0] - 2026-11-21
+
+`qpsi/viscous_interaction.py` is capped by φ = (1 + √5)/2 ≈ 1.618.
+
+### Changed
+- **Stability number φ.** `VNNConfig.graph_cfl_max` defaults to φ instead of 1.8. `validate()` refuses a ceiling above φ, so automatic substepping keeps every substep at Δt·(ν_s λ_max + 2κ_s d_max) ≤ φ.
+- **Cantilevered muonic Bayesian weights.** Each `TypedViscousCoupler` factor (ν_s, κ_s, `forcing_scale`) is now `1 + (φ − 1)·c(s)` ∈ [1, φ]. For a normalised load s:
+  - s deflects an end-loaded cantilever, δ(s) = s²(3 − s)/2;
+  - δ is the likelihood in an odds update on the muonic-decay branch of antimony, π = QΛ_free / (QΛ_free + Λ_capture) ≈ 0.037, from the same constants as `ueqgm_engine.muonic_disappearance_rate`;
+  - c(s) = πδ / (πδ + (1 − π)(1 − δ)).
+- The physical-viscosity factor `(0.5 + sin δ_G)(1 + 0.1 tanh slope)` is capped at φ.
+- **Behaviour change.** Maxima fall from ×3 (ν_s), ×2 (κ_s) and ×2.2 (forcing) to φ. Inputs are mostly held back until they reach the cantilever tip: at the default `edge_weight` of 0.125, ν_s is ×1.01 (it was ×2). The prior can be overridden with `TypedViscousCoupler(muonic_prior=…)`.
+- Non-finite readings raise `ValueError`; imaginary ones raise `TypeError`.
+
+### Added
+- `PHI`, `muonic_decay_prior`, `cantilever_weight` and `phi_capped_factor`. `CoupledStepReport.cantilever` and `brain_kv["entirety:vnn:latest"]` carry the loads, weights, factors and prior.
+- `tests/test_qpsi_viscous_phi_cap.py` (8 tests).
+
+### Not changed
+- No production caller drives the coupler yet; `mesh_slm.py`, `divine_blessing.py` and the learning path are untouched.
+
 ## [0.72.0] - 2026-11-19
 
 The v0.67.0 concepts become a potential realization of an ACRE tool: a forge-format candidate held at gate 6, instead of code hard-wired into training.

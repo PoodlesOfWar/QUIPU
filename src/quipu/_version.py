@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-__version__ = "0.72.0"
+__version__ = "0.73.0"
 __release__ = (
+    "Viscous interaction capped by phi: graph stability number phi (was 1.8) and phi-capped cantilevered Bayesian coupling weights on a muonic-antimony prior."
+)
+_RELEASE_0_72_0 = (
     "The v0.67 concepts as a held ACRE tool candidate: viscous shear chain behind tool_gate, proposals via knot_shadow; learning-path couplings removed from the core."
 )
 _RELEASE_0_71_0 = (
@@ -22,9 +25,10 @@ _RELEASE_0_67_0 = (
 _RELEASE_0_66_0 = (
     "Viscous Neural Network, Multidimensional Navier-Stokes, Monte Carlo CVaR Decision Pruning + Greedy Dijkstra, Native Semantic Distillation, and VNN Bathymetry & Temporal-Spatial Physics-Constrained Reconstruction (v0.33, Helena Sloman 1850 & Pompeii-Vesuvius 79 CE)."
 )
-__build_date__ = "2026-11-19"
+__build_date__ = "2026-11-21"
 
 PHASES = {
+    "0.73.0": "qpsi/viscous_interaction.py capped by phi = (1+sqrt5)/2: VNNConfig.graph_cfl_max defaults to phi (was 1.8) and validate() refuses a ceiling above phi, so automatic substepping keeps every substep at Stab_G <= phi. TypedViscousCoupler factors (nu_s, kappa_s, forcing_scale) are now 1 + (phi-1)*c(s) in [1, phi], where c is a cantilevered nonlinear Bayesian weight: load s in [0,1] deflects an end-loaded cantilever delta = s^2(3-s)/2, used as the likelihood in an odds update on the muonic-decay branch of antimony pi = Q*Lambda_free/(Q*Lambda_free + Lambda_capture) ~ 0.037 (ueqgm_engine.muonic_disappearance_rate); physical viscosity factor capped at phi; non-finite readings refused (complex ones raise TypeError). New PHI, muonic_decay_prior, cantilever_weight, phi_capped_factor; CoupledStepReport.cantilever and entirety:vnn:latest carry loads, weights, factors and prior. Behaviour change: maxima fall from x3 (nu_s), x2 (kappa_s), x2.2 (forcing) to phi, and default inputs now pass almost nothing (nu_s x1.01 at edge_weight 0.125, was x2). tests/test_qpsi_viscous_phi_cap.py (8).",
     "0.72.0": "v0.67 concepts become a held forge-format ACRE tool candidate. Removed from the core: mesh_slm.py restored to v0.66.0 (no train_round knot/edge multipliers, no drag-deepened _proximity, no merger telemetry); meta.supernova on /observe and the supernova_gate guidance field; supernova_gate.py; the _UEQGM_TAGS/_KEYWORDS drift. Kept live: qpsi/bond_shear.py publisher, GET /bond_shear and its guidance field (advertised by v0.70 /capabilities). Added: qpsi/tool_candidates/viscous_shear_chain.py (tool_viscous_shear_chain, import math only, stages decay/field/gate/bond/interactions/worklink/pompeii; worklink = Planck length per UTC second, 13 h : 30 min = 26, 109.92 bits below 1 knot in the GARD interstitial channel, 1 knot <-> one overhand (2,3) traversal per relational time unit, capstan hold, hidden_work bound; pompeii = differential distances of build_pompeii_79ce_case, depression z = 0.36 unresolved); qpsi/tool_gate.py (held at gate 6 on exact scope tool:<name>@<sha256>, two signers + grant, hash/lint/gate re-checked at call time, forge manifest projection, materialise); qpsi/knot_shadow.py (read-only, perceptopoly.supernova/1 relational records, proposals recurring across two distinct input states, never applied). test_observer_health race fixed. docs/ACRE_TOOL_VISCOUS_SHEAR.md replaces docs/VISCOUS_DECAY_MERGER.md.",
     "0.71.0": "world_model.py: overhauled synthesize_quipu_discourse to enforce strict internal-information boundaries (_PUBLIC_LEAK_RE, _is_safe_public_text, _clean_public_concepts) and produce clear, readable engineering prose grounded in live World Model theme routing and vetted community concepts—eliminating leaked internal metrics/phases/token fragments ('se', 'kil', token counts, edge weights) and opaque jargon; diversified comment insights and deduplicated focus phrase pairs.",
     "0.70.1": "world_model.py: eliminated 5s full-table scan/count on 1.56M-edge mesh_slm_quipu during synthesize_quipu_discourse by moving mesh/kv snapshot queries inside post mode, querying bounded high-weight edges without ORDER BY sort, and caching counts/hubs for 120s (<15ms live response).",
