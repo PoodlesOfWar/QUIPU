@@ -4,6 +4,19 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.68.0] - 2026-11-22
+
+### Added
+- `src/quipu/process_studio_mcp.py` — the x_ProcessStudio holon as an **MCP server** for IDE agents (Streamable HTTP `POST /mcp`, or `stdio`). Exposes only the v-ADMIN surface: `process_studio_status`, `process_studio_list`, `activepieces_tools`, `process_studio_propose`. **No authorise or realise tool**: an editor agent stages; the operator's grant still governs realisation (V10-SEC-010). A thin client of the observer that never opens the brain (one brain, one writer): its single write is edge-signed as the new `vscode-agent` source, so identity, idempotency and budget apply to agents too.
+- Security: bearer `QUIPU_MCP_TOKEN` required (constant-time); **unset ⇒ every request 401** (fails closed); `QUIPU_MCP_ALLOW_OPEN=1` honoured on loopback only; browser `Origin` allowlist (`QUIPU_MCP_ORIGINS`, DNS-rebinding defence); 1 MB body cap; bounded sessions.
+- **Hub Holon docker fleet hosting**: `docker-compose.yml` gains `quipu-mcp` (same image, `127.0.0.1:7110`, `edge-mcp` network, healthcheck) and a `tunnel-mcp` profile (cloudflared 2025.10.0) for remote agents. Observer `GET /process_studio/tools` (Activepieces `tools/list`, cached 5 min) and filtered `GET /process_studio?status=&source=&limit=`.
+- `extensions/vscode-x-process-studio/` — **VS Code / Open VSX extension** (engine `^1.101.0`): contributes `mcpServerDefinitionProviders`, registers an `McpHttpServerDefinition` via `vscode.lm.registerMcpServerDefinitionProvider`; token asked once at server start (never while listing) and kept in SecretStorage; refuses plain http to public hosts. `.github/workflows/publish-extension.yml` packages on every PR and, on `ext-v*` tags, publishes to the VS Code Marketplace (`VSCE_PAT`) and Open VSX (`OVSX_PAT`), each only when its token is set, and attaches the `.vsix` to the release.
+- `src/quipu/gard_wallet.py` — **GARD Shard marketplace wallet connectors**: **Solflare** (Solana, ed25519 over the base58 key) and **MetaMask** (EVM, EIP-191 `personal_sign` of an EIP-4361 Sign-In-with-Ethereum message). keccak-256, EIP-55 and secp256k1 public-key recovery in stdlib (low-s only, EIP-2), cross-checked against `eth_account` 0.14.0. Single-use 5-minute nonces bound to chain, address, purpose and domain; `bind`/`unbind` behind the edge as source `gard-marketplace`; a GARD assignment proof per binding when `SCBRAIN_GRID_SECRET` is set, and `verify_binding_proof` refuses a proof that names another wallet. Routes `POST /gard/wallet/challenge|bind|unbind`, `GET /gard/wallet`, `GET /gard/wallet/connect` (connector page: EIP-6963 MetaMask discovery, strict CSP, no third-party scripts). No key handling, no transactions.
+- `docs/GARD_WALLET_CONNECT.md`; `docs/X_PROCESS_STUDIO.md` (MCP server, fleet hosting, extension, publishing); `tests/test_process_studio_mcp.py` (10, end to end against a live observer), `tests/test_gard_wallet.py` (13).
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `gard_shard_model.py`: 0-line diff.
+
 ## [0.67.0] - 2026-11-22
 
 ### Added

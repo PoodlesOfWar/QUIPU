@@ -139,6 +139,24 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "sibling": "perceptopoly",
         "siblings": ["perceptopoly", "stockopoly"],
     },
+    # GARD Shard marketplace wallet connectors (gard_wallet): browser bindings
+    # of Solflare (Solana) and MetaMask (EVM) wallets.  The wallet signature is
+    # the proof; the edge still records and budgets the write.
+    "gard-marketplace": {
+        "kind": "marketplace_wallets",
+        "axis": "brain",
+        "axis_source": "gard-marketplace/research/hideout-mesh",
+        "sibling": "hubcore",
+    },
+    # IDE agents (VS Code / Open VSX extension) reaching the x_ProcessStudio
+    # holon through process_studio_mcp.  Like every v-ADMIN source they stage;
+    # they never authorise or realise.  Routed by ("code", 1) to touch.
+    "vscode-agent": {
+        "kind": "agentic_ide",
+        "axis": "touch",
+        "axis_source": "vscode-agent/code/hideout-mesh",
+        "sibling": "hubcore",
+    },
 }
 
 _ALIASES = {
@@ -163,6 +181,14 @@ _ALIASES = {
     "stock_opoly": "stockopoly",
     "burger_phone": "burgerphone",
     "burger-phone": "burgerphone",
+    "vscode": "vscode-agent",
+    "vscode_agent": "vscode-agent",
+    "open-vsx": "vscode-agent",
+    "open_vsx": "vscode-agent",
+    "quipu-mcp": "vscode-agent",
+    "quipu_mcp": "vscode-agent",
+    "gard_marketplace": "gard-marketplace",
+    "gard": "gard-marketplace",
 }
 
 _STATS_KEY = "observer:{source}:stats"
@@ -663,10 +689,100 @@ def _ps_realise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
     return code, {"ok": code == 200, **out}
 
 
-def _ps_status() -> dict[str, Any]:
+def _gw_domain_uri(headers) -> tuple[str, str]:
+    """The domain wallets sign for: QUIPU_GARD_WALLET_DOMAIN, else the request Host.
+    (MetaMask compares an EIP-4361 domain with the requesting origin and warns
+    on mismatch, so a relayed message is visible to the signer.)"""
+    from . import gard_wallet
+    dom = os.environ.get(gard_wallet.DOMAIN_ENV, "").strip()
+    if not dom:
+        dom = (headers.get("Host") or "127.0.0.1:7100").strip()
+    proto = (headers.get("X-Forwarded-Proto") or "").split(",")[0].strip() or "http"
+    uri = dom if "://" in dom else f"{proto}://{dom}"
+    return dom.split("://", 1)[-1], uri
+
+
+def _gw_challenge(body: dict[str, Any], headers) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    domain, uri = _gw_domain_uri(headers)
+    try:
+        out = gard_wallet.challenge(str(body.get("chain") or ""), str(body.get("address") or ""),
+                                    domain=domain, uri=uri, chain_id=body.get("chain_id"),
+                                    purpose=str(body.get("purpose") or "bind"))
+    except (gard_wallet.WalletError, ValueError, TypeError) as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, **out}
+
+
+def _gw_bind(body: dict[str, Any], *, unbind: bool = False) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    fn = gard_wallet.unbind if unbind else gard_wallet.bind
+    try:
+        out = fn(str(body.get("chain") or ""), str(body.get("address") or ""),
+                 str(body.get("nonce") or ""), str(body.get("signature") or ""))
+    except gard_wallet.WalletError as exc:
+        return 401, {"ok": False, "error": str(exc)}
+    except (ValueError, TypeError) as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, out
+
+
+def _gw_get(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    chain = (qs.get("chain") or [None])[0]
+    address = (qs.get("address") or [None])[0]
+    if not chain and not address:
+        return 200, {"ok": True, "bindings": gard_wallet.index()}
+    try:
+        rec = gard_wallet.get_binding(str(chain or ""), str(address or ""))
+    except gard_wallet.WalletError as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    if not rec:
+        return 404, {"ok": False, "error": "no binding"}
+    return 200, {"ok": True, "binding": rec, "proof_valid": gard_wallet.verify_binding_proof(rec)}
+
+
+_GW_PAGE = os.path.join(os.path.dirname(__file__), "static", "gard_wallet_connect.html")
+
+
+_PS_TOOLS_TTL_S = 300.0
+_ps_tools_cache: dict[str, Any] = {"at": 0.0, "payload": None}
+
+
+def _ps_tools() -> dict[str, Any]:
+    """Activepieces MCP tools/list, cached for _PS_TOOLS_TTL_S.  Names and input
+    schemas only: listing is not acting."""
     from . import x_process_studio
+    now = time.time()
+    cached = _ps_tools_cache.get("payload")
+    if cached is not None and now - float(_ps_tools_cache.get("at") or 0.0) < _PS_TOOLS_TTL_S:
+        return cached
+    client = x_process_studio.ActivepiecesMCP()
+    if not client.available():
+        return {"ok": True, "mcp_configured": False, "tools": []}
+    try:
+        tools = client.list_tools()
+    except Exception as exc:
+        return {"ok": False, "mcp_configured": True, "tools": [], "error": str(exc)[:200]}
+    slim = [{"name": t.get("name"), "description": t.get("description", ""),
+             "inputSchema": t.get("inputSchema") or {}} for t in tools if isinstance(t, dict)]
+    payload = {"ok": True, "mcp_configured": True, "tools": slim}
+    _ps_tools_cache.update(at=now, payload=payload)
+    return payload
+
+
+def _ps_status(qs: dict[str, list[str]] | None = None) -> dict[str, Any]:
+    from . import x_process_studio
+    qs = qs or {}
+    status = (qs.get("status") or [None])[0]
+    status = status if status in x_process_studio.STATUSES else None
+    source = _canonical_source((qs.get("source") or [None])[0])
+    try:
+        limit = int((qs.get("limit") or ["20"])[0])
+    except ValueError:
+        limit = 20
     s = x_process_studio.stats()
-    s["recent"] = x_process_studio.list_proposals(limit=20)
+    s["recent"] = x_process_studio.list_proposals(status=status, source=source, limit=limit)
     s["operator_sources"] = sorted(_ps_operator_sources())
     return s
 
@@ -917,7 +1033,30 @@ class ObserverHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/process_studio":
                 # The x_ProcessStudio holon: MCP availability and the action
                 # ledger (read-only; staging and deciding are signed POSTs).
-                self._send_json(200, _ps_status())
+                self._send_json(200, _ps_status(parse_qs(parsed.query)))
+            elif parsed.path == "/gard/wallet":
+                code, payload = _gw_get(parse_qs(parsed.query))
+                self._send_json(code, payload)
+            elif parsed.path == "/gard/wallet/connect":
+                # The Solflare / MetaMask connector page, same-origin with the
+                # challenge and bind routes (no CORS, no third-party scripts).
+                try:
+                    with open(_GW_PAGE, "rb") as fh:
+                        page = fh.read()
+                except OSError:
+                    self._send_json(404, {"ok": False, "error": "connector page not installed"})
+                    return
+                self._send_raw(200, page, "text/html; charset=utf-8", {
+                    "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; "
+                                               "style-src 'unsafe-inline'; connect-src 'self'; "
+                                               "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                    "Referrer-Policy": "no-referrer",
+                })
+            elif parsed.path == "/process_studio/tools":
+                # What Activepieces can do (read-only), so an agent knows what
+                # to propose.  Cached; never calls a tool.
+                self._send_json(200, _ps_tools())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -974,6 +1113,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="generate")
             elif parsed.path == "/lambda/clusters":
                 code, payload = _lambda_clusters(body, decision)
+            elif parsed.path == "/gard/wallet/challenge":
+                code, payload = _gw_challenge(body, self.headers)
+            elif parsed.path == "/gard/wallet/bind":
+                code, payload = _gw_bind(body)
+            elif parsed.path == "/gard/wallet/unbind":
+                code, payload = _gw_bind(body, unbind=True)
             elif parsed.path == "/process_studio/propose":
                 code, payload = _ps_propose(body, decision)
             elif parsed.path == "/process_studio/authorise":

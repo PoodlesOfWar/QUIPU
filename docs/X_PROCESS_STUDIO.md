@@ -103,4 +103,84 @@ profile (body axis, siblings perceptopoly + stockopoly), beside the existing
 The studio writes only `process_studio:*` brain_kv keys, feeds no mesh, and is
 input to no gate.
 
+## For IDE agents: the MCP server, hosted on the fleet (v0.68.0)
+
+`src/quipu/process_studio_mcp.py` serves the holon to agents as an **MCP
+server** — Streamable HTTP at `POST /mcp` (or `stdio`). It exposes exactly the
+v-ADMIN surface:
+
+| MCP tool | does |
+|---|---|
+| `process_studio_status` | ledger counts, Activepieces availability |
+| `process_studio_list` | proposals by status / source |
+| `activepieces_tools` | the operator's Activepieces tools + input schemas (`GET /process_studio/tools`, cached 5 min; listing never runs a tool) |
+| `process_studio_propose` | stage a proposal, held for the operator |
+
+There is **no** authorise or realise tool: an editor agent can want, never act.
+
+**Hosting (Hub Holon docker fleet).** `docker-compose.yml` runs it as the
+`quipu-mcp` service: same image as `quipu`, its own process, published on
+`127.0.0.1:7110`. It never opens the brain (one brain, one writer); it reads
+the observer and signs its single write as the **`vscode-agent`** source over
+the internal `edge-mcp` network, so edge identity, idempotency (identical
+proposals de-duplicate) and the operator's budget apply to agents like to every
+writer.
+
+```bash
+export QUIPU_MCP_TOKEN=$(python -c "import secrets;print(secrets.token_urlsafe(32))")
+docker compose up -d quipu quipu-mcp
+curl -s http://127.0.0.1:7110/health
+# remote agents: a named Cloudflare tunnel in front (TLS), token still required
+QUIPU_MCP_TUNNEL_TOKEN=… docker compose --profile tunnel-mcp up -d
+```
+
+Security: every request needs `Authorization: Bearer $QUIPU_MCP_TOKEN`
+(constant-time compare). **Unset ⇒ every request is 401** — the server fails
+closed; `QUIPU_MCP_ALLOW_OPEN=1` permits tokenless use on loopback only. A
+browser `Origin` not listed in `QUIPU_MCP_ORIGINS` is refused (DNS-rebinding
+defence); editors send none. Mint the `vscode-agent` edge key and add it to the
+grant to run under `QUIPU_EDGE_AUTH=enforce`.
+
+**In a fleet-root compose** (where QUIPU sits on per-writer edge networks), add
+the same service on its own edge:
+
+```yaml
+  quipu-mcp:
+    image: quipu-observer:dev
+    command: ["python", "-m", "src.quipu.process_studio_mcp", "serve", "--host", "0.0.0.0", "--port", "7110"]
+    ports: ["127.0.0.1:7110:7110"]
+    environment:
+      QUIPU_URL: http://quipu:7100
+      QUIPU_MCP_TOKEN: ${QUIPU_MCP_TOKEN}
+      QUIPU_EDGE_KEY_VSCODE_AGENT: ${QUIPU_EDGE_KEY_VSCODE_AGENT}
+    networks: [edge-mcp]        # and add edge-mcp to the quipu service's networks
+```
+
+## VS Code and Open VSX
+
+`extensions/vscode-x-process-studio/` is a VS Code extension (engine
+`^1.101.0`, the stable MCP provider API) that contributes
+`mcpServerDefinitionProviders` and registers the server via
+`vscode.lm.registerMcpServerDefinitionProvider` as an `McpHttpServerDefinition`.
+Agent mode then lists **x_ProcessStudio (QUIPU)** among its MCP servers.
+
+- `xProcessStudio.serverUrl` (default `http://127.0.0.1:7110/mcp`): plain http
+  only for this machine or a private network; `https://` otherwise.
+- The token is asked for once, when the server first starts (never while
+  merely listing servers), and kept in VS Code **secret storage**;
+  `x_ProcessStudio: Set Server Token` / `Clear Server Token` manage it.
+- Open VSX serves the same `.vsix` to VSCodium, Cursor, Windsurf, Gitpod and
+  other VS Code-compatible editors; agent use there depends on the editor
+  implementing the VS Code MCP API.
+
+**Publishing** (`.github/workflows/publish-extension.yml`): every PR touching
+the extension compiles and packages it; tagging `ext-v<version>` publishes to
+the **VS Code Marketplace** when the `VSCE_PAT` secret is set and to **Open
+VSX** when `OVSX_PAT` is set, and attaches the `.vsix` to the GitHub release.
+One-time owner steps: create publisher `poodlesofwar` on the Marketplace and
+namespace `poodlesofwar` on open-vsx.org (`npx ovsx create-namespace
+poodlesofwar -p $OVSX_PAT`), add both PATs as repository secrets, choose a
+license (the manifest says `UNLICENSED` until one is added), then
+`git tag ext-v0.1.0 && git push origin ext-v0.1.0`.
+
 翈 — the studio stages what is wanted; only the operator's grant lets it act.
