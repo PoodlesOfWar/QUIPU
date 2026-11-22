@@ -4,6 +4,18 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.67.0] - 2026-11-22
+
+### Added
+- `src/quipu/x_process_studio.py` — the **x_ProcessStudio Holon**: authorizable agentic action through **Activepieces MCP**, for **r-ADMIN via v-ADMIN**. Any admitted fleet source's VLM/LLM layer (Perceptopoly, StockOpoly, BurgerPhone, the Brain) may *stage* an `ActionProposal` (v-ADMIN: held in band 翈, never executed); the operator *authorises* with a two-party Gate 6 attestation plus the organizational `grant_ref` checked by `authorised_to_realise` (V10-SEC-010 — admissibility is not authorization; `config_digest` stamped, V10-SEC-002); only an AUTHORISED proposal is *realised* by r-ADMIN through MCP `tools/call`. A transport failure keeps the proposal AUTHORISED for retry; a JSON-RPC error marks it FAILED (the tool refused).
+- Stdlib MCP client (`ActivepiecesMCP`): JSON-RPC 2.0 over Streamable HTTP (`initialize` → `notifications/initialized` → `tools/list` / `tools/call`), plain-JSON and SSE response bodies, `Mcp-Session-Id` carried, optional bearer token; plain `http://` only for loopback/private/container addresses (as `edge_client`). Unset `QUIPU_ACTIVEPIECES_MCP_URL` ⇒ unavailable: staging still works, realisation answers `held` — opt-in on the acting side.
+- Observer routes: `GET /process_studio` (status), `POST /process_studio/propose|authorise|realise`, all in `edge_admission.MUTATING` (signed identity, idempotency, budget as `/observe`). `authorise`/`realise` additionally require a **signed** source named in `QUIPU_PROCESS_STUDIO_OPERATORS` (default none: the operator acts through the CLI inside the container — `python -m src.quipu.x_process_studio status|list|tools|propose|authorise|realise`).
+- `observer_service.SOURCE_PROFILES["burgerphone"]` — the operator-facing agentic comms surface joins the fleet on the body axis (`burgerphone/wiki/hideout-mesh`), siblings `perceptopoly` + `stockopoly`; aliases `burger_phone`, `burger-phone`. Connects like every writer: minted key, grant line, signed writes.
+- `docs/X_PROCESS_STUDIO.md`; `tests/test_x_process_studio.py` (19 tests).
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `gate6_interlock.py`: 0-line diff. The holon writes only `process_studio:*` brain_kv keys, feeds no mesh, and is input to no gate.
+
 ## [0.66.0] - 2026-10-27
 
 ### Added

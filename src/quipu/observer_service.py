@@ -126,6 +126,19 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "sibling": "loadopoly-ocr",
         "siblings": ["loadopoly-ocr", "bakugo"],
     },
+    # BurgerPhone: the operator-facing agentic comms surface.  Its assistant's
+    # VLM/LLM layer stages ActionProposals on the x_ProcessStudio holon
+    # (x_process_studio: v-ADMIN stages, the operator authorises, r-ADMIN
+    # realises through Activepieces MCP) and observes what it heard.  Routed by
+    # the ("wiki", 3) marker to the body axis (grounded, task-shaped text),
+    # beside hub-floor's tasks.
+    "burgerphone": {
+        "kind": "agentic_comms",
+        "axis": "body",
+        "axis_source": "burgerphone/wiki/hideout-mesh",
+        "sibling": "perceptopoly",
+        "siblings": ["perceptopoly", "stockopoly"],
+    },
 }
 
 _ALIASES = {
@@ -148,6 +161,8 @@ _ALIASES = {
     "job-hawk": "jobhawk",
     "stockopoly": "stockopoly",
     "stock_opoly": "stockopoly",
+    "burger_phone": "burgerphone",
+    "burger-phone": "burgerphone",
 }
 
 _STATS_KEY = "observer:{source}:stats"
@@ -554,6 +569,108 @@ def _lambda_clusters(body: dict[str, Any], decision) -> tuple[int, dict[str, Any
         return 403, {"ok": False, "error": f"clusters come from the marketplace ({', '.join(shadow_tokens.MARKET_SOURCES)})"}
     return 200, shadow_tokens.store_clusters(body.get("clusters"), source)
 
+def _ps_operator_sources() -> set[str]:
+    """Canonical sources the operator allows to authorise/realise over HTTP
+    (QUIPU_PROCESS_STUDIO_OPERATORS, comma-separated).  Default empty: the
+    operator acts through the CLI inside the container."""
+    from .x_process_studio import OPERATORS_ENV
+    raw = os.environ.get(OPERATORS_ENV, "")
+    out: set[str] = set()
+    for part in raw.split(","):
+        c = _canonical_source(part)
+        if c:
+            out.add(c)
+    return out
+
+
+def _ps_propose(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """Stage an ActionProposal on the x_ProcessStudio holon (v-ADMIN side).
+    Any admitted fleet source may stage; nothing is executed here."""
+    from . import x_process_studio
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False,
+                     "error": "propose requires source=" + "|".join(sorted(SOURCE_PROFILES))}
+    tool = str(body.get("tool") or "").strip()
+    if not tool:
+        return 400, {"ok": False, "error": "propose requires a tool name"}
+    arguments = body.get("arguments")
+    if arguments is not None and not isinstance(arguments, dict):
+        return 400, {"ok": False, "error": "arguments must be an object"}
+    meta = body.get("meta")
+    if meta is not None and not isinstance(meta, dict):
+        return 400, {"ok": False, "error": "meta must be an object"}
+    try:
+        p = x_process_studio.propose(source, tool, arguments=arguments,
+                                     reason=str(body.get("reason") or ""), meta=meta)
+    except ValueError as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, "held": True, "proposal": p.to_dict()}
+
+
+def _ps_operator_gate(body: dict[str, Any], decision) -> tuple[str, None] | tuple[None, tuple[int, dict[str, Any]]]:
+    """The HTTP operator check for authorise/realise: the write must be signed
+    and its source named in QUIPU_PROCESS_STUDIO_OPERATORS."""
+    allowed = _ps_operator_sources()
+    if not allowed:
+        return None, (403, {"ok": False,
+                            "error": "HTTP authorisation is off (QUIPU_PROCESS_STUDIO_OPERATORS "
+                                     "unset): the operator acts through the CLI"})
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source not in allowed:
+        return None, (403, {"ok": False, "error": "source is not an operator source"})
+    if decision is None or getattr(decision, "assurance", "") != "signed":
+        return None, (403, {"ok": False,
+                            "error": "authorise/realise require a signed identity "
+                                     "(QUIPU_EDGE_AUTH with a minted key)"})
+    return source, None
+
+
+def _ps_authorise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """The operator's decision over HTTP: approve (grant_ref) or reject.
+    Gate 6 two-party attestation + authorised_to_realise (V10-SEC-010)."""
+    from . import x_process_studio
+    source, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    pid = str(body.get("proposal_id") or "").strip()
+    if not pid:
+        return 400, {"ok": False, "error": "proposal_id required"}
+    operator = str(body.get("operator") or source or "").strip()
+    out = x_process_studio.authorise(pid, operator, str(body.get("grant_ref") or ""),
+                                     approve=bool(body.get("approve", True)),
+                                     why=str(body.get("why") or ""))
+    code = 200 if out.get("status") in ("authorised", "rejected", "already_authorised", "held") else 400
+    return code, {"ok": code == 200, **out}
+
+
+def _ps_realise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """Realise one AUTHORISED proposal (or all ready ones) through Activepieces
+    MCP — r-ADMIN's act, operator sources only."""
+    from . import x_process_studio
+    _, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    if body.get("ready"):
+        return 200, {"ok": True, "results": x_process_studio.realise_ready()}
+    pid = str(body.get("proposal_id") or "").strip()
+    if not pid:
+        return 400, {"ok": False, "error": "proposal_id (or ready: true) required"}
+    out = x_process_studio.realise(pid)
+    code = 200 if out.get("status") != "error" else 400
+    return code, {"ok": code == 200, **out}
+
+
+def _ps_status() -> dict[str, Any]:
+    from . import x_process_studio
+    s = x_process_studio.stats()
+    s["recent"] = x_process_studio.list_proposals(limit=20)
+    s["operator_sources"] = sorted(_ps_operator_sources())
+    return s
+
+
 def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, dict[str, Any]]:
     """Execute universal MESH-SLM inference, classification, or scoring over HTTP."""
     try:
@@ -694,6 +811,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
             text = str(body.get("text") or "")
         elif path == "/feedback":
             text = str(body.get("expected") or "")
+        elif path.startswith("/process_studio/"):
+            text = str(body.get("reason") or body.get("tool") or "")
         try:
             tokens = len(mesh_slm._tokenize(text)) if text else 0
         except Exception:
@@ -795,6 +914,10 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path == "/process_studio":
+                # The x_ProcessStudio holon: MCP availability and the action
+                # ledger (read-only; staging and deciding are signed POSTs).
+                self._send_json(200, _ps_status())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -851,6 +974,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="generate")
             elif parsed.path == "/lambda/clusters":
                 code, payload = _lambda_clusters(body, decision)
+            elif parsed.path == "/process_studio/propose":
+                code, payload = _ps_propose(body, decision)
+            elif parsed.path == "/process_studio/authorise":
+                code, payload = _ps_authorise(body, decision)
+            elif parsed.path == "/process_studio/realise":
+                code, payload = _ps_realise(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
             elif parsed.path == "/bathymetry":
