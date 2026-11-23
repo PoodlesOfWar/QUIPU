@@ -4,6 +4,18 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.74.0] - 2026-11-23
+
+### Added
+- `observer_service`: source `quipu-voice` (aliases `voice`, `quipu_voice`), kind `speech`, for the fleet's
+  speech service (`services/quipu_voice` in the fleet repository). Edge devices and fleet members send audio
+  there; faster-whisper transcribes it and each transcript is posted to `/observe` through the edge client
+  (durable outbox, idempotency, signed when a key is minted for `quipu-voice`). No audio reaches QUIPU.
+  The source's `axis_source` has no axis-map marker, so speech feeds the mesh broad and unrouted;
+  `_SOURCE_AXIS_MAP` and its memristive mirror are unchanged. The service reads `/guidance?source=quipu-voice`
+  and uses the learned lexicon as faster-whisper hotwords.
+- Tests: `test_voice_source_feeds_the_mesh_unrouted`; aliases in `test_canonical_source_routing`.
+
 ## [0.73.0] - 2026-11-21
 
 `qpsi/viscous_interaction.py` is capped by φ = (1 + √5)/2 ≈ 1.618.

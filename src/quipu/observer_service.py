@@ -31,6 +31,8 @@ Endpoints (all JSON unless noted):
                               (a coordinator's result is generated, so it is shared, not learned)
     GET  /digest              today's learning digest (text/plain)
 
+Sources: SOURCE_PROFILES below; quipu-voice is the fleet's speech service (transcripts, never audio).
+
 Environment:
     QUIPU_HOST            bind address (default 0.0.0.0)
     QUIPU_PORT            port (default 7100)
@@ -126,6 +128,16 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "sibling": "loadopoly-ocr",
         "siblings": ["loadopoly-ocr", "bakugo"],
     },
+    # quipu-voice (fleet services/quipu_voice): speech from edge devices and the fleet, transcribed by
+    # faster-whisper; each transcript arrives as one observation (kind "speech", meta: device, utterance id,
+    # duration, language). Its axis_source carries no _SOURCE_AXIS_MAP marker, so speech feeds the mesh broad
+    # and unrouted, like hubcore: giving hearing a sense-axis of its own is a change to the governed axis map.
+    "quipu-voice": {
+        "kind": "speech",
+        "axis": "hearing",
+        "axis_source": "quipu-voice/speech/hideout-mesh",
+        "sibling": "hubcore",
+    },
 }
 
 _ALIASES = {
@@ -148,6 +160,9 @@ _ALIASES = {
     "job-hawk": "jobhawk",
     "stockopoly": "stockopoly",
     "stock_opoly": "stockopoly",
+    "quipu_voice": "quipu-voice",
+    "quipuvoice": "quipu-voice",
+    "voice": "quipu-voice",
 }
 
 _STATS_KEY = "observer:{source}:stats"

@@ -19,6 +19,15 @@ def test_canonical_source_routing():
     assert observer_service._canonical_source("hub") == "hubcore"
     assert observer_service._canonical_source("hub-floor") == "hub-floor"
     assert observer_service._canonical_source("floor") == "hub-floor"
+    assert observer_service._canonical_source("quipu_voice") == "quipu-voice"
+    assert observer_service._canonical_source("voice") == "quipu-voice"
+
+
+def test_voice_source_feeds_the_mesh_unrouted():
+    """Speech is accepted as an observation but does not claim a sense-axis: the axis map is unchanged."""
+    profile = observer_service.SOURCE_PROFILES["quipu-voice"]
+    assert profile["kind"] == "speech"
+    assert mesh_slm._axis_for_source(profile["axis_source"]) is None
 
 
 def test_observe_and_guidance_for_scb():

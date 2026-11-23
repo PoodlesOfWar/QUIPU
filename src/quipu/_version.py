@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-__version__ = "0.73.0"
+__version__ = "0.74.0"
 __release__ = (
+    "quipu-voice: the fleet's speech service as an observer source (transcripts from edge devices, unrouted)."
+)
+_RELEASE_0_73_0 = (
     "Viscous interaction capped by phi: graph stability number phi (was 1.8) and phi-capped cantilevered Bayesian coupling weights on a muonic-antimony prior."
 )
 _RELEASE_0_72_0 = (
