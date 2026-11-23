@@ -126,6 +126,37 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "sibling": "loadopoly-ocr",
         "siblings": ["loadopoly-ocr", "bakugo"],
     },
+    # BurgerPhone: the operator-facing agentic comms surface.  Its assistant's
+    # VLM/LLM layer stages ActionProposals on the x_ProcessStudio holon
+    # (x_process_studio: v-ADMIN stages, the operator authorises, r-ADMIN
+    # realises through Activepieces MCP) and observes what it heard.  Routed by
+    # the ("wiki", 3) marker to the body axis (grounded, task-shaped text),
+    # beside hub-floor's tasks.
+    "burgerphone": {
+        "kind": "agentic_comms",
+        "axis": "body",
+        "axis_source": "burgerphone/wiki/hideout-mesh",
+        "sibling": "perceptopoly",
+        "siblings": ["perceptopoly", "stockopoly"],
+    },
+    # GARD Shard marketplace wallet connectors (gard_wallet): browser bindings
+    # of Solflare (Solana) and MetaMask (EVM) wallets.  The wallet signature is
+    # the proof; the edge still records and budgets the write.
+    "gard-marketplace": {
+        "kind": "marketplace_wallets",
+        "axis": "brain",
+        "axis_source": "gard-marketplace/research/hideout-mesh",
+        "sibling": "hubcore",
+    },
+    # IDE agents (VS Code / Open VSX extension) reaching the x_ProcessStudio
+    # holon through process_studio_mcp.  Like every v-ADMIN source they stage;
+    # they never authorise or realise.  Routed by ("code", 1) to touch.
+    "vscode-agent": {
+        "kind": "agentic_ide",
+        "axis": "touch",
+        "axis_source": "vscode-agent/code/hideout-mesh",
+        "sibling": "hubcore",
+    },
 }
 
 _ALIASES = {
@@ -148,6 +179,16 @@ _ALIASES = {
     "job-hawk": "jobhawk",
     "stockopoly": "stockopoly",
     "stock_opoly": "stockopoly",
+    "burger_phone": "burgerphone",
+    "burger-phone": "burgerphone",
+    "vscode": "vscode-agent",
+    "vscode_agent": "vscode-agent",
+    "open-vsx": "vscode-agent",
+    "open_vsx": "vscode-agent",
+    "quipu-mcp": "vscode-agent",
+    "quipu_mcp": "vscode-agent",
+    "gard_marketplace": "gard-marketplace",
+    "gard": "gard-marketplace",
 }
 
 _STATS_KEY = "observer:{source}:stats"
@@ -554,6 +595,264 @@ def _lambda_clusters(body: dict[str, Any], decision) -> tuple[int, dict[str, Any
         return 403, {"ok": False, "error": f"clusters come from the marketplace ({', '.join(shadow_tokens.MARKET_SOURCES)})"}
     return 200, shadow_tokens.store_clusters(body.get("clusters"), source)
 
+def _ps_operator_sources() -> set[str]:
+    """Canonical sources the operator allows to authorise/realise over HTTP
+    (QUIPU_PROCESS_STUDIO_OPERATORS, comma-separated).  Default empty: the
+    operator acts through the CLI inside the container."""
+    from .x_process_studio import OPERATORS_ENV
+    raw = os.environ.get(OPERATORS_ENV, "")
+    out: set[str] = set()
+    for part in raw.split(","):
+        c = _canonical_source(part)
+        if c:
+            out.add(c)
+    return out
+
+
+def _ps_propose(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """Stage an ActionProposal on the x_ProcessStudio holon (v-ADMIN side).
+    Any admitted fleet source may stage; nothing is executed here."""
+    from . import x_process_studio
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False,
+                     "error": "propose requires source=" + "|".join(sorted(SOURCE_PROFILES))}
+    tool = str(body.get("tool") or "").strip()
+    if not tool:
+        return 400, {"ok": False, "error": "propose requires a tool name"}
+    arguments = body.get("arguments")
+    if arguments is not None and not isinstance(arguments, dict):
+        return 400, {"ok": False, "error": "arguments must be an object"}
+    meta = body.get("meta")
+    if meta is not None and not isinstance(meta, dict):
+        return 400, {"ok": False, "error": "meta must be an object"}
+    try:
+        p = x_process_studio.propose(source, tool, arguments=arguments,
+                                     reason=str(body.get("reason") or ""), meta=meta)
+    except ValueError as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, "held": True, "proposal": p.to_dict()}
+
+
+def _ps_operator_gate(body: dict[str, Any], decision) -> tuple[str, None] | tuple[None, tuple[int, dict[str, Any]]]:
+    """The HTTP operator check for authorise/realise: the write must be signed
+    and its source named in QUIPU_PROCESS_STUDIO_OPERATORS."""
+    allowed = _ps_operator_sources()
+    if not allowed:
+        return None, (403, {"ok": False,
+                            "error": "HTTP authorisation is off (QUIPU_PROCESS_STUDIO_OPERATORS "
+                                     "unset): the operator acts through the CLI"})
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source not in allowed:
+        return None, (403, {"ok": False, "error": "source is not an operator source"})
+    if decision is None or getattr(decision, "assurance", "") != "signed":
+        return None, (403, {"ok": False,
+                            "error": "authorise/realise require a signed identity "
+                                     "(QUIPU_EDGE_AUTH with a minted key)"})
+    return source, None
+
+
+def _ps_authorise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """The operator's decision over HTTP: approve (grant_ref) or reject.
+    Gate 6 two-party attestation + authorised_to_realise (V10-SEC-010)."""
+    from . import x_process_studio
+    source, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    pid = str(body.get("proposal_id") or "").strip()
+    if not pid:
+        return 400, {"ok": False, "error": "proposal_id required"}
+    operator = str(body.get("operator") or source or "").strip()
+    out = x_process_studio.authorise(pid, operator, str(body.get("grant_ref") or ""),
+                                     approve=bool(body.get("approve", True)),
+                                     why=str(body.get("why") or ""))
+    code = 200 if out.get("status") in ("authorised", "rejected", "already_authorised", "held") else 400
+    return code, {"ok": code == 200, **out}
+
+
+def _ps_realise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """Realise one AUTHORISED proposal (or all ready ones) through Activepieces
+    MCP — r-ADMIN's act, operator sources only."""
+    from . import x_process_studio
+    _, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    if body.get("ready"):
+        return 200, {"ok": True, "results": x_process_studio.realise_ready()}
+    pid = str(body.get("proposal_id") or "").strip()
+    if not pid:
+        return 400, {"ok": False, "error": "proposal_id (or ready: true) required"}
+    out = x_process_studio.realise(pid)
+    code = 200 if out.get("status") != "error" else 400
+    return code, {"ok": code == 200, **out}
+
+
+def _vnn_actions_get() -> tuple[int, dict[str, Any]]:
+    """GET /vnn/actions: what the VNN rules would stage from the latest report (read-only, stages nothing)."""
+    from . import vnn_actions
+    try:
+        return 200, vnn_actions.dry_run()
+    except ValueError as exc:                         # an invalid operator rules file is loud, not ignored
+        return 500, {"ok": False, "error": str(exc)}
+
+
+def _vnn_actions_stage(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """POST /vnn/actions/stage: stage a held proposal for every firing VNN rule.  Staging is not
+    acting (the operator still authorises each proposal), but it is an operator act: the same
+    signed-operator gate as authorise and realise."""
+    from . import vnn_actions
+    _, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    try:
+        return 200, vnn_actions.stage()
+    except ValueError as exc:
+        return 500, {"ok": False, "error": str(exc)}
+
+
+def _deepmap_link(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """POST /deepmap/link: keep one device's deepmap.link/1 record.  Validated and rebuilt from a
+    whitelist first (deepmap.validate_link): a record carrying a MAC address is refused, so the
+    generic relational route cannot be used to store device or access-point addresses here."""
+    from . import deepmap
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False, "error": "unknown source; expected one of " + ", ".join(sorted(SOURCE_PROFILES))}
+    clean, err = deepmap.validate_link(body.get("relational"))
+    if clean is None:
+        return 400, {"ok": False, "error": err}
+    kept = _keep_relational(source, clean)
+    if kept is None:
+        return 400, {"ok": False, "error": "record not kept"}
+    return 200, {"ok": True, "source": source, "kept": kept}
+
+
+def _deepmap_get(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """GET /deepmap: the graph assembled from every kept deepmap.link/1 record
+    (?source= filters reporters, ?max_age_s= sets when a silent reporter goes stale)."""
+    from . import deepmap
+    want = _canonical_source((qs.get("source") or [None])[0]) if (qs.get("source") or [None])[0] else None
+    try:
+        max_age = float((qs.get("max_age_s") or [deepmap.DEFAULT_MAX_AGE_S])[0])
+    except ValueError:
+        max_age = deepmap.DEFAULT_MAX_AGE_S
+    idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+    records = []
+    for row in idx.values():
+        if not isinstance(row, dict) or row.get("schema") != deepmap.SCHEMA_LINK:
+            continue
+        if want and row.get("source") != want:
+            continue
+        rec = brain_kv.kv_get_json(_RELATIONAL_KEY.format(source=row.get("source"), entity=row.get("entity")), None)
+        if isinstance(rec, dict):
+            records.append(rec)
+    return 200, deepmap.build_graph(records, max_age_s=max(1.0, min(max_age, 30 * 86400.0)))
+
+
+def _gw_domain_uri(headers) -> tuple[str, str]:
+    """The domain wallets sign for: QUIPU_GARD_WALLET_DOMAIN, else the request Host.
+    (MetaMask compares an EIP-4361 domain with the requesting origin and warns
+    on mismatch, so a relayed message is visible to the signer.)"""
+    from . import gard_wallet
+    dom = os.environ.get(gard_wallet.DOMAIN_ENV, "").strip()
+    if not dom:
+        dom = (headers.get("Host") or "127.0.0.1:7100").strip()
+    proto = (headers.get("X-Forwarded-Proto") or "").split(",")[0].strip() or "http"
+    uri = dom if "://" in dom else f"{proto}://{dom}"
+    return dom.split("://", 1)[-1], uri
+
+
+def _gw_challenge(body: dict[str, Any], headers) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    domain, uri = _gw_domain_uri(headers)
+    try:
+        out = gard_wallet.challenge(str(body.get("chain") or ""), str(body.get("address") or ""),
+                                    domain=domain, uri=uri, chain_id=body.get("chain_id"),
+                                    purpose=str(body.get("purpose") or "bind"))
+    except (gard_wallet.WalletError, ValueError, TypeError) as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, **out}
+
+
+def _gw_bind(body: dict[str, Any], *, unbind: bool = False) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    fn = gard_wallet.unbind if unbind else gard_wallet.bind
+    try:
+        out = fn(str(body.get("chain") or ""), str(body.get("address") or ""),
+                 str(body.get("nonce") or ""), str(body.get("signature") or ""))
+    except gard_wallet.WalletError as exc:
+        return 401, {"ok": False, "error": str(exc)}
+    except (ValueError, TypeError) as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, out
+
+
+def _gw_get(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    from . import gard_wallet
+    chain = (qs.get("chain") or [None])[0]
+    address = (qs.get("address") or [None])[0]
+    if not chain and not address:
+        return 200, {"ok": True, "bindings": gard_wallet.index()}
+    try:
+        rec = gard_wallet.get_binding(str(chain or ""), str(address or ""))
+    except gard_wallet.WalletError as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    if not rec:
+        return 404, {"ok": False, "error": "no binding"}
+    return 200, {"ok": True, "binding": rec, "proof_valid": gard_wallet.verify_binding_proof(rec)}
+
+
+_GW_PAGE = os.path.join(os.path.dirname(__file__), "static", "gard_wallet_connect.html")
+
+
+_PS_TOOLS_TTL_S = 300.0
+_ps_tools_cache: dict[str, Any] = {"at": 0.0, "payload": None}
+
+
+def _ps_tools() -> dict[str, Any]:
+    """Activepieces MCP tools/list, cached for _PS_TOOLS_TTL_S.  Names and input
+    schemas only: listing is not acting."""
+    from . import x_process_studio
+    now = time.time()
+    cached = _ps_tools_cache.get("payload")
+    if cached is not None and now - float(_ps_tools_cache.get("at") or 0.0) < _PS_TOOLS_TTL_S:
+        return cached
+    client = x_process_studio.ActivepiecesMCP()
+    if not client.available():
+        return {"ok": True, "mcp_configured": False, "tools": []}
+    try:
+        tools = client.list_tools()
+    except Exception as exc:
+        return {"ok": False, "mcp_configured": True, "tools": [], "error": str(exc)[:200]}
+    slim = [{"name": t.get("name"), "description": t.get("description", ""),
+             "inputSchema": t.get("inputSchema") or {}} for t in tools if isinstance(t, dict)]
+    payload = {"ok": True, "mcp_configured": True, "tools": slim}
+    _ps_tools_cache.update(at=now, payload=payload)
+    return payload
+
+
+def _ps_status(qs: dict[str, list[str]] | None = None) -> dict[str, Any]:
+    from . import x_process_studio
+    qs = qs or {}
+    status = (qs.get("status") or [None])[0]
+    status = status if status in x_process_studio.STATUSES else None
+    source = _canonical_source((qs.get("source") or [None])[0])
+    try:
+        limit = int((qs.get("limit") or ["20"])[0])
+    except ValueError:
+        limit = 20
+    s = x_process_studio.stats()
+    s["recent"] = x_process_studio.list_proposals(status=status, source=source, limit=limit)
+    one = (qs.get("id") or [None])[0]
+    if one:
+        s["recent"] = [r for r in x_process_studio.list_proposals(limit=500) if r.get("proposal_id") == one]
+    s["operator_sources"] = sorted(_ps_operator_sources())
+    return s
+
+
 def _slm(body: dict[str, Any], endpoint_kind: str | None = None) -> tuple[int, dict[str, Any]]:
     """Execute universal MESH-SLM inference, classification, or scoring over HTTP."""
     try:
@@ -694,6 +993,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
             text = str(body.get("text") or "")
         elif path == "/feedback":
             text = str(body.get("expected") or "")
+        elif path.startswith("/process_studio/"):
+            text = str(body.get("reason") or body.get("tool") or "")
         try:
             tokens = len(mesh_slm._tokenize(text)) if text else 0
         except Exception:
@@ -795,6 +1096,39 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path == "/process_studio":
+                # The x_ProcessStudio holon: MCP availability and the action
+                # ledger (read-only; staging and deciding are signed POSTs).
+                self._send_json(200, _ps_status(parse_qs(parsed.query)))
+            elif parsed.path == "/deepmap":
+                code, payload = _deepmap_get(parse_qs(parsed.query))
+                self._send_json(code, payload)
+            elif parsed.path == "/vnn/actions":
+                code, payload = _vnn_actions_get()
+                self._send_json(code, payload)
+            elif parsed.path == "/gard/wallet":
+                code, payload = _gw_get(parse_qs(parsed.query))
+                self._send_json(code, payload)
+            elif parsed.path == "/gard/wallet/connect":
+                # The Solflare / MetaMask connector page, same-origin with the
+                # challenge and bind routes (no CORS, no third-party scripts).
+                try:
+                    with open(_GW_PAGE, "rb") as fh:
+                        page = fh.read()
+                except OSError:
+                    self._send_json(404, {"ok": False, "error": "connector page not installed"})
+                    return
+                self._send_raw(200, page, "text/html; charset=utf-8", {
+                    "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; "
+                                               "style-src 'unsafe-inline'; connect-src 'self'; "
+                                               "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                    "Referrer-Policy": "no-referrer",
+                })
+            elif parsed.path == "/process_studio/tools":
+                # What Activepieces can do (read-only), so an agent knows what
+                # to propose.  Cached; never calls a tool.
+                self._send_json(200, _ps_tools())
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -851,6 +1185,22 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="generate")
             elif parsed.path == "/lambda/clusters":
                 code, payload = _lambda_clusters(body, decision)
+            elif parsed.path == "/deepmap/link":
+                code, payload = _deepmap_link(body, decision)
+            elif parsed.path == "/vnn/actions/stage":
+                code, payload = _vnn_actions_stage(body, decision)
+            elif parsed.path == "/gard/wallet/challenge":
+                code, payload = _gw_challenge(body, self.headers)
+            elif parsed.path == "/gard/wallet/bind":
+                code, payload = _gw_bind(body)
+            elif parsed.path == "/gard/wallet/unbind":
+                code, payload = _gw_bind(body, unbind=True)
+            elif parsed.path == "/process_studio/propose":
+                code, payload = _ps_propose(body, decision)
+            elif parsed.path == "/process_studio/authorise":
+                code, payload = _ps_authorise(body, decision)
+            elif parsed.path == "/process_studio/realise":
+                code, payload = _ps_realise(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
             elif parsed.path == "/bathymetry":

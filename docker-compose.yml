@@ -18,12 +18,62 @@ services:
       QUIPU_EDGE_BUDGET: "${QUIPU_EDGE_BUDGET:-record}"
       QUIPU_EDGE_KEYS_FILE: /run/quipu-edge/edge_keys.json
       QUIPU_EDGE_GRANT_FILE: /run/quipu-edge/edge_grant.json
+      # x_ProcessStudio: Activepieces MCP server URL (Settings -> MCP Server).
+      QUIPU_ACTIVEPIECES_MCP_URL: "${QUIPU_ACTIVEPIECES_MCP_URL:-}"
+      QUIPU_ACTIVEPIECES_MCP_TOKEN: "${QUIPU_ACTIVEPIECES_MCP_TOKEN:-}"
+      # GARD wallet connectors: the domain wallets sign for (Solflare / MetaMask).
+      QUIPU_GARD_WALLET_DOMAIN: "${QUIPU_GARD_WALLET_DOMAIN:-127.0.0.1:7100}"
     volumes:
       - quipu_brain:/data
       - ./bridge_state:/app/bridge_state
       # Edge keys and grant, read-only, from outside the repository (qpsi.edge_admission).
       - ${QUIPU_EDGE_DIR:-./docs/edge-empty}:/run/quipu-edge:ro
+    networks: [default, edge-mcp]
     restart: unless-stopped
+
+  # The x_ProcessStudio holon as an MCP server for IDE agents (VS Code / Open
+  # VSX extension "x-process-studio").  Same image, its own process; it never
+  # opens the brain (one brain, one writer): it reads the observer and signs its
+  # one write as the `vscode-agent` source over the internal edge-mcp network.
+  # v-ADMIN tools only: agents stage, the operator authorises.  Fails closed
+  # (401) until QUIPU_MCP_TOKEN is set.
+  quipu-mcp:
+    image: quipu-observer:dev
+    container_name: quipu-mcp
+    depends_on: [quipu]
+    command: ["python", "-m", "src.quipu.process_studio_mcp", "serve", "--host", "0.0.0.0", "--port", "7110"]
+    ports:
+      - "127.0.0.1:7110:7110"
+    environment:
+      QUIPU_URL: http://quipu:7100
+      QUIPU_MCP_SOURCE: vscode-agent
+      QUIPU_MCP_TOKEN: "${QUIPU_MCP_TOKEN:-}"
+      QUIPU_EDGE_KEY_VSCODE_AGENT: "${QUIPU_EDGE_KEY_VSCODE_AGENT:-}"
+      QUIPU_MCP_ORIGINS: "${QUIPU_MCP_ORIGINS:-}"
+    networks: [edge-mcp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7110/health',timeout=4).status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Remote agents: publish the MCP server through a named Cloudflare tunnel
+  # (docker compose --profile tunnel-mcp up -d).  Always set QUIPU_MCP_TOKEN
+  # first; the tunnel adds TLS, the token is the door.
+  quipu-mcp-tunnel:
+    image: cloudflare/cloudflared:2025.10.0
+    profiles: [tunnel-mcp]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${QUIPU_MCP_TUNNEL_TOKEN:-}"]
+    depends_on: [quipu-mcp]
+    networks: [edge-mcp]
+    restart: unless-stopped
+
+networks:
+  # The MCP server's own edge: only quipu and quipu-mcp (and its tunnel).
+  edge-mcp:
+    internal: false
 
 volumes:
   quipu_brain:

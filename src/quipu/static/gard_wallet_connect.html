@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GARD Wallet Connect</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8;
+          --primary:#3b82f6; --ok:#22c55e; --bad:#f87171; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lede { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .card p { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button { min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--line);
+           background: var(--primary); color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .status { margin-top: 12px; font-size: 14px; word-break: break-all; min-height: 1.5em; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  .note { color: var(--muted); font-size: 13px; }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>GARD Shard wallet connect</h1>
+  <p class="lede">Bind a wallet to GARD Shard marketplace access. You sign a short sign-in
+    message. It costs nothing and authorises no transaction; no key ever leaves your wallet.</p>
+
+  <section class="card" aria-labelledby="sol-h">
+    <h2 id="sol-h">Solflare — Solana</h2>
+    <p>Signs with your Solana account (ed25519).</p>
+    <div class="row">
+      <button id="sol-bind" type="button" aria-label="Bind Solflare wallet">Bind Solflare</button>
+      <button id="sol-unbind" type="button" class="ghost" aria-label="Remove Solflare wallet binding">Unbind</button>
+    </div>
+    <div id="sol-status" class="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="card" aria-labelledby="mm-h">
+    <h2 id="mm-h">MetaMask — Ethereum / EVM</h2>
+    <p>Signs a Sign-In with Ethereum (EIP-4361) message with <code>personal_sign</code>.</p>
+    <div class="row">
+      <button id="mm-bind" type="button" aria-label="Bind MetaMask wallet">Bind MetaMask</button>
+      <button id="mm-unbind" type="button" class="ghost" aria-label="Remove MetaMask wallet binding">Unbind</button>
+    </div>
+    <div id="mm-status" class="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <p class="note">Check that the domain in the message your wallet shows is this page's
+    address. MetaMask warns if it is not.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const SOURCE = 'gard-marketplace';
+
+  const say = (id, text, kind) => {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'status' + (kind ? ' ' + kind : '');
+  };
+
+  async function api(path, body) {
+    const r = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: SOURCE, ...body }),
+    });
+    let data = {};
+    try { data = await r.json(); } catch (_) { /* keep empty */ }
+    if (!r.ok || data.ok === false) {
+      throw new Error(data.error || ('HTTP ' + r.status));
+    }
+    return data;
+  }
+
+  const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  const utf8Hex = (s) => '0x' + toHex(new TextEncoder().encode(s));
+
+  // ---- Solflare ---------------------------------------------------------
+  function solflare() {
+    const w = window.solflare;
+    return w && w.isSolflare ? w : null;
+  }
+
+  async function solFlow(purpose) {
+    const id = 'sol-status';
+    const w = solflare();
+    if (!w) { say(id, 'Solflare not found. Install the Solflare extension and reload.', 'bad'); return; }
+    try {
+      say(id, 'Connecting…');
+      await w.connect();
+      const address = w.publicKey && w.publicKey.toString();
+      if (!address) throw new Error('Solflare returned no public key');
+      const ch = await api('/gard/wallet/challenge', { chain: 'solana', address, purpose });
+      say(id, 'Sign the message in Solflare…');
+      const res = await w.signMessage(new TextEncoder().encode(ch.message), 'utf8');
+      const sig = res instanceof Uint8Array ? res : (res && res.signature);
+      if (!sig) throw new Error('Solflare returned no signature');
+      const out = await api('/gard/wallet/' + purpose,
+        { chain: 'solana', address: ch.address, nonce: ch.nonce, signature: toHex(sig) });
+      say(id, purpose === 'bind'
+        ? 'Bound ' + ch.address + (out.binding && out.binding.proof ? ' · GARD proof issued' : ' · proof pending (grid secret unset)')
+        : 'Unbound ' + ch.address, 'ok');
+    } catch (e) {
+      say(id, 'Not done: ' + (e && e.message ? e.message : e), 'bad');
+    }
+  }
+
+  // ---- MetaMask (EIP-6963 discovery, window.ethereum fallback) -------------
+  const announced = [];
+  window.addEventListener('eip6963:announceProvider', (ev) => {
+    if (ev && ev.detail && ev.detail.provider) announced.push(ev.detail);
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+  function metamask() {
+    const mm = announced.find((d) => d.info && d.info.rdns === 'io.metamask');
+    if (mm) return mm.provider;
+    const eth = window.ethereum;
+    return eth && eth.isMetaMask ? eth : null;
+  }
+
+  async function mmFlow(purpose) {
+    const id = 'mm-status';
+    const p = metamask();
+    if (!p) { say(id, 'MetaMask not found. Install the MetaMask extension and reload.', 'bad'); return; }
+    try {
+      say(id, 'Connecting…');
+      const accounts = await p.request({ method: 'eth_requestAccounts' });
+      const address = accounts && accounts[0];
+      if (!address) throw new Error('MetaMask returned no account');
+      const chainHex = await p.request({ method: 'eth_chainId' });
+      const ch = await api('/gard/wallet/challenge',
+        { chain: 'evm', address, chain_id: parseInt(chainHex, 16), purpose });
+      say(id, 'Sign the message in MetaMask…');
+      const signature = await p.request({ method: 'personal_sign', params: [utf8Hex(ch.message), address] });
+      const out = await api('/gard/wallet/' + purpose,
+        { chain: 'evm', address: ch.address, nonce: ch.nonce, signature });
+      say(id, purpose === 'bind'
+        ? 'Bound ' + ch.address + (out.binding && out.binding.proof ? ' · GARD proof issued' : ' · proof pending (grid secret unset)')
+        : 'Unbound ' + ch.address, 'ok');
+    } catch (e) {
+      say(id, 'Not done: ' + (e && e.message ? e.message : e), 'bad');
+    }
+  }
+
+  document.getElementById('sol-bind').addEventListener('click', () => solFlow('bind'));
+  document.getElementById('sol-unbind').addEventListener('click', () => solFlow('unbind'));
+  document.getElementById('mm-bind').addEventListener('click', () => mmFlow('bind'));
+  document.getElementById('mm-unbind').addEventListener('click', () => mmFlow('unbind'));
+})();
+</script>
+</body>
+</html>

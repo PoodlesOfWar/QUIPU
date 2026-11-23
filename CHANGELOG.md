@@ -4,6 +4,73 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.72.0] - 2026-11-23
+
+### Added
+- **integrations/**: Python and JavaScript SDKs for the x_ProcessStudio MCP (v-ADMIN surface only; no authorise or realise), a static site and strict-header server on :8090, a non-root Dockerfile. `docs/HOLON_DESK.md` records that Holon Desk was not found and was not invented. `integrations.loadopoly.com` DNS/tunnel routing is the owner's step.
+
+## [0.71.0] - 2026-11-23
+
+### Added
+- **Edge MCP client.** `clients/termux/quipu_mcp.py` lets an edge device (Termux, or driven through Desktop Commander Remote) use the same x_ProcessStudio MCP the VS Code / Open VSX extension registers: `doctor|tools|status|list|propose|voice|call`. `doctor` fails if the server lists anything beyond the five v-ADMIN tools (plus the optional voice) or any tool that could authorise, realise, approve or promote. Proposals stay held and carry `meta.edge_device`. `edge_setup.sh` stores the URL and token in 0600 files; the token is never taken on the command line nor printed. `docs/EDGE_DESKTOP_COMMANDER.md`; 15 tests. Not verified on a real phone, tunnel or Desktop Commander.
+
+## [0.70.0] - 2026-11-23
+
+### Added
+- **The Holon Hub worker.** QUIPU's x_ProcessStudio MCP is the external-to-internal service worker for Hub Holon (HubCore): an agent, Activepieces or the VNN stages what it wants at the edge, a human authorises it, and QUIPU queues a governed HubCore task. `hub_actions.py` (a closed catalogue in code; one entry, `hub.body_directive`, mirroring the Brain's `body_directives`), `hub_client.py` (a stdlib client that mints only the self-service **Requester** token and holds no operator credential), and `x_process_studio.realise` routing `hub.*` proposals to HubCore. "Realised" means queued in Hub Holon: the task's result is held for a Reviewer. A proposal carries who proposed, who authorised and under which grant, and HubCore records the actor from the verified token.
+- **VNN to staged actions** (`vnn_actions.py`): `entirety:vnn:latest` is read against rules and each firing rule stages one held proposal, deduplicated by fingerprint. A VNN output never executes by itself (HubCore Parts 0.3.10/10.2; V10-SEC-010). Default rules cover **solver health only**; mappings onto your plant come from an operator-owned `QUIPU_VNN_ACTION_RULES` file, validated at load, severity capped at `act`, a bad file loud rather than a silent fallback. `GET /vnn/actions` (dry run), `POST /vnn/actions/stage` (signed operator source).
+- **The Perceptopoly voice in the MCP.** `perceptopoly_voice` is listed only while HubCore reports the v-ADMIN voice effective (a human Admin turned it on; kill switch not engaged), re-checked on every call and fail-closed on any doubt; it narrates a proposal using only source, tool, reason and status (arguments never leave). `hub_actions` lists the catalogue. `GET /process_studio?id=`; the proposal index carries a short reason and the fingerprint.
+- `docs/HOLON_HUB_WORKER.md`; `tests/test_hub_bridge.py` (46). Verified end to end against the real HubCore (VS-Code repo, `services/hubcore`), including that the bridge's token is refused on turning the voice on, accepting its own task and promoting a release.
+
+### Changed
+- `tests/test_process_studio_mcp.py`: the MCP now lists five base tools (the catalogue tool is new); there is still no authorise or realise tool.
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `viscous_interaction.py`: untouched. The worker is not wired into the Entirety step.
+
+## [0.69.1] - 2026-11-23
+
+### Added
+- `clients/termux/autosync.sh` — run the deepmap node automatically through Termux:API's job scheduler (about every 15 minutes on unmetered networks, kept across reboots): `enable`, `disable`, `status`. `enable` refuses to schedule unless the node's `--check` passes, `DEEPMAP_SSIDS` is set, `QUIPU_URL` is an `https://` address, and the installed `termux-job-scheduler` lists every flag the script uses (verified, not assumed). The node still acts only on allow-listed SSIDs.
+- `docs/DEEPMAP_TERMUX.md`: "Automatic sync", and why this does not use Android Switch or All files access (Android lets only the user switch All files access, per app; Android Switch is a one-time transfer tool, not a sync service; the node needs neither).
+- `tests/test_deepmap_autosync.py` (13, run as a real subprocess against stand-in Termux commands).
+
+## [0.69.0] - 2026-11-23
+
+### Added
+- `src/quipu/deepmap.py` and `clients/termux/deepmap_node.py` — **deepmap**, a link map of the fleet fed from a phone. A Termux node reports the Wi-Fi link the phone is on and whether the BurgerPhone peers it is told about answer, as one `deepmap.link/1` record per run. `POST /deepmap/link` (behind the edge, like every write) keeps the latest record per node in the relational store; `GET /deepmap` assembles every reporter's view into `nodes`, `edges` and `networks`, marking a silent reporter `stale` after `max_age_s` (default one hour) instead of showing it connected.
+- **Privacy by construction.** Records are rebuilt from a whitelist; a record containing a MAC address anywhere is refused (so the route cannot be used to store device or access-point addresses); the node sends salted hashes of the access point and network, with the salt generated on the phone and never sent.
+- **The node does only what it is told.** Dry run unless `--send`; acts only on SSIDs in `DEEPMAP_SSIDS` (no default — empty does nothing; off that network it neither probes nor sends); never sweeps the LAN; times only the peers listed in `DEEPMAP_PEERS`, with a bare TCP connect that sends no data, and only when the peer resolves to a private, link-local or loopback address. Wi-Fi link information only — no Bluetooth, as no Termux:API command for it was confirmed.
+- `docs/DEEPMAP_TERMUX.md` — Termux:API install, the nearby-devices / location grants, configuration, scheduling, reaching QUIPU through the tunnel, and what was and was not verified; `tests/test_deepmap.py` (23, including node → signed edge client → live observer).
+
+### Not changed
+- `mesh_slm.py`, the mesh corpus, stats and world model: untouched. Writes only `relational:*` keys; input to no gate.
+
+## [0.68.0] - 2026-11-22
+
+### Added
+- `src/quipu/process_studio_mcp.py` — the x_ProcessStudio holon as an **MCP server** for IDE agents (Streamable HTTP `POST /mcp`, or `stdio`). Exposes only the v-ADMIN surface: `process_studio_status`, `process_studio_list`, `activepieces_tools`, `process_studio_propose`. **No authorise or realise tool**: an editor agent stages; the operator's grant still governs realisation (V10-SEC-010). A thin client of the observer that never opens the brain (one brain, one writer): its single write is edge-signed as the new `vscode-agent` source, so identity, idempotency and budget apply to agents too.
+- Security: bearer `QUIPU_MCP_TOKEN` required (constant-time); **unset ⇒ every request 401** (fails closed); `QUIPU_MCP_ALLOW_OPEN=1` honoured on loopback only; browser `Origin` allowlist (`QUIPU_MCP_ORIGINS`, DNS-rebinding defence); 1 MB body cap; bounded sessions.
+- **Hub Holon docker fleet hosting**: `docker-compose.yml` gains `quipu-mcp` (same image, `127.0.0.1:7110`, `edge-mcp` network, healthcheck) and a `tunnel-mcp` profile (cloudflared 2025.10.0) for remote agents. Observer `GET /process_studio/tools` (Activepieces `tools/list`, cached 5 min) and filtered `GET /process_studio?status=&source=&limit=`.
+- `extensions/vscode-x-process-studio/` — **VS Code / Open VSX extension** (engine `^1.101.0`): contributes `mcpServerDefinitionProviders`, registers an `McpHttpServerDefinition` via `vscode.lm.registerMcpServerDefinitionProvider`; token asked once at server start (never while listing) and kept in SecretStorage; refuses plain http to public hosts. `.github/workflows/publish-extension.yml` packages on every PR and, on `ext-v*` tags, publishes to the VS Code Marketplace (`VSCE_PAT`) and Open VSX (`OVSX_PAT`), each only when its token is set, and attaches the `.vsix` to the release.
+- `src/quipu/gard_wallet.py` — **GARD Shard marketplace wallet connectors**: **Solflare** (Solana, ed25519 over the base58 key) and **MetaMask** (EVM, EIP-191 `personal_sign` of an EIP-4361 Sign-In-with-Ethereum message). keccak-256, EIP-55 and secp256k1 public-key recovery in stdlib (low-s only, EIP-2), cross-checked against `eth_account` 0.14.0. Single-use 5-minute nonces bound to chain, address, purpose and domain; `bind`/`unbind` behind the edge as source `gard-marketplace`; a GARD assignment proof per binding when `SCBRAIN_GRID_SECRET` is set, and `verify_binding_proof` refuses a proof that names another wallet. Routes `POST /gard/wallet/challenge|bind|unbind`, `GET /gard/wallet`, `GET /gard/wallet/connect` (connector page: EIP-6963 MetaMask discovery, strict CSP, no third-party scripts). No key handling, no transactions.
+- `docs/GARD_WALLET_CONNECT.md`; `docs/X_PROCESS_STUDIO.md` (MCP server, fleet hosting, extension, publishing); `tests/test_process_studio_mcp.py` (10, end to end against a live observer), `tests/test_gard_wallet.py` (13).
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `gard_shard_model.py`: 0-line diff.
+
+## [0.67.0] - 2026-11-22
+
+### Added
+- `src/quipu/x_process_studio.py` — the **x_ProcessStudio Holon**: authorizable agentic action through **Activepieces MCP**, for **r-ADMIN via v-ADMIN**. Any admitted fleet source's VLM/LLM layer (Perceptopoly, StockOpoly, BurgerPhone, the Brain) may *stage* an `ActionProposal` (v-ADMIN: held in band 翈, never executed); the operator *authorises* with a two-party Gate 6 attestation plus the organizational `grant_ref` checked by `authorised_to_realise` (V10-SEC-010 — admissibility is not authorization; `config_digest` stamped, V10-SEC-002); only an AUTHORISED proposal is *realised* by r-ADMIN through MCP `tools/call`. A transport failure keeps the proposal AUTHORISED for retry; a JSON-RPC error marks it FAILED (the tool refused).
+- Stdlib MCP client (`ActivepiecesMCP`): JSON-RPC 2.0 over Streamable HTTP (`initialize` → `notifications/initialized` → `tools/list` / `tools/call`), plain-JSON and SSE response bodies, `Mcp-Session-Id` carried, optional bearer token; plain `http://` only for loopback/private/container addresses (as `edge_client`). Unset `QUIPU_ACTIVEPIECES_MCP_URL` ⇒ unavailable: staging still works, realisation answers `held` — opt-in on the acting side.
+- Observer routes: `GET /process_studio` (status), `POST /process_studio/propose|authorise|realise`, all in `edge_admission.MUTATING` (signed identity, idempotency, budget as `/observe`). `authorise`/`realise` additionally require a **signed** source named in `QUIPU_PROCESS_STUDIO_OPERATORS` (default none: the operator acts through the CLI inside the container — `python -m src.quipu.x_process_studio status|list|tools|propose|authorise|realise`).
+- `observer_service.SOURCE_PROFILES["burgerphone"]` — the operator-facing agentic comms surface joins the fleet on the body axis (`burgerphone/wiki/hideout-mesh`), siblings `perceptopoly` + `stockopoly`; aliases `burger_phone`, `burger-phone`. Connects like every writer: minted key, grant line, signed writes.
+- `docs/X_PROCESS_STUDIO.md`; `tests/test_x_process_studio.py` (19 tests).
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `gate6_interlock.py`: 0-line diff. The holon writes only `process_studio:*` brain_kv keys, feeds no mesh, and is input to no gate.
+
 ## [0.66.0] - 2026-10-27
 
 ### Added

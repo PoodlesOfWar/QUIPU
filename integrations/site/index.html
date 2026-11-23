@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loadopoly integrations</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:0 auto;padding:1rem 16px;background:#0f172a;color:#e2e8f0}
+a{color:#7dd3fc}code,pre{background:#1e293b;padding:.15em .35em;border-radius:4px}pre{padding:.8em;overflow:auto}</style></head>
+<body><h1>Loadopoly integrations</h1>
+<p>SDKs for QUIPU's x_ProcessStudio MCP. A client can read the ledger, stage a proposal (held), and hear the
+Perceptopoly voice while a human Admin has it on. It <strong>cannot authorise or realise</strong>: the server has no such tool.</p>
+<h2>Downloads</h2>
+<ul><li><a href="sdk/loadopoly_integrations.py">Python</a> (stdlib only)</li>
+<li><a href="sdk/loadopoly_integrations.mjs">JavaScript</a> (ES module) and <a href="sdk/loadopoly_integrations.d.mts">types</a></li></ul>
+<h2>Use</h2>
+<pre>from loadopoly_integrations import Client
+c = Client("https://YOUR-HOST/mcp", token=TOKEN)
+c.propose("hub.body_directive", "line 3 is quiet",
+          {"title": "Check line 3", "do_this": "Walk it", "owner_role": "Ops"})</pre>
+<p>Keep the token out of source control and chat. Plain http is refused for public hosts.</p>
+</body></html>
