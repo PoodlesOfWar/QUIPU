@@ -4,6 +4,17 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.69.0] - 2026-11-23
+
+### Added
+- `src/quipu/deepmap.py` and `clients/termux/deepmap_node.py` — **deepmap**, a link map of the fleet fed from a phone. A Termux node reports the Wi-Fi link the phone is on and whether the BurgerPhone peers it is told about answer, as one `deepmap.link/1` record per run. `POST /deepmap/link` (behind the edge, like every write) keeps the latest record per node in the relational store; `GET /deepmap` assembles every reporter's view into `nodes`, `edges` and `networks`, marking a silent reporter `stale` after `max_age_s` (default one hour) instead of showing it connected.
+- **Privacy by construction.** Records are rebuilt from a whitelist; a record containing a MAC address anywhere is refused (so the route cannot be used to store device or access-point addresses); the node sends salted hashes of the access point and network, with the salt generated on the phone and never sent.
+- **The node does only what it is told.** Dry run unless `--send`; acts only on SSIDs in `DEEPMAP_SSIDS` (no default — empty does nothing; off that network it neither probes nor sends); never sweeps the LAN; times only the peers listed in `DEEPMAP_PEERS`, with a bare TCP connect that sends no data, and only when the peer resolves to a private, link-local or loopback address. Wi-Fi link information only — no Bluetooth, as no Termux:API command for it was confirmed.
+- `docs/DEEPMAP_TERMUX.md` — Termux:API install, the nearby-devices / location grants, configuration, scheduling, reaching QUIPU through the tunnel, and what was and was not verified; `tests/test_deepmap.py` (23, including node → signed edge client → live observer).
+
+### Not changed
+- `mesh_slm.py`, the mesh corpus, stats and world model: untouched. Writes only `relational:*` keys; input to no gate.
+
 ## [0.68.0] - 2026-11-22
 
 ### Added

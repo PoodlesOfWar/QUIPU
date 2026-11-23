@@ -95,7 +95,8 @@ MUTATING = {("POST", "/observe"), ("POST", "/feedback"), ("POST", "/anneal"), ("
             ("POST", "/lambda/clusters"), ("POST", "/relational"),
             ("POST", "/process_studio/propose"), ("POST", "/process_studio/authorise"),
             ("POST", "/process_studio/realise"),
-            ("POST", "/gard/wallet/bind"), ("POST", "/gard/wallet/unbind")}
+            ("POST", "/gard/wallet/bind"), ("POST", "/gard/wallet/unbind"),
+            ("POST", "/deepmap/link")}
 H_SOURCE, H_TS, H_SIG = "X-Quipu-Source", "X-Quipu-Timestamp", "X-Quipu-Signature"
 H_IDEM = "X-Quipu-Idempotency"
 # Headers a public front door adds (Cloudflare, reverse proxies).  A request

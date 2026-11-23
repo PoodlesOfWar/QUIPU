@@ -689,6 +689,46 @@ def _ps_realise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
     return code, {"ok": code == 200, **out}
 
 
+def _deepmap_link(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """POST /deepmap/link: keep one device's deepmap.link/1 record.  Validated and rebuilt from a
+    whitelist first (deepmap.validate_link): a record carrying a MAC address is refused, so the
+    generic relational route cannot be used to store device or access-point addresses here."""
+    from . import deepmap
+    source = (decision.source if decision is not None and getattr(decision, "source", None) else None) \
+        or _canonical_source(body.get("source"))
+    if source is None:
+        return 400, {"ok": False, "error": "unknown source; expected one of " + ", ".join(sorted(SOURCE_PROFILES))}
+    clean, err = deepmap.validate_link(body.get("relational"))
+    if clean is None:
+        return 400, {"ok": False, "error": err}
+    kept = _keep_relational(source, clean)
+    if kept is None:
+        return 400, {"ok": False, "error": "record not kept"}
+    return 200, {"ok": True, "source": source, "kept": kept}
+
+
+def _deepmap_get(qs: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """GET /deepmap: the graph assembled from every kept deepmap.link/1 record
+    (?source= filters reporters, ?max_age_s= sets when a silent reporter goes stale)."""
+    from . import deepmap
+    want = _canonical_source((qs.get("source") or [None])[0]) if (qs.get("source") or [None])[0] else None
+    try:
+        max_age = float((qs.get("max_age_s") or [deepmap.DEFAULT_MAX_AGE_S])[0])
+    except ValueError:
+        max_age = deepmap.DEFAULT_MAX_AGE_S
+    idx = brain_kv.kv_get_json(_RELATIONAL_INDEX, {}) or {}
+    records = []
+    for row in idx.values():
+        if not isinstance(row, dict) or row.get("schema") != deepmap.SCHEMA_LINK:
+            continue
+        if want and row.get("source") != want:
+            continue
+        rec = brain_kv.kv_get_json(_RELATIONAL_KEY.format(source=row.get("source"), entity=row.get("entity")), None)
+        if isinstance(rec, dict):
+            records.append(rec)
+    return 200, deepmap.build_graph(records, max_age_s=max(1.0, min(max_age, 30 * 86400.0)))
+
+
 def _gw_domain_uri(headers) -> tuple[str, str]:
     """The domain wallets sign for: QUIPU_GARD_WALLET_DOMAIN, else the request Host.
     (MetaMask compares an EIP-4361 domain with the requesting origin and warns
@@ -1034,6 +1074,9 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # The x_ProcessStudio holon: MCP availability and the action
                 # ledger (read-only; staging and deciding are signed POSTs).
                 self._send_json(200, _ps_status(parse_qs(parsed.query)))
+            elif parsed.path == "/deepmap":
+                code, payload = _deepmap_get(parse_qs(parsed.query))
+                self._send_json(code, payload)
             elif parsed.path == "/gard/wallet":
                 code, payload = _gw_get(parse_qs(parsed.query))
                 self._send_json(code, payload)
@@ -1113,6 +1156,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _slm(body, endpoint_kind="generate")
             elif parsed.path == "/lambda/clusters":
                 code, payload = _lambda_clusters(body, decision)
+            elif parsed.path == "/deepmap/link":
+                code, payload = _deepmap_link(body, decision)
             elif parsed.path == "/gard/wallet/challenge":
                 code, payload = _gw_challenge(body, self.headers)
             elif parsed.path == "/gard/wallet/bind":
