@@ -96,6 +96,47 @@ Check the result from any machine that can reach QUIPU:
 curl -s "$QUIPU_URL/deepmap" | python -m json.tool
 ```
 
+## Automatic sync
+
+```sh
+sh clients/termux/autosync.sh enable     # schedule it
+sh clients/termux/autosync.sh status     # pending Termux jobs
+sh clients/termux/autosync.sh disable    # cancel it
+```
+
+`enable` uses Termux:API's job scheduler: Android's JobScheduler runs the node
+about every 15 minutes (the minimum Android allows; `DEEPMAP_PERIOD_MS` to
+change) while the phone is on an unmetered network, and keeps the job across
+reboots. The node still acts only on an SSID in `DEEPMAP_SSIDS`, so a job that
+fires on some other Wi-Fi does nothing. Android may delay jobs to save battery;
+if it runs late, exempt Termux and Termux:API from battery optimisation.
+
+`enable` **refuses to schedule** unless: Termux:API answers and the network name
+is visible (`--check`), `DEEPMAP_SSIDS` is set, `QUIPU_URL` is an `https://`
+address, and this Termux:API's `termux-job-scheduler` lists every flag the
+script uses (it checks rather than assumes, because I could not read Termux's own
+docs). Put the configuration in `~/.config/quipu/deepmap.env`; a scheduled job
+does not see your shell's exports. Output goes to `~/.config/quipu/deepmap.log`
+(trimmed when it grows).
+
+## About "Android Switch" and "All files access"
+
+Android's **All files access** screen lists only apps that *declare* that
+permission, and nothing — no app, no script, no Claude — can switch it on for
+another app: Android makes the person do it in Settings, per app. On the
+screen as I saw it, the apps listed were Android Auto, Android Switch, Copilot,
+Cross-Device Services, F-Droid, Files by Google, Hub, Link to Windows and
+Termux; there was no BurgerPhone Android app, so there was nothing to set to
+Allowed.
+
+Android Switch is Google's one-time device-setup transfer tool, not a sync
+service: it has no hook another app can use to sync through it. The automatic
+sync above is the supported equivalent, and it does not need All files access at
+all (the node reads and writes only Termux's own private
+`~/.config/quipu`). I would leave All files access off for anything that does not
+need it; Termux already has it, and F-Droid and Hub being "Not allowed" is a
+sound default.
+
 ## 5. Reaching QUIPU from the phone
 
 QUIPU listens on `127.0.0.1:7100` on the fleet host, so the phone needs a front

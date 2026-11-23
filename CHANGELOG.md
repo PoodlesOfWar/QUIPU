@@ -4,6 +4,13 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.69.1] - 2026-11-23
+
+### Added
+- `clients/termux/autosync.sh` — run the deepmap node automatically through Termux:API's job scheduler (about every 15 minutes on unmetered networks, kept across reboots): `enable`, `disable`, `status`. `enable` refuses to schedule unless the node's `--check` passes, `DEEPMAP_SSIDS` is set, `QUIPU_URL` is an `https://` address, and the installed `termux-job-scheduler` lists every flag the script uses (verified, not assumed). The node still acts only on allow-listed SSIDs.
+- `docs/DEEPMAP_TERMUX.md`: "Automatic sync", and why this does not use Android Switch or All files access (Android lets only the user switch All files access, per app; Android Switch is a one-time transfer tool, not a sync service; the node needs neither).
+- `tests/test_deepmap_autosync.py` (13, run as a real subprocess against stand-in Termux commands).
+
 ## [0.69.0] - 2026-11-23
 
 ### Added
