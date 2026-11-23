@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.73.0] - 2026-11-23
+
+### Added
+- **Voice notes from the edge.** `clients/termux/quipu_voice.py` records a clip (Termux:API), sends it to `voice_stt.py` (optional faster-whisper; bearer-gated, fails closed, size-capped), shows the transcript and, once confirmed, stages one *held* `hub.body_directive` at severity `info` for owner role `Anyone`. Speech cannot pick the tool, role or severity and is never an authorisation. `docs/VOICE_EDGE.md`; 13 tests. faster-whisper, a real microphone and a phone were not exercised.
+
 ## [0.72.0] - 2026-11-23
 
 ### Added
