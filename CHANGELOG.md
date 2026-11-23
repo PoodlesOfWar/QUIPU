@@ -4,6 +4,20 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.70.0] - 2026-11-23
+
+### Added
+- **The Holon Hub worker.** QUIPU's x_ProcessStudio MCP is the external-to-internal service worker for Hub Holon (HubCore): an agent, Activepieces or the VNN stages what it wants at the edge, a human authorises it, and QUIPU queues a governed HubCore task. `hub_actions.py` (a closed catalogue in code; one entry, `hub.body_directive`, mirroring the Brain's `body_directives`), `hub_client.py` (a stdlib client that mints only the self-service **Requester** token and holds no operator credential), and `x_process_studio.realise` routing `hub.*` proposals to HubCore. "Realised" means queued in Hub Holon: the task's result is held for a Reviewer. A proposal carries who proposed, who authorised and under which grant, and HubCore records the actor from the verified token.
+- **VNN to staged actions** (`vnn_actions.py`): `entirety:vnn:latest` is read against rules and each firing rule stages one held proposal, deduplicated by fingerprint. A VNN output never executes by itself (HubCore Parts 0.3.10/10.2; V10-SEC-010). Default rules cover **solver health only**; mappings onto your plant come from an operator-owned `QUIPU_VNN_ACTION_RULES` file, validated at load, severity capped at `act`, a bad file loud rather than a silent fallback. `GET /vnn/actions` (dry run), `POST /vnn/actions/stage` (signed operator source).
+- **The Perceptopoly voice in the MCP.** `perceptopoly_voice` is listed only while HubCore reports the v-ADMIN voice effective (a human Admin turned it on; kill switch not engaged), re-checked on every call and fail-closed on any doubt; it narrates a proposal using only source, tool, reason and status (arguments never leave). `hub_actions` lists the catalogue. `GET /process_studio?id=`; the proposal index carries a short reason and the fingerprint.
+- `docs/HOLON_HUB_WORKER.md`; `tests/test_hub_bridge.py` (46). Verified end to end against the real HubCore (VS-Code repo, `services/hubcore`), including that the bridge's token is refused on turning the voice on, accepting its own task and promoting a release.
+
+### Changed
+- `tests/test_process_studio_mcp.py`: the MCP now lists five base tools (the catalogue tool is new); there is still no authorise or realise tool.
+
+### Not changed
+- `mesh_slm.py`, `qpsi/governance.py`, `viscous_interaction.py`: untouched. The worker is not wired into the Entirety step.
+
 ## [0.69.1] - 2026-11-23
 
 ### Added

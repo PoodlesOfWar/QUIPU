@@ -306,8 +306,11 @@ class ActionProposal:
 def _save(p: ActionProposal) -> None:
     brain_kv.kv_set_json(_PROPOSAL_KEY.format(pid=p.proposal_id), p.to_dict())
     idx = brain_kv.kv_get_json(_INDEX_KEY, {}) or {}
-    idx[p.proposal_id] = {"source": p.source, "tool": p.tool, "status": p.status,
-                          "created_at": p.created_at}
+    row = {"source": p.source, "tool": p.tool, "status": p.status, "created_at": p.created_at,
+           "reason": " ".join(str(p.reason or "").split())[:160]}
+    if isinstance(p.meta, dict) and p.meta.get("fingerprint"):
+        row["fingerprint"] = str(p.meta["fingerprint"])[:120]
+    idx[p.proposal_id] = row
     brain_kv.kv_set_json(_INDEX_KEY, idx)
 
 
@@ -361,6 +364,14 @@ def propose(source: str, tool: str, arguments: Mapping[str, Any] | None = None,
     if not name:
         raise ValueError("proposal needs a tool")
     args = dict(arguments or {})
+    from . import hub_actions
+    if hub_actions.is_hub_tool(name):
+        # Hub Holon actions come from a closed catalogue in code: an unknown hub.* tool or a
+        # malformed argument is refused here, and what is stored is the validated form.
+        clean, err = hub_actions.validate(name, args)
+        if clean is None:
+            raise ValueError(err)
+        args = clean
     m = dict(meta or {})
     m.setdefault("schema", SCHEMA_PROPOSE)
     p = ActionProposal(proposal_id=f"act_{uuid.uuid4().hex[:12]}", source=src,
@@ -370,6 +381,15 @@ def propose(source: str, tool: str, arguments: Mapping[str, Any] | None = None,
     _save(p)
     log.info("x_process_studio: %s staged %s -> %s (held)", src, p.proposal_id, name)
     return p
+
+
+def find_open(fingerprint: str) -> Optional[str]:
+    """The id of a proposal with this fingerprint that is still waiting (PROPOSED or AUTHORISED), else None."""
+    idx = brain_kv.kv_get_json(_INDEX_KEY, {}) or {}
+    for pid, row in idx.items():
+        if (row or {}).get("fingerprint") == fingerprint and (row or {}).get("status") in (PROPOSED, AUTHORISED):
+            return pid
+    return None
 
 
 def propose_from_vlm(source: str, tool: str, vlm: Mapping[str, Any],
@@ -451,8 +471,49 @@ def reject(proposal_id: str, operator: str, why: str = "") -> dict[str, Any]:
 
 # -- r-ADMIN: realisation ----------------------------------------------------
 
-def realise(proposal_id: str, mcp: ActivepiecesMCP | None = None) -> dict[str, Any]:
-    """Realise one AUTHORISED proposal through Activepieces MCP (r-ADMIN).
+def _realise_hub(p: ActionProposal, hub: Any = None) -> dict[str, Any]:
+    """Realise an AUTHORISED ``hub.*`` proposal by queueing a HubCore task.
+
+    "Realised" here means the task is queued in Hub Holon, not that the work is done:
+    HubCore holds the task's result for a Reviewer to accept.  The task carries who
+    proposed it, who authorised it and under which grant."""
+    from . import hub_actions, hub_client
+    client = hub or hub_client.HubCoreClient()
+    if not client.configured():
+        p.attempts += 1
+        p.last_error = f"HubCore unconfigured ({hub_client.URL_ENV}, {hub_client.ORG_ENV})"
+        _save(p)
+        return {"status": "held", "proposal_id": p.proposal_id, "error": p.last_error}
+    clean, err = hub_actions.validate(p.tool, p.arguments)         # re-checked at the edge of action
+    if clean is None:
+        p.status, p.attempts, p.last_error = FAILED, p.attempts + 1, err
+        _save(p)
+        return {"status": "failed", "proposal_id": p.proposal_id, "error": err}
+    kind, payload = hub_actions.task_for(p.tool, clean, {
+        "proposal_id": p.proposal_id, "proposed_by": p.source, "authorised_by": p.authorised_by,
+        "grant_ref": p.grant_ref, "reason": " ".join(str(p.reason or "").split())[:200]})
+    try:
+        task = client.create_task(kind, payload)
+    except hub_client.HubCoreRefused as exc:                       # HubCore understood and refused: permanent
+        p.status, p.attempts, p.last_error = FAILED, p.attempts + 1, str(exc)
+        _save(p)
+        return {"status": "failed", "proposal_id": p.proposal_id, "error": p.last_error}
+    except Exception as exc:                                       # unreachable / 5xx: keep for retry
+        p.attempts += 1
+        p.last_error = str(exc)
+        _save(p)
+        return {"status": "retry", "proposal_id": p.proposal_id, "error": p.last_error}
+    result = {"hubcore_task": {"id": task.get("id"), "state": task.get("state"), "kind": kind}}
+    p.status, p.realised_at, p.result = REALISED, time.time(), result
+    p.attempts, p.last_error = p.attempts + 1, ""
+    _save(p)
+    log.info("x_process_studio: %s realised as HubCore task %s under %s", p.proposal_id, task.get("id"), p.grant_ref)
+    return {"status": "realised", "proposal_id": p.proposal_id, "result": result}
+
+
+def realise(proposal_id: str, mcp: ActivepiecesMCP | None = None, hub: Any = None) -> dict[str, Any]:
+    """Realise one AUTHORISED proposal (r-ADMIN): ``hub.*`` actions become HubCore tasks,
+    everything else goes through Activepieces MCP.
 
     Anything short of AUTHORISED is refused: a PROPOSED item is held at the
     edge (V10-SEC-010), REJECTED stays rejected, REALISED answers idempotently.
@@ -470,6 +531,9 @@ def realise(proposal_id: str, mcp: ActivepiecesMCP | None = None) -> dict[str, A
         return {"status": "held", "proposal_id": p.proposal_id,
                 "error": "not authorised: admissibility is not authorization "
                          "(V10-SEC-010); an operator grant_ref is required"}
+    from . import hub_actions as _ha
+    if _ha.is_hub_tool(p.tool):
+        return _realise_hub(p, hub)
     client = mcp or ActivepiecesMCP()
     if not client.available():
         p.attempts += 1
@@ -502,11 +566,11 @@ def realise(proposal_id: str, mcp: ActivepiecesMCP | None = None) -> dict[str, A
     return {"status": "realised", "proposal_id": p.proposal_id, "result": result}
 
 
-def realise_ready(mcp: ActivepiecesMCP | None = None, limit: int = 5) -> list[dict[str, Any]]:
+def realise_ready(mcp: ActivepiecesMCP | None = None, limit: int = 5, hub: Any = None) -> list[dict[str, Any]]:
     """Realise up to ``limit`` AUTHORISED proposals, oldest first."""
     rows = list_proposals(status=AUTHORISED, limit=max(1, int(limit)))
     rows.sort(key=lambda r: r.get("created_at") or 0.0)
-    return [realise(r["proposal_id"], mcp=mcp) for r in rows]
+    return [realise(r["proposal_id"], mcp=mcp, hub=hub) for r in rows]
 
 
 # ---------------------------------------------------------------------------

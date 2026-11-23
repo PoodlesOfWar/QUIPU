@@ -8,6 +8,10 @@ exposes only what v-ADMIN may do:
     process_studio_list       proposals, filtered by status / source
     activepieces_tools        what the operator's Activepieces can do (names + schemas)
     process_studio_propose    stage an ActionProposal — held for the operator
+    hub_actions               the closed catalogue of Hub Holon actions a proposal may name
+    perceptopoly_voice        ONLY while a human Admin (r-ADMIN) has the v-ADMIN voice on in
+                              HubCore: v-ADMIN narrates a proposal, a queue entry or the status as
+                              Perceptopoly, with the standing synthetic-assistant disclosure
 
 There is deliberately **no** authorise or realise tool.  An agent can want; only
 the operator's grant (``grant_ref``, V10-SEC-010) lets r-ADMIN act, and that
@@ -54,8 +58,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Mapping, Optional
 from urllib.parse import urlencode, urlparse
 
+from . import hub_actions
 from ._version import __version__
 from .edge_client import idempotency_key, sign_headers
+from .hub_client import HubCoreClient, HubCoreError, HubCoreRefused
 
 log = logging.getLogger("quipu.process_studio_mcp")
 
@@ -78,7 +84,9 @@ INSTRUCTIONS = (
     "operator authorises them with an organizational grant reference; only then "
     "does r-ADMIN realise them. You cannot authorise or realise. Explain in "
     "`reason` why the action is wanted, and pass `arguments` that match the "
-    "Activepieces tool's inputSchema from activepieces_tools."
+    "Activepieces tool's inputSchema from activepieces_tools. Hub Holon actions (tools named hub.*) "
+    "come from a fixed catalogue: see hub_actions. If perceptopoly_voice is listed, a human Admin has "
+    "turned the v-ADMIN voice on; it narrates and decides nothing."
 )
 
 _STATUSES = ["PROPOSED", "AUTHORISED", "REALISED", "FAILED", "REJECTED"]
@@ -116,6 +124,15 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": {"readOnlyHint": True, "openWorldHint": True},
     },
     {
+        "name": "hub_actions",
+        "title": "Hub Holon action catalogue",
+        "description": "The fixed catalogue of Hub Holon actions (tools named hub.*) a proposal may name, "
+                       "with their fields. An action becomes a HubCore task only after the operator "
+                       "authorises the proposal; HubCore then holds the result for a Reviewer.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False},
+    },
+    {
         "name": "process_studio_propose",
         "title": "Stage an action proposal",
         "description": "Stage an ActionProposal for an Activepieces tool. It is HELD for the "
@@ -137,6 +154,26 @@ TOOLS: list[dict[str, Any]] = [
                         "idempotentHint": True, "openWorldHint": False},
     },
 ]
+
+
+VOICE_TOOL: dict[str, Any] = {
+    "name": "perceptopoly_voice",
+    "title": "Perceptopoly (v-ADMIN voice)",
+    "description": ("v-ADMIN speaks as Perceptopoly, a disclosed synthetic assistant. Narrates a staged "
+                    "proposal, a v-ADMIN queue entry, or the overall status for a human to read. It "
+                    "narrates only: it decides, approves and runs nothing. Available because a human Admin "
+                    "turned the voice on."),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": ["status", "queue_entry", "proposal"], "default": "status"},
+            "entryId": {"type": "string", "description": "a v-ADMIN queue entry id (kind queue_entry)"},
+            "proposalId": {"type": "string", "description": "a proposal id from process_studio_list (kind proposal)"},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": {"readOnlyHint": True, "openWorldHint": False},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +246,15 @@ def _text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
 class ProcessStudioMCP:
     """JSON-RPC handler for the MCP methods this server implements."""
 
-    def __init__(self, observer: ObserverClient | None = None) -> None:
+    def __init__(self, observer: ObserverClient | None = None, hub: HubCoreClient | None = None) -> None:
         self.observer = observer or ObserverClient()
+        self.hub = hub or HubCoreClient()
+
+    def tools_list(self) -> list[dict[str, Any]]:
+        """The base tools, plus the voice only while HubCore says a human Admin has it on.
+        Any doubt (HubCore unconfigured, unreachable, refusing) leaves it out: fail closed."""
+        on, _persona = self.hub.voice_effective()
+        return TOOLS + [VOICE_TOOL] if on else list(TOOLS)
 
     # -- tools -------------------------------------------------------------
     def call_tool(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
@@ -256,7 +300,39 @@ class ProcessStudioMCP:
                 data = {**data, "note": "staged and HELD: the operator must authorise it "
                                         "with a grant reference before anything runs"}
             return _text_result(data, is_error=not ok)
+        if name == "hub_actions":
+            return _text_result({"ok": True, "actions": hub_actions.catalogue_public()})
+        if name == "perceptopoly_voice":
+            return self._voice(args)
         raise KeyError(name)
+
+    def _voice(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        """Re-checked on every call: whether the voice is on is HubCore's to say, not a listing's."""
+        on, _ = self.hub.voice_effective()
+        if not on:
+            return _text_result({"error": "the v-ADMIN voice is off. A human Admin (r-ADMIN) must turn it "
+                                          "on in HubCore before Perceptopoly can speak."}, is_error=True)
+        kind = str(args.get("kind") or "status")
+        facts: dict[str, Any] = {}
+        if kind == "queue_entry":
+            facts = {"entryId": str(args.get("entryId") or "")}
+        elif kind == "proposal":
+            pid = str(args.get("proposalId") or "")
+            code, data = self.observer.get("/process_studio", {"id": pid})
+            rows = (data or {}).get("recent") if code == 200 and isinstance(data, dict) else None
+            if not rows:
+                return _text_result({"error": f"no proposal {pid!r}"}, is_error=True)
+            row = rows[0]
+            facts = {k: row.get(k) for k in ("source", "tool", "reason", "status")}
+        elif kind != "status":
+            return _text_result({"error": "kind must be status, queue_entry or proposal"}, is_error=True)
+        try:
+            said = self.hub.speak(kind, facts)
+        except HubCoreRefused as exc:
+            return _text_result({"error": str(exc)}, is_error=True)
+        except HubCoreError as exc:
+            return _text_result({"error": f"Hub Holon is unreachable: {exc}"}, is_error=True)
+        return _text_result(said, is_error=not said.get("spoken"))
 
     # -- JSON-RPC ------------------------------------------------------------
     def handle(self, msg: Any) -> Optional[dict[str, Any]]:
@@ -297,10 +373,12 @@ class ProcessStudioMCP:
         if method == "ping":
             return {}
         if method == "tools/list":
-            return {"tools": TOOLS}
+            return {"tools": self.tools_list()}
         if method == "tools/call":
             name = str((params or {}).get("name") or "")
-            if name not in {t["name"] for t in TOOLS}:
+            # The voice is answerable even when off (with the reason), so an agent that was told about it
+            # earlier learns why it is gone; every other name must be a base tool.
+            if name not in {t["name"] for t in TOOLS} | {VOICE_TOOL["name"]}:
                 raise _RpcError(-32602, f"unknown tool: {name}")
             arguments = (params or {}).get("arguments") or {}
             if not isinstance(arguments, dict):

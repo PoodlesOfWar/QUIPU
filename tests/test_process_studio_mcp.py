@@ -77,8 +77,8 @@ def test_handshake_lists_only_vadmin_tools(mcp_server):
     assert code == 202
     code, body, _ = _post(mcp_server, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, session=sid)
     names = {t["name"] for t in body["result"]["tools"]}
-    assert names == {"process_studio_status", "process_studio_list",
-                     "activepieces_tools", "process_studio_propose"}
+    assert names == {"process_studio_status", "process_studio_list", "activepieces_tools",
+                     "hub_actions", "process_studio_propose"}          # the voice is not here: HubCore has it off
     assert not any("authori" in n or "realis" in n for n in names)   # v-ADMIN cannot act
 
 
@@ -189,7 +189,7 @@ def test_stdio_transport(observer):
     replies = [json.loads(x) for x in out.getvalue().splitlines()]
     assert [r["id"] for r in replies] == [1, 2, 3]          # the notification got no reply
     assert replies[0]["result"]["protocolVersion"] == "2024-11-05"
-    assert len(replies[1]["result"]["tools"]) == 4
+    assert len(replies[1]["result"]["tools"]) == 5
     assert replies[2]["error"]["code"] == -32601
 
 

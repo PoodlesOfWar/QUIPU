@@ -689,6 +689,29 @@ def _ps_realise(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
     return code, {"ok": code == 200, **out}
 
 
+def _vnn_actions_get() -> tuple[int, dict[str, Any]]:
+    """GET /vnn/actions: what the VNN rules would stage from the latest report (read-only, stages nothing)."""
+    from . import vnn_actions
+    try:
+        return 200, vnn_actions.dry_run()
+    except ValueError as exc:                         # an invalid operator rules file is loud, not ignored
+        return 500, {"ok": False, "error": str(exc)}
+
+
+def _vnn_actions_stage(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
+    """POST /vnn/actions/stage: stage a held proposal for every firing VNN rule.  Staging is not
+    acting (the operator still authorises each proposal), but it is an operator act: the same
+    signed-operator gate as authorise and realise."""
+    from . import vnn_actions
+    _, refusal = _ps_operator_gate(body, decision)
+    if refusal is not None:
+        return refusal
+    try:
+        return 200, vnn_actions.stage()
+    except ValueError as exc:
+        return 500, {"ok": False, "error": str(exc)}
+
+
 def _deepmap_link(body: dict[str, Any], decision) -> tuple[int, dict[str, Any]]:
     """POST /deepmap/link: keep one device's deepmap.link/1 record.  Validated and rebuilt from a
     whitelist first (deepmap.validate_link): a record carrying a MAC address is refused, so the
@@ -823,6 +846,9 @@ def _ps_status(qs: dict[str, list[str]] | None = None) -> dict[str, Any]:
         limit = 20
     s = x_process_studio.stats()
     s["recent"] = x_process_studio.list_proposals(status=status, source=source, limit=limit)
+    one = (qs.get("id") or [None])[0]
+    if one:
+        s["recent"] = [r for r in x_process_studio.list_proposals(limit=500) if r.get("proposal_id") == one]
     s["operator_sources"] = sorted(_ps_operator_sources())
     return s
 
@@ -1077,6 +1103,9 @@ class ObserverHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/deepmap":
                 code, payload = _deepmap_get(parse_qs(parsed.query))
                 self._send_json(code, payload)
+            elif parsed.path == "/vnn/actions":
+                code, payload = _vnn_actions_get()
+                self._send_json(code, payload)
             elif parsed.path == "/gard/wallet":
                 code, payload = _gw_get(parse_qs(parsed.query))
                 self._send_json(code, payload)
@@ -1158,6 +1187,8 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _lambda_clusters(body, decision)
             elif parsed.path == "/deepmap/link":
                 code, payload = _deepmap_link(body, decision)
+            elif parsed.path == "/vnn/actions/stage":
+                code, payload = _vnn_actions_stage(body, decision)
             elif parsed.path == "/gard/wallet/challenge":
                 code, payload = _gw_challenge(body, self.headers)
             elif parsed.path == "/gard/wallet/bind":
