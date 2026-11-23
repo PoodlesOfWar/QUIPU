@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.72.0] - 2026-11-23
+
+### Added
+- **integrations/**: Python and JavaScript SDKs for the x_ProcessStudio MCP (v-ADMIN surface only; no authorise or realise), a static site and strict-header server on :8090, a non-root Dockerfile. `docs/HOLON_DESK.md` records that Holon Desk was not found and was not invented. `integrations.loadopoly.com` DNS/tunnel routing is the owner's step.
+
 ## [0.71.0] - 2026-11-23
 
 ### Added
