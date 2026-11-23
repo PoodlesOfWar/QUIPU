@@ -4,6 +4,11 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.71.0] - 2026-11-23
+
+### Added
+- **Edge MCP client.** `clients/termux/quipu_mcp.py` lets an edge device (Termux, or driven through Desktop Commander Remote) use the same x_ProcessStudio MCP the VS Code / Open VSX extension registers: `doctor|tools|status|list|propose|voice|call`. `doctor` fails if the server lists anything beyond the five v-ADMIN tools (plus the optional voice) or any tool that could authorise, realise, approve or promote. Proposals stay held and carry `meta.edge_device`. `edge_setup.sh` stores the URL and token in 0600 files; the token is never taken on the command line nor printed. `docs/EDGE_DESKTOP_COMMANDER.md`; 15 tests. Not verified on a real phone, tunnel or Desktop Commander.
+
 ## [0.70.0] - 2026-11-23
 
 ### Added
