@@ -104,3 +104,59 @@ def test_coupler_refuses_imaginary_and_non_finite_readings():
         _coupled(rheology_reading={"edge_weight": float("inf")})
     with pytest.raises(ValueError):
         vi.TypedViscousCoupler(muonic_prior=1.0)
+
+
+# ---- relational stability number: poADAM vs rADAM differential ----------------
+
+STATE = {"m": 0.02, "v": 0.001, "t": 3, "pressure": 0.4, "pivot_ema": 0.4, "theta": 0.3}
+
+
+def test_identity_knobs_give_zero_differential_and_phi():
+    d = vi.poadam_radam_differential(STATE, 0.3)
+    assert d["delta"] == 0.0 and d["p_radam"] == d["p_poadam"]
+    assert d["stability_number"] == pytest.approx(PHI)
+
+
+def test_differential_does_not_mutate_state():
+    before = dict(STATE)
+    vi.poadam_radam_differential(STATE, 0.3, 0.5, use_torus=True, external_phase=1.0)
+    assert STATE == before
+
+
+def test_relational_knobs_move_delta_and_tighten_the_number():
+    d = vi.poadam_radam_differential(STATE, 0.3, 0.8, use_torus=True, external_phase=2.0)
+    assert d["delta"] != 0.0
+    assert d["delta"] == pytest.approx(d["p_radam"] - d["p_poadam"])
+    assert 1.0 / PHI <= d["stability_number"] < PHI
+    assert d["stability_number"] == pytest.approx(PHI ** (1 - 2 * abs(d["delta"])))
+
+
+def test_explicit_potential_is_the_poadam_side():
+    d = vi.poadam_radam_differential(STATE, 0.3, potential=0.9)
+    assert d["p_poadam"] == 0.9
+    assert d["delta"] == pytest.approx(d["p_radam"] - 0.9)
+    with pytest.raises(ValueError):
+        vi.poadam_radam_differential(STATE, 0.3, potential=float("nan"))
+
+
+def test_relational_stability_number_bounds_and_symmetry():
+    assert vi.relational_stability_number(0.0) == pytest.approx(PHI)
+    assert vi.relational_stability_number(1.0) == pytest.approx(1.0 / PHI)
+    assert vi.relational_stability_number(-1.0) == vi.relational_stability_number(1.0)
+    assert vi.relational_stability_number(0.5) == pytest.approx(1.0)
+    assert vi.relational_stability_number(7.0) == pytest.approx(1.0 / PHI)
+    xs = np.linspace(0, 1, 21)
+    ss = [vi.relational_stability_number(x) for x in xs]
+    assert all(b < a for a, b in zip(ss, ss[1:]))
+    with pytest.raises(ValueError):
+        vi.relational_stability_number(float("inf"))
+
+
+def test_coupler_uses_the_relational_stability_number():
+    _, rep0 = _coupled()
+    assert rep0.cantilever["graph_cfl_max"] == pytest.approx(PHI) and rep0.cantilever["radam_delta"] == 0.0
+    _, rep = _coupled(radam_differential={"delta": 0.5})
+    assert rep.cantilever["graph_cfl_max"] == pytest.approx(1.0)
+    assert rep.vnn_diagnostics["graph_cfl"] <= 1.0 + 1e-12
+    with pytest.raises(ValueError):
+        _coupled(radam_differential={"delta": float("nan")})

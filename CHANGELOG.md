@@ -4,6 +4,27 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.75.0] - 2026-11-24
+
+The viscous network's stability number now depends on how far the relational optimiser (rADAM) has moved from the potential one (poADAM).
+
+### Changed
+- `qpsi/viscous_interaction.py`: the graph stability number follows the poADAM vs rADAM differential:
+  - Δ = p_rADAM − p_poADAM ∈ [−1, 1];
+  - S(Δ) = φ^(1 − 2|Δ|) ∈ [1/φ, φ];
+  - S is φ when the two agree, 1 at |Δ| = ½ and 1/φ at full divergence. A smaller S means more substeps.
+- `TypedViscousCoupler.step(radam_differential={"delta": …})` sets the network's `graph_cfl_max` to the smaller of the config ceiling and S(Δ). The report's `cantilever` block carries `graph_cfl_max` and `radam_delta`. Without a reading, S stays φ.
+
+### Added
+- `poadam_radam_differential(state, grad_real, grad_imag=0, *, potential=None, **radam_kwargs)`. Both optimisers run on copies of the same state and gradient, and the state is never mutated:
+  - **rADAM** is `radam_optimizer.radam_step` with every relational setting the caller passes: complex gradient, pivoted ReLU, heartbeat, noise and torus.
+  - **poADAM** is the `potential` the caller passes, for example `recursive_strengthening`'s `actionable_potential`. Without one it is `reduces_to_vanilla_adam`, rADAM's identity reduction, so Δ = 0 exactly at the identity settings.
+- `relational_stability_number(delta)`.
+- 6 tests in `tests/test_qpsi_viscous_phi_cap.py`.
+
+### Not changed
+- Nothing in production calls the coupler yet, and the learning path is untouched.
+
 ## [0.74.0] - 2026-11-23
 
 ### Added

@@ -35,6 +35,17 @@ Mathematical specification
    Graph stability invariant (Gershgorin bound λ_max(L_G) ≤ 2 max_i d_i):
          Stab_G = Δt · (ν_s λ_max(L_G) + 2 κ_s d_max) ≤ graph_cfl_max (default φ ≈ 1.618 < 2.0)
 
+   The stability number is relational: it follows the poADAM vs rADAM
+   differential Δ = p_rADAM − p_poADAM ∈ [−1, 1] (see
+   :func:`poadam_radam_differential`), where poADAM is the potential (vanilla)
+   Adam pressure and rADAM the relational one from the same moments:
+
+         S(Δ) = φ^(1 − 2|Δ|)   ∈ [1/φ, φ]
+
+   The two optimisers agree (rADAM at its identity knobs reduces to vanilla
+   Adam) → Δ = 0 → S = φ; the further the relational extensions pull from the
+   potential, the smaller the stability number and the more substeps.
+
 3. **Typed Coupling Interface (`TypedViscousCoupler`)**:
    Connects the D-dimensional physical flow (u, p) and the 7-D semantic graph Z
    through dimensionless scalar invariants (enstrophy, strain rate, pressure
@@ -97,6 +108,54 @@ def muonic_decay_prior(
     total = muonic_disappearance_rate(huff_factor=huff_factor, free_lifetime=free_lifetime, **kw)
     decay = max(0.0, float(huff_factor)) / max(1e-18, float(free_lifetime))
     return min(1.0, max(0.0, decay / total)) if total > 0.0 else 0.0
+
+
+def poadam_radam_differential(
+    state: Mapping[str, float],
+    grad_real: float,
+    grad_imag: float = 0.0,
+    *,
+    potential: Optional[float] = None,
+    **radam_kwargs: Any,
+) -> dict[str, float]:
+    """Differential Δ = p_rADAM − p_poADAM between the relational and the potential Adam.
+
+    Both are evaluated on a *copy* of ``state`` (never mutated) with the same
+    gradient and the same ``lr``/``beta1``/``beta2``/``eps``:
+
+    * **rADAM**: ``radam_optimizer.radam_step(copy, grad_real, grad_imag, **radam_kwargs)``,
+      the complex gradient, pivoted ReLU, heartbeat, Langevin and torus knobs included.
+    * **poADAM**: ``potential`` when given (e.g. ``recursive_strengthening``'s
+      ``actionable_potential``), else ``radam_optimizer.reduces_to_vanilla_adam``,
+      the identity reduction of rADAM.
+
+    With every rADAM knob at identity, Δ = 0 exactly.
+    """
+    from ..radam_optimizer import radam_step, reduces_to_vanilla_adam
+
+    g_re, g_im = float(grad_real), float(grad_imag)
+    if not (math.isfinite(g_re) and math.isfinite(g_im)):
+        raise ValueError("gradients must be finite")
+    p_radam = float(radam_step(dict(state), g_re, g_im, **radam_kwargs))
+    if potential is None:
+        adam_kw = {k: radam_kwargs[k] for k in ("lr", "beta1", "beta2", "eps") if k in radam_kwargs}
+        p_po = float(reduces_to_vanilla_adam(dict(state), g_re, **adam_kw))
+    else:
+        p_po = float(potential)
+        if not math.isfinite(p_po):
+            raise ValueError("potential must be finite")
+        p_po = min(1.0, max(0.0, p_po))
+    delta = min(1.0, max(-1.0, p_radam - p_po))
+    return {"p_radam": p_radam, "p_poadam": p_po, "delta": delta,
+            "stability_number": relational_stability_number(delta)}
+
+
+def relational_stability_number(delta: float) -> float:
+    """S(Δ) = φ^(1 − 2|Δ|) ∈ [1/φ, φ]: φ when poADAM and rADAM agree, 1/φ at full divergence."""
+    d = float(delta)
+    if not math.isfinite(d):
+        raise ValueError("delta must be finite")
+    return PHI ** (1.0 - 2.0 * min(1.0, abs(d)))
 
 
 def cantilever_weight(load: float, prior: Optional[float] = None) -> float:
@@ -361,7 +420,7 @@ class VNNConfig:
     kappa_s: float = 0.04              # nonlinear graph convection κ_s ≥ 0
     forcing_gain: float = 0.05         # semantic forcing gain toward target state
     dt: float = 0.10                   # integration step Δt > 0
-    graph_cfl_max: float = PHI         # stability number φ on Δt·(ν_s λ_max + 2 κ_s d_max) < 2
+    graph_cfl_max: float = PHI         # stability number S(Δ=0) = φ; see relational_stability_number
     weyl_trace_free: bool = True       # project forcing through (I − ŵŵ*) on the 6 sense axes
     max_substeps: int = 32
 
@@ -602,6 +661,7 @@ class TypedViscousCoupler:
         *,
         rheology_reading: Optional[Mapping[str, Any]] = None,
         shear_reading: Optional[Mapping[str, Any]] = None,
+        radam_differential: Optional[Mapping[str, Any]] = None,
         bathymetry_features: Optional[Mapping[str, float]] = None,
         target_mesh7: Optional[Sequence[float]] = None,
         physical_forcing: Optional[np.ndarray] = None,
@@ -651,8 +711,13 @@ class TypedViscousCoupler:
         eff_nu_sem = self.vnn_cfg.nu_s * factors["nu_sem"]
         eff_kappa_sem = self.vnn_cfg.kappa_s * factors["kappa_sem"]
         forcing_scale = factors["forcing"]
+        # Relational stability number from the poADAM vs rADAM differential
+        delta = float((radam_differential or {}).get("delta", 0.0))
+        if not math.isfinite(delta):
+            raise ValueError("radam_differential delta must be finite")
+        stability_number = min(self.vnn_cfg.graph_cfl_max, relational_stability_number(delta))
         vnn_cfg_eff = dataclasses.replace(
-            self.vnn_cfg, nu_s=eff_nu_sem, kappa_s=eff_kappa_sem
+            self.vnn_cfg, nu_s=eff_nu_sem, kappa_s=eff_kappa_sem, graph_cfl_max=stability_number
         )
 
         # Step 3: Advance semantic graph VNN
@@ -696,7 +761,8 @@ class TypedViscousCoupler:
                 "loads": loads,
                 "weights": weights,
                 "factors": factors,
-                "graph_cfl_max": self.vnn_cfg.graph_cfl_max,
+                "graph_cfl_max": stability_number,
+                "radam_delta": delta,
             },
         )
         return ns_next, vnn_next, report
@@ -767,6 +833,8 @@ __all__ = [
     "muonic_decay_prior",
     "cantilever_weight",
     "phi_capped_factor",
+    "poadam_radam_differential",
+    "relational_stability_number",
     "AXES_7D",
     "KV_VNN_LATEST",
     "NavierStokesConfig",
