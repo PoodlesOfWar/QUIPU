@@ -4,6 +4,26 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.76.0] - 2026-11-26
+
+A behavioural model of an edge neuromorphic compute-and-store core, and poADAM defined as poissonic ADAM.
+
+### Added
+- `qpsi/mott_spintronic.py`:
+  - Seven leaky integrate-and-fire Mott neurons, one per CAT axis plane, coupled through the Shannon entropy of their subthreshold ("shadow") potentials and a tanh shear across the planes.
+  - Spikes are written directly into a domain-wall racetrack or an SOT-MTJ, with no amplifier or ADC: a spike is stored only if its own amplitude clears the critical current and the memory has room. Otherwise it stays latent.
+  - **poADAM (poissonic ADAM):** plain Adam on the Poisson score of the spike count. It defines the potential.
+  - **rADAM:** the realisation, driven by written spikes (real part), latent spikes (imaginary part) and the fraction written (pivot slope). It equals poADAM exactly when every spike is stored.
+  - `run_window` returns `radam_differential` for `TypedViscousCoupler.step`, so the viscous stability number is φ when the realisation matches the potential and tightens when spikes stay latent.
+- `docs/MOTT_SPINTRONIC_CORE.md`; `tests/test_qpsi_mott_spintronic.py` (12 tests).
+
+### Changed
+- `viscous_interaction` docstrings: poADAM is poissonic ADAM (it was described as "potential ADAM" in v0.75.0). No behaviour change.
+
+### Not changed
+- The module is pure functions: no table or `brain_kv` access, and nothing in training or the services calls it.
+- Its constants are defaults in dimensionless units. They are not fitted to the Nature Nanotechnology paper, which could not be reached.
+
 ## [0.75.0] - 2026-11-24
 
 The viscous network's stability number now depends on how far the relational optimiser (rADAM) has moved from the potential one (poADAM).

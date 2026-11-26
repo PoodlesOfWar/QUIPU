@@ -37,8 +37,10 @@ Mathematical specification
 
    The stability number is relational: it follows the poADAM vs rADAM
    differential Δ = p_rADAM − p_poADAM ∈ [−1, 1] (see
-   :func:`poadam_radam_differential`), where poADAM is the potential (vanilla)
-   Adam pressure and rADAM the relational one from the same moments:
+   :func:`poadam_radam_differential`), where poADAM is the poissonic ADAM
+   pressure that defines the potential (``mott_spintronic.poissonic_adam_step``:
+   vanilla Adam on a Poisson spike-count score) and rADAM the relational,
+   realised one from the same moments:
 
          S(Δ) = φ^(1 − 2|Δ|)   ∈ [1/φ, φ]
 
@@ -125,9 +127,9 @@ def poadam_radam_differential(
 
     * **rADAM**: ``radam_optimizer.radam_step(copy, grad_real, grad_imag, **radam_kwargs)``,
       the complex gradient, pivoted ReLU, heartbeat, Langevin and torus knobs included.
-    * **poADAM**: ``potential`` when given (e.g. ``recursive_strengthening``'s
-      ``actionable_potential``), else ``radam_optimizer.reduces_to_vanilla_adam``,
-      the identity reduction of rADAM.
+    * **poADAM** (poissonic ADAM): ``potential`` when given (e.g. the pressure
+      from ``mott_spintronic.poissonic_adam_step``), else
+      ``radam_optimizer.reduces_to_vanilla_adam``, the identity reduction of rADAM.
 
     With every rADAM knob at identity, Δ = 0 exactly.
     """
