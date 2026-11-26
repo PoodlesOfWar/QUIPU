@@ -91,6 +91,7 @@ PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
 SENSES_ENV: str = annealed_senses.ENV              # QUIPU_ANNEALED_SENSES
 ROUTING_ENV: str = "QUIPU_SILENT_ROUTING"          # route the plan around silent sources (default on)
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
+MESH_FLOW_ENV: str = "QUIPU_MESH_FLOW"            # cells → Mott core → VNN → proposed shadow edges (default on with the cells)
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
 # budget among operator-granted sources is not a widening of autonomy — the
@@ -230,6 +231,30 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                                   "expected": r["expected"], "chi": r["chi"], "eps": r["eps"],
                                   "pulses": r["decision"]["pulses"], "energy_j": r["decision"]["energy_j"],
                                   "lr_eff": r["lr_eff"]} for a, r in pcm.items()}
+                # The cell pressures drive the Mott core; its poADAM/rADAM differential sets the
+                # VNN's stability number over a read-only copy of the MESH graph, and the flow's
+                # converging pairs become *proposed* shadow edges (entirety:mesh_flow:* only).
+                if os.environ.get(MESH_FLOW_ENV, "1").strip() != "0":
+                    cn.execute("SAVEPOINT qpsi_mesh_flow")
+                    try:
+                        from . import mesh_flow, rheology
+                        try:
+                            from . import bond_shear as _bs
+                            shear = _bs.shear_reading(cn)
+                        except Exception:
+                            shear = None
+                        mf = mesh_flow.run(cn, pressures={a: r["pressure"] for a, r in pcm.items()},
+                                           axes=axes, observer=observer,
+                                           rheology_reading=rheology.reading(arr), shear_reading=shear,
+                                           now=now)
+                    except Exception as exc:
+                        cn.execute("ROLLBACK TO SAVEPOINT qpsi_mesh_flow")
+                        cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
+                        out["mesh_flow"] = {"error": str(exc)}
+                    else:
+                        cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
+                        out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes",
+                                                               "latent", "shadow_this_step", "proposed")}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:

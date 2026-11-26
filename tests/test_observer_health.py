@@ -86,3 +86,23 @@ def test_the_other_route_returns_the_published_record(monkeypatch):
             assert r.status == 200 and json.loads(r.read().decode()) == rec
     finally:
         srv.shutdown()
+
+
+def test_the_mesh_flow_route_serves_latest_and_proposals(monkeypatch):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from src.quipu import brain_kv
+    store = {"entirety:mesh_flow:latest": {"delta": 0.0, "stability_number": 1.618},
+             "entirety:mesh_flow:proposals": {"edges": [{"src": "a", "dst": "b", "kind": "new"}]}}
+    monkeypatch.setattr(brain_kv, "kv_get_json", lambda k, d=None: store.get(k, d))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), O.ObserverHandler)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/mesh_flow", timeout=5) as r:
+            body = json.loads(r.read().decode())
+        assert body == {"latest": store["entirety:mesh_flow:latest"],
+                        "proposals": store["entirety:mesh_flow:proposals"]}
+    finally:
+        srv.shutdown()

@@ -4,6 +4,26 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.77.0] - 2026-11-26
+
+Everything joined: the axis cells drive the Mott core, the optimiser differential sets the VNN's stability, the VNN flows over the MESH graph, and the result is proposed shadow edges.
+
+### Added
+- `qpsi/mesh_flow.py`, called from `self_organising.after_step` after the PCM cells. It is controlled by `QUIPU_MESH_FLOW` (on by default with the cells) and runs inside its own savepoint, so a failure never breaks the step.
+  - **Drive:** PCM axis pressures feed the Mott core. A pressure of 0 sits at the firing threshold and stays silent.
+  - **Stability:** the poADAM/rADAM differential Δ sets the VNN stability number S(Δ).
+  - **Coupling:** the coupler reads the rheology and bond-shear readings, with the live 7-D MESH state as its target.
+  - **Flow:** the VNN steps over a read-only copy of the MESH graph (top 128 tokens and their Quipu edges).
+- **Shadow edges.** Each lift is damped by S/φ.
+  - `lift`: existing edges whose ends converged.
+  - `new`: unlinked pairs the flow made near-parallel.
+- **Proposed only.** An edge is proposed once it recurs in ≥ 2 distinct input states, with `realisation: none: through the six gates, two signers and the grant`.
+- `GET /mesh_flow`, and its entries on `/capabilities`.
+- `docs/MESH_FLOW.md`; 10 tests (`test_qpsi_mesh_flow.py`, plus one each in the self-organising and observer suites).
+
+### Not changed
+- `mesh_slm_vocab`, `mesh_slm_embed` and `mesh_slm_quipu` are never written, and training is untouched. Applying a proposal still needs a governed writer that does not exist yet.
+
 ## [0.76.0] - 2026-11-26
 
 A behavioural model of an edge neuromorphic compute-and-store core, and poADAM defined as poissonic ADAM.

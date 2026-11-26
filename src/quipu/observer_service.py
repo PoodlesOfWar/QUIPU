@@ -809,6 +809,15 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # step (read-only; qpsi/bond_shear.py).
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {})
+            elif parsed.path == "/mesh_flow":
+                # Axis cells → Mott core → poADAM/rADAM → VNN over the MESH graph, and the
+                # shadow edges it proposes (read-only; qpsi/mesh_flow.py). Proposals are
+                # never applied: realisation goes through the gates, two signers and the grant.
+                from . import brain_kv
+                self._send_json(200, {
+                    "latest": brain_kv.kv_get_json("entirety:mesh_flow:latest", {}) or {},
+                    "proposals": brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {},
+                })
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last
                 # published by pcm_cells.record (read-only): what the Herald's
@@ -851,6 +860,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "pmi_constituent_segmentation": True,
                         "viscoelastic_rheology": True,
                         "bond_shear_chain": True,
+                        "mesh_flow_shadow_edges": True,
                         "vnn_bathymetry": True,
                         "mesh_slm_inference": True,
                     },
@@ -865,6 +875,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "lambda": "/lambda",
                         "rheology": "/rheology",
                         "bond_shear": "/bond_shear",
+                        "mesh_flow": "/mesh_flow",
                         "bathymetry": "/bathymetry",
                         "guidance": "/guidance?source=...",
                         "entirety": "/entirety",

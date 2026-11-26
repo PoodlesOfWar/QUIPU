@@ -425,3 +425,16 @@ def test_deepen_step_carries_the_axis_shear(isolated):
     s = b["self_organising"]
     assert "error" not in s["pcm"] and s["pcm_shear"] is not None
     assert {"u_bar", "dispersion", "psi", "counter_rotating"} <= set(s["pcm_shear"])
+
+
+def test_mesh_flow_runs_after_the_cells_and_proposes_only(isolated):
+    brain_kv.kv_set_json(ma.KV_THE_OTHER, OTHER)
+    so.enable()
+    _flux_on()
+    a = system_entirety.oscillating_expansion_step(force=True)
+    mf = a["self_organising"].get("mesh_flow")
+    assert mf is not None and "error" not in mf, mf
+    assert 1 / 1.6181 <= mf["stability_number"] <= 1.6181
+    keys = {k for (k,) in brain_kv.open_conn().execute(
+        "SELECT key FROM brain_kv WHERE key LIKE 'entirety:mesh_flow:%'")}
+    assert {"entirety:mesh_flow:latest", "entirety:mesh_flow:proposals"} <= keys
