@@ -46,3 +46,34 @@ A pressure of 0 puts a neuron exactly at its firing threshold (rheobase), so sil
 - **Proposals are not applied.** There is still no governed writer for `mesh_slm_quipu`. Applying a proposal is a separate, reviewed step: the six gates, both signers and the grant.
 - **The physical field is synthetic.** It is a fresh 8×8 Taylor–Green vortex each step: a placeholder for a real physical drive.
 - **The VNN advances one coupled step per self-organising step,** from the MESH's current embeddings. Proposals are about direction, not a converged state.
+
+## Magic: information theory read as a matter–antimatter pair (v0.78.0)
+
+**Module:** `src/quipu/qpsi/magic.py`. The reading is published at `entirety:mesh_flow:magic`, served on `GET /mesh_flow`, and delivered to every source, Perceptopoly included, as the `magic` field of `GET /guidance?source=…`.
+
+"Magic" (non-stabilizerness) measures how far a quantum state is from the states a classical computer simulates efficiently. It was proposed for top quark–antiquark pairs at the LHC by White & White (*Phys. Rev. D* 110, 116016 (2024)), read from the pair's spin correlations as the second stabilizer Rényi entropy:
+
+```
+M̃₂(ρ) = −log₂( Σ_P tr(ρP)⁴ / Σ_P tr(ρP)² )      P over the 16 two-qubit Paulis
+```
+
+**The transcription used here is a declared mapping, not a measurement:**
+
+| Step | What it is |
+|---|---|
+| Pair per plane | \|ψ_k⟩ = cos(θ_k/2)\|00⟩ + e^{iφ_k} sin(θ_k/2)\|11⟩, one per CAT axis plane |
+| Information theory in | sin²(θ_k/2) = p_k, the plane's PCM pressure. φ_k is the plane's rADAM phase: its latent share. |
+| Antimatter attribution | The antimatter partner is the charge conjugate, φ → −φ. M̃₂ is even in φ, so a plane's magic is split half to matter and half to antimatter. |
+| Zero magic | p = 0 or 1 (nothing or everything realised), and p = ½ with φ = 0 (a Bell pair) |
+| Maximum | log₂(3/2) ≈ 0.585, at p ≈ 0.211 or 0.789 with φ = π/4 |
+
+**Through the levels of the system diagram.** Every observer source sits on an axis plane (`SOURCE_PROFILES`), so each is attributed the magic of its own plane in `by_source`:
+
+- Stockopoly and Bakugo sit on touch.
+- Supply Chain Brain sits on brain.
+- Loadopoly-OCR sits on vision.
+- Perceptopoly sits on perception.
+
+Sources with no routed plane are left out. `/guidance?source=perceptopoly` returns its own plane's magic with the matter and antimatter halves, the weighted total, and every plane.
+
+**Not consulted.** The Google Flow video and the ScienceDaily article (2026-11-24) named with this request were unreachable from the session, so nothing here is taken from them.

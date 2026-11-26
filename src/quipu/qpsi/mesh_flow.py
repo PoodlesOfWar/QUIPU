@@ -39,6 +39,7 @@ KV_STATE: str = KV_PREFIX + "state"
 KV_HISTORY: str = KV_PREFIX + "history"
 KV_PROPOSALS: str = KV_PREFIX + "proposals"
 KV_LATEST: str = KV_PREFIX + "latest"
+KV_MAGIC: str = KV_PREFIX + "magic"
 
 AXES: tuple[str, ...] = ("vision", "touch", "smell", "body", "brain", "perception", "entirety")
 WINDOW_STEPS: int = 64          # Mott steps per self-organising step
@@ -148,7 +149,8 @@ def _tokens(cn: sqlite3.Connection, ids: Sequence[int]) -> dict[int, str]:
 def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping[str, float],
         observer: float = 0.0, rheology_reading: Optional[Mapping[str, Any]] = None,
         shear_reading: Optional[Mapping[str, Any]] = None, now: Optional[float] = None,
-        max_nodes: int = MAX_NODES) -> dict[str, Any]:
+        max_nodes: int = MAX_NODES, phases: Optional[Mapping[str, float]] = None,
+        source_axes: Optional[Mapping[str, str]] = None) -> dict[str, Any]:
     """One pass of the chain on the step's connection; returns the published summary."""
     from . import viscous_interaction as vi
 
@@ -203,8 +205,14 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
     for p in proposals:
         p["kind"] = p.pop("lobe")
 
+    # 4. Information theory → magic: each plane's pressure and rADAM phase as a matter–antimatter pair
+    from . import magic as _magic
+    mg = _magic.reading(pressures, phases, source_axes=source_axes)
+    mg["at"] = now
+
     summary = {
         "at": now,
+        "magic": mg["total"],
         "session": session,
         "drive": [round(x, 6) for x in drive],
         "spikes": win["spikes"], "written": win["written"], "latent": win["latent"],
@@ -219,6 +227,7 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
     _kv_set(cn, KV_STATE, {"v": st.v, "poadam": po, "radam": rr})
     _kv_set(cn, KV_HISTORY, hist)
     _kv_set(cn, KV_PROPOSALS, {"at": now, "min_sessions": MIN_SESSIONS, "edges": proposals})
+    _kv_set(cn, KV_MAGIC, mg)
     _kv_set(cn, KV_LATEST, summary)
     return summary
 
@@ -233,5 +242,5 @@ def proposals(cn: sqlite3.Connection) -> dict:
     return rec if isinstance(rec, dict) else {}
 
 
-__all__ = ["KV_PREFIX", "KV_STATE", "KV_HISTORY", "KV_PROPOSALS", "KV_LATEST", "AXES",
+__all__ = ["KV_PREFIX", "KV_STATE", "KV_HISTORY", "KV_PROPOSALS", "KV_LATEST", "KV_MAGIC", "AXES",
            "mott_drive", "shadow_edges", "run", "latest", "proposals"]

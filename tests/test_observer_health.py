@@ -103,6 +103,6 @@ def test_the_mesh_flow_route_serves_latest_and_proposals(monkeypatch):
         with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/mesh_flow", timeout=5) as r:
             body = json.loads(r.read().decode())
         assert body == {"latest": store["entirety:mesh_flow:latest"],
-                        "proposals": store["entirety:mesh_flow:proposals"]}
+                        "proposals": store["entirety:mesh_flow:proposals"], "magic": {}}
     finally:
         srv.shutdown()

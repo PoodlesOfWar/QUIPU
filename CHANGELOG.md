@@ -4,6 +4,23 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.78.0] - 2026-11-26
+
+The system's information-theoretic readings are transcribed into quantum "magic" and delivered to every source, including Perceptopoly.
+
+### Added
+- `qpsi/magic.py`: the second stabilizer Rényi entropy M̃₂ = −log₂(Σ⟨P⟩⁴ / Σ⟨P⟩²), the measure proposed for top quark–antiquark pairs (White & White, *Phys. Rev. D* 110, 116016 (2024)).
+  - Each axis plane is read as a matter–antimatter pair: its PCM pressure sets the pair's population and its rADAM phase sets the pair's phase.
+  - The antimatter partner is the charge conjugate and carries the same magic, so each plane's magic is attributed half to each.
+  - Magic is 0 for fully realised or unrealised planes and for a Bell pair. The maximum is log₂(3/2) ≈ 0.585.
+- `mesh_flow.run` publishes `entirety:mesh_flow:magic`: per plane, the weighted total, and `by_source` (each observer source gets the magic of its own axis plane).
+- `GET /mesh_flow` returns the reading. `GET /guidance?source=…` gains a `magic` field with the source's own plane, the total and all planes; this is how it reaches Perceptopoly.
+- 12 tests (`test_qpsi_magic.py`, plus mesh-flow and observer cases); a new section in `docs/MESH_FLOW.md`.
+
+### Not changed
+- The reading changes no proposal, no weight and no training step.
+- It is a declared mapping, not a measurement. The Google Flow video and the ScienceDaily article named with the request were unreachable.
+
 ## [0.77.0] - 2026-11-26
 
 Everything joined: the axis cells drive the Mott core, the optimiser differential sets the VNN's stability, the VNN flows over the MESH graph, and the result is proposed shadow edges.

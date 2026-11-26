@@ -357,6 +357,25 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "temperature_bias": float(last_osc.get("temperature", 0.7)),
         },
         "bond_shear": _bond_shear_payload(),
+        "magic": _magic_payload(source, profile.get("axis")),
+    }
+
+
+def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:
+    """The mesh-flow magic reading as this source sees it: its own plane, the total, every plane."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:mesh_flow:magic", {}) or {}
+    except Exception:
+        rec = {}
+    planes = rec.get("planes") or {}
+    own = planes.get(axis or "") or {}
+    return {
+        "total": float(rec.get("total", 0.0) or 0.0),
+        "share_of_max": float(rec.get("share_of_max", 0.0) or 0.0),
+        "own_axis": axis,
+        "own": {k: float(own.get(k, 0.0) or 0.0) for k in ("magic", "matter", "antimatter")},
+        "planes": {a: float((v or {}).get("magic", 0.0) or 0.0) for a, v in planes.items()},
+        "by_source": rec.get("by_source") or {},
     }
 
 
@@ -817,6 +836,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {
                     "latest": brain_kv.kv_get_json("entirety:mesh_flow:latest", {}) or {},
                     "proposals": brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {},
+                    "magic": brain_kv.kv_get_json("entirety:mesh_flow:magic", {}) or {},
                 })
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last

@@ -156,6 +156,15 @@ def _epoch(value) -> float:
         return time.time()
 
 
+def _source_axes() -> dict[str, str]:
+    """Each observer source's axis plane (routed sources only), for the magic attribution."""
+    try:
+        from ..observer_service import SOURCE_PROFILES
+        return {s: p["axis"] for s, p in SOURCE_PROFILES.items() if p.get("axis")}
+    except Exception:
+        return {}
+
+
 def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | None = None,
                now: float | None = None) -> dict:
     """Run the SOMN step and the prior's realisation check for one expansion step.
@@ -246,15 +255,17 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                         mf = mesh_flow.run(cn, pressures={a: r["pressure"] for a, r in pcm.items()},
                                            axes=axes, observer=observer,
                                            rheology_reading=rheology.reading(arr), shear_reading=shear,
-                                           now=now)
+                                           now=now, source_axes=_source_axes(),
+                                           phases={a: float((arr.radam.get(a) or {}).get("theta", 0.0))
+                                                   for a in pcm})
                     except Exception as exc:
                         cn.execute("ROLLBACK TO SAVEPOINT qpsi_mesh_flow")
                         cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
                         out["mesh_flow"] = {"error": str(exc)}
                     else:
                         cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
-                        out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes",
-                                                               "latent", "shadow_this_step", "proposed")}
+                        out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes", "latent",
+                                                               "shadow_this_step", "proposed", "magic")}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:

@@ -68,7 +68,7 @@ def test_run_never_writes_the_mesh_and_only_its_keys(cn):
     out = MF.run(cn, pressures=P1, axes=AXES, observer=0.5, now=1.0)
     assert _mesh(cn) == before
     keys = {r[0] for r in cn.execute("SELECT key FROM brain_kv")}
-    assert keys == {MF.KV_STATE, MF.KV_HISTORY, MF.KV_PROPOSALS, MF.KV_LATEST, "entirety:vnn:latest"}
+    assert keys == {MF.KV_STATE, MF.KV_HISTORY, MF.KV_PROPOSALS, MF.KV_LATEST, MF.KV_MAGIC, "entirety:vnn:latest"}
     assert out["nodes"] == 6 and out["spikes"] > 0
     assert 1 / MF.PHI <= out["stability_number"] <= MF.PHI + 1e-12
     assert out["vnn_graph_cfl"] <= out["stability_number"] + 1e-12
@@ -129,3 +129,12 @@ def test_brain_without_mesh_tables_runs_the_core_only():
     c = sqlite3.connect(":memory:")
     out = MF.run(c, pressures=P1, axes=AXES, now=1.0)
     assert out["nodes"] == 0 and out["spikes"] > 0 and out["proposed"] == 0
+
+
+def test_run_publishes_the_magic_reading_with_source_attribution(cn):
+    out = MF.run(cn, pressures=P2, axes=AXES, now=1.0, phases={"brain": 0.7},
+                 source_axes={"perceptopoly": "perception", "supply-chain-brain": "brain"})
+    mg = json.loads(cn.execute("SELECT value FROM brain_kv WHERE key=?", (MF.KV_MAGIC,)).fetchone()[0])
+    assert out["magic"] == mg["total"] > 0.0
+    assert set(mg["by_source"]) == {"perceptopoly", "supply-chain-brain"}
+    assert mg["by_source"]["supply-chain-brain"] == mg["planes"]["brain"]["magic"]

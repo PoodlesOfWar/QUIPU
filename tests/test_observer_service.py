@@ -229,3 +229,14 @@ def test_agent_card_and_capabilities_endpoints():
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_guidance_carries_the_magic_reading_for_perceptopoly(monkeypatch):
+    from quipu import observer_service as O2, brain_kv as bk
+    rec = {"total": 0.2, "share_of_max": 0.34, "planes": {"perception": {"magic": 0.5, "matter": 0.25, "antimatter": 0.25},
+                                                         "touch": {"magic": 0.1}}, "by_source": {"perceptopoly": 0.5}}
+    monkeypatch.setattr(bk, "kv_get_json", lambda k, d=None: rec if k == "entirety:mesh_flow:magic" else d)
+    out = O2._magic_payload("perceptopoly", "perception")
+    assert out["own_axis"] == "perception" and out["own"] == {"magic": 0.5, "matter": 0.25, "antimatter": 0.25}
+    assert out["total"] == 0.2 and out["planes"] == {"perception": 0.5, "touch": 0.1}
+    assert O2._magic_payload("quipu-voice", "hearing")["own"]["magic"] == 0.0
