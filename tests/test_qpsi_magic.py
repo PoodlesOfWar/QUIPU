@@ -98,3 +98,71 @@ def test_a_cpt_violating_moment_ratio_shows_as_asymmetry(monkeypatch):
     assert r["planes"]["vision"]["cpt_asymmetry"] == 0.0               # no magic, nothing to break
     monkeypatch.setenv("QUIPU_CPT_RATIO", "nan")
     assert M.reading({"perception": 0.3}, {"perception": 0.8}, weights=[1] * 7)["cpt"]["conserved"] is True
+
+
+
+# ---- non-linear operational gain from the recent proofs --------------------------
+
+def test_proved_two_qubit_maximum_is_never_exceeded_and_is_approached():
+    rng = np.random.default_rng(1)
+    paulis = [np.kron(a, b) for a in (I2, X, Y, Z) for b in (I2, X, Y, Z)]
+
+    def m2(v):
+        return M.stabilizer_renyi_2([float(np.real(v.conj() @ p @ v)) for p in paulis])
+
+    best, bv = 0.0, None
+    for _ in range(4000):
+        v = rng.normal(size=4) + 1j * rng.normal(size=4)
+        v /= np.linalg.norm(v)
+        m = m2(v)
+        assert m <= M.MAX_TWO_QUBIT_MAGIC + 1e-9
+        if m > best:
+            best, bv = m, v
+    for _ in range(6000):
+        w = bv + 0.02 * (rng.normal(size=4) + 1j * rng.normal(size=4))
+        w /= np.linalg.norm(w)
+        m = m2(w)
+        assert m <= M.MAX_TWO_QUBIT_MAGIC + 1e-9
+        if m > best:
+            best, bv = m, w
+    assert best > M.MAX_TWO_QUBIT_MAGIC - 2e-3
+    assert M.stabilizer_purity(M.MAX_TWO_QUBIT_MAGIC) == pytest.approx(7 / 16)
+
+
+def test_operational_gain_is_concave_saturating_and_spans_one_to_phi():
+    phi = (1 + math.sqrt(5)) / 2
+    assert M.operational_gain(0.0) == 1.0
+    assert M.operational_gain(M.MAX_TWO_QUBIT_MAGIC) == pytest.approx(phi)
+    assert M.operational_gain(5.0) == pytest.approx(phi)                 # clipped beyond the proved maximum
+    xs = np.linspace(0, M.MAX_TWO_QUBIT_MAGIC, 41)
+    gs = [M.operational_gain(x) for x in xs]
+    steps = np.diff(gs)
+    assert (steps > 0).all() and (np.diff(steps) < 0).all()              # increasing, concave
+    assert M.operational_gain(M.MAX_PAIR_MAGIC) == pytest.approx(1 + (phi - 1) * (1 / 3) / (9 / 16))
+    with pytest.raises(ValueError):
+        M.stabilizer_purity(float("nan"))
+
+
+def test_monotone_under_free_operations_local_cliffords_leave_magic_unchanged():
+    # Leone & Bittel: M2 is a monotone; Cliffords are free and reversible, so they preserve it.
+    H = np.array([[1, 1], [1, -1]], dtype=complex) / math.sqrt(2)
+    S = np.diag([1, 1j])
+    CNOT = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]], dtype=complex)
+    paulis = [np.kron(a, b) for a in (I2, X, Y, Z) for b in (I2, X, Y, Z)]
+
+    def m2(v):
+        return M.stabilizer_renyi_2([float(np.real(v.conj() @ p @ v)) for p in paulis])
+
+    rng = np.random.default_rng(3)
+    v = rng.normal(size=4) + 1j * rng.normal(size=4)
+    v /= np.linalg.norm(v)
+    for U in (np.kron(H, I2), np.kron(S, H), CNOT, CNOT @ np.kron(H, S)):
+        assert m2(U @ v) == pytest.approx(m2(v), abs=1e-9)
+
+
+def test_reading_reports_proved_max_share_and_design_per_plane():
+    r = M.reading({"brain": M.P_AT_MAX}, {"brain": math.pi / 4}, weights=[1] * 7)
+    assert r["max_two_qubit"] == pytest.approx(math.log2(16 / 7), abs=1e-6)
+    assert r["planes"]["brain"]["design"] == pytest.approx((1 / 3) / (9 / 16), abs=1e-6)
+    assert r["planes"]["vision"]["design"] == 0.0
+    assert r["operational_gain"] == pytest.approx(M.operational_gain(r["total"]), abs=1e-6)

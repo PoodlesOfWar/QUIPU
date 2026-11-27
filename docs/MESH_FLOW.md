@@ -126,3 +126,35 @@ The magic reading now acts on the shadow pathways instead of sitting beside them
 - `/guidance?source=…` lists the proposed shadow tokens on the source's own plane under `magic.shadow_tokens`. Perceptopoly sees those on perception.
 
 **Still proposals only.** Nothing writes `mesh_slm_*`.
+
+## A non-linear gain from recent magic proofs (v0.81.0)
+
+The v0.80 pathway gain was linear in magic and normalised by the pair family's own maximum. It is now a non-linear operational gain anchored on three recent results:
+
+| Result | What it gives here |
+|---|---|
+| **Monotone.** Leone & Bittel, *Phys. Rev. A* 110, L040403 (2024): stabilizer entropies M_α with integer α ≥ 2 are magic monotones on pure states | M₂ (α = 2), the quantity QUIPU computes, cannot be raised by free (Clifford) operations. A test checks that Clifford gates leave it unchanged. |
+| **Proved maximum.** Two-qubit max M₂ = log₂(16/7) ≈ 1.193 bits. Found numerically in *Quantum Sci. Technol.* 11, 015035 (2026); exact proofs of two-qubit maximal-magic states, for four measures including this one, claimed by Shen, Yin & Zhang, arXiv:2611.08586 | The normaliser. Random search with hill-climbing reaches 1.1925 and never exceeds 1.19265, in this session and in a test. |
+| **Operational meaning.** Bittel & Leone, arXiv:2507.22883: a state's Clifford orbit is an approximate design, indistinguishable from Haar-random up to exp(−Θ(M_α)), α ≥ 2 | With the Θ constant taken as 1 in nats, the error is 2^(−M₂), which is exactly the stabilizer purity Σ⟨P⟩⁴/Σ⟨P⟩² |
+
+**The gain:**
+
+```
+D(M₂) = (1 − 2^(−M₂)) / (1 − 7/16)          design indistinguishability, 0 … 1
+g     = 1 + (φ − 1) · D                     1 … φ, concave and saturating
+pathway: D = Σ π_k · D(M₂,k),   gain = (1 + (φ − 1)·D) · held
+```
+
+**What changes in practice:**
+- The steepest gain is at low magic; it flattens towards the proved maximum, where g = φ.
+- The pair family (one pair per plane) tops out at M₂ = log₂(3/2), so its largest gain is ≈ 1.366. φ is reserved for a pathway that carries the proved two-qubit maximum.
+- Shadow-edge lifts through the most magic planes are therefore about 16% lower than in v0.80.0, where they could reach φ.
+
+**New fields:**
+- `magic.reading` adds `max_two_qubit`, `share_of_proved_max` and `operational_gain`, and a per-plane `design`.
+- Each pathway carries `design`.
+
+**Limits:**
+- **Proofs not read in full.** The arXiv full texts were unreachable from the session, so the proofs themselves were not read; the results come from their abstracts and indexed summaries. The 16/7 maximum was checked numerically here.
+- **Declared constant.** Θ(·) = 1 is a choice: the paper states the rate only up to a constant.
+- **Pure states only.** The monotone result covers pure states, and the plane pairs here are pure.

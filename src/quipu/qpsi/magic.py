@@ -45,6 +45,29 @@ B, T and r are overridable (``QUIPU_POSITRON_B_T``, ``QUIPU_POSITRON_T_K``,
 wrote this; the trap description comes from its abstract as indexed and press
 coverage, and no value here is taken from its data.
 
+**Non-linear operational gain from recent proofs:**
+
+* *Monotone.* M_α with integer α ≥ 2 is a magic monotone on pure states
+  (Leone & Bittel, *Phys. Rev. A* 110, L040403 (2024)), so M̃₂ here cannot be
+  raised by free (stabilizer) operations.
+* *Proved maximum.* The largest two-qubit M₂ is log₂(16/7) ≈ 1.193 bits
+  (numerically, "Maximal Magic for Two-qubit States", *Quantum Sci. Technol.*
+  11, 015035 (2026); exact proofs of the two-qubit maximisers claimed by Shen,
+  Yin & Zhang, arXiv:2611.08586).  The pair family above reaches only
+  log₂(3/2).  At the maximum the stabilizer purity 2^{−M₂} is 7/16.
+* *Operational meaning.* A state's Clifford orbit is an approximate design,
+  indistinguishable from Haar-random states up to an error exp(−Θ(M_α)), α ≥ 2
+  (Bittel & Leone, arXiv:2507.22883).  Taking the Θ constant as 1 with M in
+  nats (a declared choice), the error is 2^{−M₂}, which is exactly the
+  stabilizer purity Σ⟨P⟩⁴/Σ⟨P⟩².
+
+  :func:`operational_gain` maps this to [1, φ]:
+
+      g(M₂) = 1 + (φ − 1) · (1 − 2^{−M₂}) / (1 − 7/16)
+
+  It is concave and saturating: steep for little magic, flat near the proved
+  maximum, where g = φ.  The pair family tops out at g ≈ 1.366.
+
 Pure functions, standard library only; no I/O beyond reading those three
 environment variables.
 """
@@ -56,6 +79,8 @@ from typing import Mapping, Optional, Sequence
 
 AXES: tuple[str, ...] = ("vision", "touch", "smell", "body", "brain", "perception", "entirety")
 MAX_PAIR_MAGIC: float = math.log2(1.5)
+MAX_TWO_QUBIT_MAGIC: float = math.log2(16.0 / 7.0)   # proved two-qubit maximum of M2, in bits
+PHI: float = (1.0 + math.sqrt(5.0)) / 2.0
 E_CHARGE: float = 1.602176634e-19       # C (exact, SI)
 M_ELECTRON: float = 9.1093837015e-31    # kg (CODATA 2018; the positron mass is equal under CPT)
 H_PLANCK: float = 6.62607015e-34        # J s (exact)
@@ -94,6 +119,24 @@ def pair_magic(pressure: float, phase: float) -> float:
     p = min(1.0, max(0.0, p))
     theta = 2.0 * math.asin(math.sqrt(p))
     return stabilizer_renyi_2(list(pair_paulis(theta, ph).values()))
+
+
+def stabilizer_purity(magic_bits: float) -> float:
+    """2^{−M₂} = Σ⟨P⟩⁴/Σ⟨P⟩²: 1 for stabilizer states, 7/16 at the proved two-qubit maximum."""
+    m = float(magic_bits)
+    if not math.isfinite(m):
+        raise ValueError("magic must be finite")
+    return 2.0 ** (-max(0.0, m))
+
+
+def design_indistinguishability(magic_bits: float) -> float:
+    """1 − 2^{−M₂} normalised by its proved two-qubit maximum 9/16: 0 for stabilizer states, 1 at the maximum."""
+    return min(1.0, (1.0 - stabilizer_purity(magic_bits)) / (1.0 - 7.0 / 16.0))
+
+
+def operational_gain(magic_bits: float) -> float:
+    """g = 1 + (φ − 1)·design_indistinguishability(M₂) ∈ [1, φ]: concave, saturating at the proved maximum."""
+    return 1.0 + (PHI - 1.0) * design_indistinguishability(magic_bits)
 
 
 def quantum_cyclotron(b_tesla: float = POSITRON_B_T, temp_k: float = POSITRON_T_K) -> dict:
@@ -169,8 +212,13 @@ def reading(pressures: Mapping[str, float], phases: Optional[Mapping[str, float]
                      "cpt_asymmetry": round(m_bar - m, 12)}
         total += (wk / tot) * m
         asym = max(asym, abs(m_bar - m))
+    for rec in planes.values():
+        rec["design"] = round(design_indistinguishability(rec["magic"]), 9)
     out = {"planes": planes, "total": round(total, 6), "max": round(MAX_PAIR_MAGIC, 6),
            "share_of_max": round(total / MAX_PAIR_MAGIC, 6),
+           "max_two_qubit": round(MAX_TWO_QUBIT_MAGIC, 6),
+           "share_of_proved_max": round(total / MAX_TWO_QUBIT_MAGIC, 6),
+           "operational_gain": round(operational_gain(total), 9),
            "positron": {**{k: (v if k in ("n_bar", "ground_probability") else round(v, 6)) for k, v in cyc.items()},
                         "source": "one-positron quantum cyclotron, PRL 137, 173001"},
            "cpt": {"ratio": r, "max_asymmetry": asym, "conserved": asym < 1e-12}}
@@ -179,4 +227,5 @@ def reading(pressures: Mapping[str, float], phases: Optional[Mapping[str, float]
     return out
 
 
-__all__ = ["AXES", "MAX_PAIR_MAGIC", "P_AT_MAX", "quantum_cyclotron", "positron_config", "stabilizer_renyi_2", "pair_paulis", "pair_magic", "reading"]
+__all__ = ["AXES", "MAX_PAIR_MAGIC", "MAX_TWO_QUBIT_MAGIC", "P_AT_MAX", "stabilizer_purity",
+           "design_indistinguishability", "operational_gain", "quantum_cyclotron", "positron_config", "stabilizer_renyi_2", "pair_paulis", "pair_magic", "reading"]

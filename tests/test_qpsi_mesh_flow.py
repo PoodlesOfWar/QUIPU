@@ -165,12 +165,14 @@ def test_pathway_planes_follow_where_the_flow_moved():
     assert still[4] == pytest.approx(1.0)                     # nothing moved: falls back to where it sits
 
 
-def test_pathway_gain_spans_one_to_phi_and_unheld_antimatter_weakens_it():
+def test_pathway_gain_is_the_operational_gain_and_unheld_antimatter_weakens_it():
     brain = [0, 0, 0, 0, 1.0, 0, 0]
     stab = MF.pathway_magic(brain, _planes(brain=0.0))         # stabilizer plane: no magic
     assert stab["magic"] == 0.0 and stab["gain"] == pytest.approx(1.0) and stab["plane"] == "brain"
     top = MF.pathway_magic(brain, _planes(brain=MG.P_AT_MAX))  # maximal magic
-    assert top["gain"] == pytest.approx(PHI_, rel=1e-6) and top["held"] == pytest.approx(1.0)
+    # the pair family tops out below the proved two-qubit maximum, so below phi
+    assert top["gain"] == pytest.approx(MG.operational_gain(MG.MAX_PAIR_MAGIC), rel=1e-6)
+    assert 1.36 < top["gain"] < PHI_ and top["held"] == pytest.approx(1.0)
     warm_planes = MG.reading({"brain": MG.P_AT_MAX}, {"brain": math.pi / 4}, weights=[1] * 7,
                              temp_k=20.0)["planes"]
     warm = MF.pathway_magic(brain, warm_planes)

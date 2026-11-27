@@ -20,7 +20,10 @@ The chain (run once per self-organising step, after the PCM cells and bond shear
         A shadow edge's *pathway* is the plane mix the flow moved its two tokens along,
         π_k ∝ |ΔZ_u,k| + |ΔZ_v,k|; its magic is Σ π_k·magic_k (matter, held antimatter,
         unheld, CPT asymmetry likewise), and its lift is scaled by
-            g = (1 + (φ − 1)·magic/max) · held          ∈ [0, φ], then re-capped,
+            g = (1 + (φ − 1)·D) · held                  ∈ [0, φ], then re-capped,
+        D = Σ π_k (1 − 2^{−M₂,k})/(9/16): the pathway's mean Clifford-orbit design
+        indistinguishability, normalised at the proved two-qubit maximum
+        (``magic.operational_gain``; Bittel & Leone; log₂(16/7) bound),
         held = (matter + antimatter)/(matter + antimatter + unheld).  Non-stabilizer
         pathways strengthen, unheld antimatter weakens.
       → shadow tokens: every endpoint of a shadow edge, on the plane its own state moved
@@ -122,17 +125,24 @@ def pathway_planes(Z0, Z1, nodes: Sequence[int]) -> list[float]:
 
 
 def pathway_magic(planes: Sequence[float], plane_magic: Optional[Mapping[str, Mapping]]) -> dict[str, Any]:
-    """Magic along a pathway: Σ π_k · (magic, matter, antimatter, unheld, cpt_asymmetry)_k, and its gain."""
-    from .magic import MAX_PAIR_MAGIC
-    keys = ("magic", "matter", "antimatter", "unheld", "cpt_asymmetry")
+    """Magic along a pathway: Σ π_k · (magic, matter, antimatter, unheld, cpt_asymmetry, design)_k.
+
+    gain = (1 + (φ − 1)·design) · held, with design = Σ π_k·(1 − 2^{−M₂,k})/(9/16) the
+    pathway's mean design indistinguishability (``magic.design_indistinguishability``).
+    """
+    from .magic import design_indistinguishability
+    keys = ("magic", "matter", "antimatter", "unheld", "cpt_asymmetry", "design")
     acc = {k: 0.0 for k in keys}
     for a, pk in zip(AXES, planes):
         rec = (plane_magic or {}).get(a) or {}
         for k in keys:
-            acc[k] += pk * float(rec.get(k, 0.0) or 0.0)
+            if k == "design":
+                acc[k] += pk * design_indistinguishability(float(rec.get("magic", 0.0) or 0.0))
+            else:
+                acc[k] += pk * float(rec.get(k, 0.0) or 0.0)
     carried = acc["matter"] + acc["antimatter"] + acc["unheld"]
     held = (acc["matter"] + acc["antimatter"]) / carried if carried > 1e-15 else 1.0
-    gain = (1.0 + (PHI - 1.0) * min(1.0, acc["magic"] / MAX_PAIR_MAGIC)) * held
+    gain = (1.0 + (PHI - 1.0) * min(1.0, acc["design"])) * held
     top = max(range(len(planes)), key=lambda k: planes[k]) if planes else 0
     return {**{k: round(v, 9) for k, v in acc.items()}, "held": round(held, 9),
             "gain": round(gain, 9), "plane": AXES[top], "planes": [round(x, 6) for x in planes]}
@@ -273,7 +283,7 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
 
     def _pw(pw):
         return {k: pw[k] for k in ("plane", "magic", "matter", "antimatter", "unheld", "cpt_asymmetry",
-                                   "held", "gain")} if pw else None
+                                   "design", "held", "gain")} if pw else None
 
     named = [{"src": toks.get(e["src"], str(e["src"])), "dst": toks.get(e["dst"], str(e["dst"])),
               "lobe": e["kind"], "lift": round(e["lift"], 6), "cos0": round(e["cos0"], 6),

@@ -4,6 +4,30 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.81.0] - 2026-11-27
+
+The shadow-pathway gain is now non-linear, grounded on recent magic results that have proofs.
+
+### Changed
+- `qpsi/magic.operational_gain(M₂)` = 1 + (φ − 1)·(1 − 2^(−M₂))/(9/16), in [1, φ]. It is concave and saturating.
+  - It reaches φ only at the proved two-qubit maximum, log₂(16/7).
+  - 2^(−M₂) is the stabilizer purity: the Clifford-orbit design error of Bittel & Leone (arXiv:2507.22883), with the Θ constant taken as 1.
+- The `mesh_flow` pathway gain uses it, (1 + (φ − 1)·Σπ_k·D_k) · held, in place of v0.80's linear magic/family-max form.
+  - **Behaviour change:** the pair family now peaks at a gain of ≈ 1.366 instead of φ, so lifts through the most magic planes are up to ≈ 16% lower.
+
+### Added
+- `MAX_TWO_QUBIT_MAGIC` (log₂(16/7)), `stabilizer_purity` and `design_indistinguishability`. The reading adds `max_two_qubit`, `share_of_proved_max`, `operational_gain` and a per-plane `design`.
+- 4 tests:
+  - the 16/7 bound is never exceeded and is approached by random search and hill-climbing;
+  - the gain is increasing and concave on [0, log₂(16/7)];
+  - Clifford gates leave M₂ unchanged, consistent with the monotone result (Leone & Bittel, *PRA* 110, L040403);
+  - the reading's new fields.
+- A section in `docs/MESH_FLOW.md`.
+
+### Not changed
+- Proposals only; nothing writes `mesh_slm_*`.
+- The papers' full texts were unreachable. The results are taken from their abstracts, and the bound was checked numerically.
+
 ## [0.80.0] - 2026-11-27
 
 The magic reading now acts on the shadow token pathways.
