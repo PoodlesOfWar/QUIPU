@@ -21,6 +21,11 @@ src/quipu/          Python model core (package: src.quipu)
   neural_plasticity.py    Plasticity dynamics
   self_realization_loop.py  Realization loop (v0.24.1 sigmoidal eligibility lineage)
   radam_optimizer.py      rADAM optimizer
+  qpsi/tool_candidates/   Held forge-format ACRE tool candidates (source text; never imported)
+  qpsi/tool_gate.py       Holds tool candidates at gate 6 until both parties attest + grant
+  qpsi/knot_shadow.py     Realised viscous shear chain -> token/edge proposals (read-only)
+  qpsi/bond_shear.py      LiTaSb Morse rupture force -> multiplanar Landau shear of the polariton condensate
+                          into PC/CR-39 optics and asphalt pyrolysis (GET /bond_shear)
   recurrent_depth.py      Recurrent depth control
   recursive_strengthening.py  Recursive strengthening pass
   temporal_spatiality.py  Temporal-spatial (Weyl tensor) state

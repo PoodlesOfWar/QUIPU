@@ -91,6 +91,8 @@ PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
 SENSES_ENV: str = annealed_senses.ENV              # QUIPU_ANNEALED_SENSES
 ROUTING_ENV: str = "QUIPU_SILENT_ROUTING"          # route the plan around silent sources (default on)
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
+DEEPMAP_ENV: str = "QUIPU_DEEPMAP"                # information theory along deep MESH pathways (default on with the flow)
+MESH_FLOW_ENV: str = "QUIPU_MESH_FLOW"            # cells → Mott core → VNN → proposed shadow edges (default on with the cells)
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
 # budget among operator-granted sources is not a widening of autonomy — the
@@ -155,6 +157,15 @@ def _epoch(value) -> float:
         return time.time()
 
 
+def _source_axes() -> dict[str, str]:
+    """Each observer source's axis plane (routed sources only), for the magic attribution."""
+    try:
+        from ..observer_service import SOURCE_PROFILES
+        return {s: p["axis"] for s, p in SOURCE_PROFILES.items() if p.get("axis")}
+    except Exception:
+        return {}
+
+
 def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | None = None,
                now: float | None = None) -> dict:
     """Run the SOMN step and the prior's realisation check for one expansion step.
@@ -216,12 +227,62 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                                            now=now, cfg=pcm_cells.PcmConfig.from_env(), deepen=deepen,
                                            shear=os.environ.get(PCM_SHEAR_ENV, "1").strip() != "0")
                 pcm_cells.record(cn, arr, pcm, now=now)
+                # The LiTaSb bond-shear chain reads the rheology weights and the
+                # condensate coherence just published; it writes only
+                # entirety:bond_shear:latest and never blocks the cells.
+                try:
+                    from . import bond_shear
+                    out["bond_shear"] = {"yield": bond_shear.publish(cn, now=now)["yield"]}
+                except Exception as exc:
+                    out["bond_shear"] = {"error": str(exc)}
                 ens = pcm.pop("_ensemble", None)
                 out["pcm_shear"] = ens
                 out["pcm"] = {a: {"action": r["decision"]["action"], "pressure": r["pressure"],
                                   "expected": r["expected"], "chi": r["chi"], "eps": r["eps"],
                                   "pulses": r["decision"]["pulses"], "energy_j": r["decision"]["energy_j"],
                                   "lr_eff": r["lr_eff"]} for a, r in pcm.items()}
+                # The cell pressures drive the Mott core; its poADAM/rADAM differential sets the
+                # VNN's stability number over a read-only copy of the MESH graph, and the flow's
+                # converging pairs become *proposed* shadow edges (entirety:mesh_flow:* only).
+                if os.environ.get(MESH_FLOW_ENV, "1").strip() != "0":
+                    cn.execute("SAVEPOINT qpsi_mesh_flow")
+                    try:
+                        from . import mesh_flow, rheology
+                        try:
+                            from . import bond_shear as _bs
+                            shear = _bs.shear_reading(cn)
+                        except Exception:
+                            shear = None
+                        mf = mesh_flow.run(cn, pressures={a: r["pressure"] for a, r in pcm.items()},
+                                           axes=axes, observer=observer,
+                                           rheology_reading=rheology.reading(arr), shear_reading=shear,
+                                           now=now, source_axes=_source_axes(),
+                                           phases={a: float((arr.radam.get(a) or {}).get("theta", 0.0))
+                                                   for a in pcm})
+                    except Exception as exc:
+                        cn.execute("ROLLBACK TO SAVEPOINT qpsi_mesh_flow")
+                        cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
+                        out["mesh_flow"] = {"error": str(exc)}
+                    else:
+                        cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
+                        out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes", "latent",
+                                                               "shadow_this_step", "proposed", "proposed_tokens",
+                                                               "magic", "pathway_magic")}
+                        # The DeepMap: deep MESH pathways from the shadow tokens, each hop carrying the
+                        # flow's information aspects (writes only entirety:deepmap:*).
+                        if os.environ.get(DEEPMAP_ENV, "1").strip() != "0":
+                            cn.execute("SAVEPOINT qpsi_deepmap")
+                            try:
+                                from . import deepmap
+                                dm = deepmap.build(cn, now=now)
+                            except Exception as exc:
+                                cn.execute("ROLLBACK TO SAVEPOINT qpsi_deepmap")
+                                cn.execute("RELEASE SAVEPOINT qpsi_deepmap")
+                                out["deepmap"] = {"error": str(exc)}
+                            else:
+                                cn.execute("RELEASE SAVEPOINT qpsi_deepmap")
+                                out["deepmap"] = {"paths": len(dm["paths"]), "seed_from": dm["seed_from"],
+                                                  **{k: dm["totals"][k] for k in ("surprisal_bits", "magic")}}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:

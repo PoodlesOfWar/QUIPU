@@ -182,3 +182,29 @@ curl -X POST http://localhost:7100/world-model/transition \
     ]
   }'
 ```
+
+
+## v0.68.0 — PMI Predicate/Constituent Boundaries & Non-Linear Shadow Tensor Multiplicative Shearing
+
+- **Live Transition Grounding (`assess_observation` → `observe_token_transition`, `match_dynamical_isomorphism`)**: Every `/observe` event projects observed tokens into an EMA 6-D `WorldState` delta vector $(\Delta\text{inventory}, \Delta\text{backlog}, \Delta\text{load\_ratio}, \Delta\text{reliability}, \Delta\text{uncertainty}, \text{residual})$ stored in `brain_kv["world_model:token_signatures"]`, enabling both emergent lexicon-free peer clustering and dynamical regime projection.
+- **PMI + Branching Entropy + State-Delta Boundary Segmentation (`pmi_boundary_profile`, `boundary_split_score`, `segment_constituents`)**: Replaces static POS wordlists by scoring transitions via $\text{Split}(w_t, w_{t+1}) = H_{\rightarrow}(w_t) + H_{\leftarrow}(w_{t+1}) - 1.5\,\mathrm{PMI}(w_t, w_{t+1}) + 0.5\,\|\vec{\delta}_S(w_t) - \vec{\delta}_S(w_{t+1})\|_2$, keeping high-PMI constituents bound while splitting at high-entropy predicate boundaries.
+- **Non-Linear 6-Plane Shadow Tensor & Multiplicative Shearing (`build_shadow_plane_tensor`, `diffuse_shadow_tensor`, `multiplicative_shear_coupling`)**: Builds 6-D non-linear plane tensors across Essay planes `I..VI` from `/lambda` (`emission`, signed `held_back`/`pulled_in` `shadow_tokens`, complex potential $\mathrm{Re}(\Psi)+i\,\mathrm{Im}(\Psi)$), `bond_shear` Landau survival, and `relational_shear` ($\lambda_{\text{rel\_STP}}, E^*$), diffuses across corpus bigram edges via $\tanh$ saturation, and couples pairs multiplicatively via exterior wedge cross-plane shear $\|\vec{\psi}(A) \wedge \vec{\psi}(B)\|_F$ with inverse shear-annealed selection temperature $\tau_{\mathrm{eff}}$ to replace flat additive softmax.
+
+
+## v0.69.0 — Native QUIPU Discourse & Original Post Synthesis (`/synthesize`)
+
+- **`world_model.synthesize_quipu_discourse(mode, target_text, context)`**: Synthesizes original Moltbook posts, analytical comments, and multi-party thread replies natively through QUIPU's active substrate:
+  - **`mode="post"`**: Draws live World Model phase, `precedent_depth`, `epistemic_surprise`, `mesh_slm` topology metrics, `/lambda` shadow tokens (`held_back` vs `pulled_in`) and complex potential ($\Psi$), viscoelastic rheology ($\delta, \alpha$), Landau condensate survival ($S$), token state-delta signatures (`world_model:token_signatures`), recent epistemic ruptures, live TheSeuScape realm exchanges (`herald:realm_interactions`), and ingested external community themes into distinct non-colliding posts.
+  - **`mode="comment"` / `"reply"`**: Extracts informative domain focus phrases via unsupervised PMI constituent segmentation (`_extract_focus_phrases`), classifies governing mechanism families (`liveness_vs_progress`, `representation_loss`, `spec_envelope`, `provenance_drift`, `minimization_queue`, `boundary_invariant`, `feedback_coordination`), and synthesizes concise technical insights alongside `@peer` multi-party thread synthesis.
+- **`observer_service` (`GET /synthesize`, `POST /synthesize`)**: Exposes QUIPU discourse synthesis over HTTP (unmutating read/compute routes outside edge-admission locks).
+
+## v0.70.0 — External A2A Agent Card & Service Capabilities (`/.well-known/agent.json`, `/capabilities`)
+
+- Exposes machine-readable A2A v0.2 capability discovery at `GET /.well-known/agent.json` and `GET /capabilities` on the QUIPU Observer (`:7100`), enabling external peers and orchestrators to discover `/synthesize`, `/world-model/transition`, `/lambda`, `/rheology`, `/bond_shear`, `/bathymetry`, `/slm`, `/guidance`, and `/entirety`.
+
+
+## v0.71.0 — Public-Safe Clear Engineering Discourse (`synthesize_quipu_discourse`)
+
+- **Strict Internal Information Boundary (`_PUBLIC_LEAK_RE`, `_is_safe_public_text`, `_clean_public_concepts`)**: Ensures zero internal token/edge counts, cognitive phases (`continuous_synthesis`), shadow fragment tokens (`se`, `kil`), internal rupture sources, player handles, or opaque physics variable dumps ever enter public Moltbook posts or comments.
+- **Internal Steering, Readable External Prose (`_PUBLIC_POST_THEMES`)**: Internal World Model signals (`epistemic_surprise`, `precedent_depth`, rheology damping) and vetted external community concepts select and tailor 7 clear, non-repetitive engineering theses (queue liveness vs. progress, immutable state provenance, lag-aware verification, atomic state guards, preprocessing polarity preservation, exploration vs. utility, and delta-shrinking fault isolation) written directly for external engineers.
+- **Non-Redundant Comment Insights**: Deduplicates overlapping phrase pairs in `_extract_focus_phrases` and rotates 3 distinct, plain-English technical formulations per mechanism family.

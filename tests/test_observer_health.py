@@ -53,6 +53,10 @@ def test_health_does_not_wait_on_a_busy_brain(monkeypatch):
 def test_health_reports_counts_once_refreshed(monkeypatch):
     monkeypatch.setattr(O.mesh_slm, "_conn", lambda: _Counts())
     monkeypatch.setattr(O, "_health_counts", {"vocab": None, "edges": None, "at": None})
+    # A refresh thread left by the previous test may still hold the lock; the
+    # refresh below gives up rather than wait, so wait for it here.
+    assert O._health_refreshing.acquire(timeout=10)
+    O._health_refreshing.release()
     O._refresh_health_counts()
     snap = O._health_snapshot()
     assert snap["vocab"] == 7 and snap["edges"] == 11
@@ -80,5 +84,25 @@ def test_the_other_route_returns_the_published_record(monkeypatch):
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/the_other", timeout=5) as r:
             assert r.status == 200 and json.loads(r.read().decode()) == rec
+    finally:
+        srv.shutdown()
+
+
+def test_the_mesh_flow_route_serves_latest_and_proposals(monkeypatch):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from src.quipu import brain_kv
+    store = {"entirety:mesh_flow:latest": {"delta": 0.0, "stability_number": 1.618},
+             "entirety:mesh_flow:proposals": {"edges": [{"src": "a", "dst": "b", "kind": "new"}]}}
+    monkeypatch.setattr(brain_kv, "kv_get_json", lambda k, d=None: store.get(k, d))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), O.ObserverHandler)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/mesh_flow", timeout=5) as r:
+            body = json.loads(r.read().decode())
+        assert body == {"latest": store["entirety:mesh_flow:latest"],
+                        "proposals": store["entirety:mesh_flow:proposals"], "magic": {}}
     finally:
         srv.shutdown()

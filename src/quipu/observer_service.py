@@ -31,6 +31,8 @@ Endpoints (all JSON unless noted):
                               (a coordinator's result is generated, so it is shared, not learned)
     GET  /digest              today's learning digest (text/plain)
 
+Sources: SOURCE_PROFILES below; quipu-voice is the fleet's speech service (transcripts, never audio).
+
 Environment:
     QUIPU_HOST            bind address (default 0.0.0.0)
     QUIPU_PORT            port (default 7100)
@@ -126,6 +128,16 @@ SOURCE_PROFILES: dict[str, dict[str, Any]] = {
         "sibling": "loadopoly-ocr",
         "siblings": ["loadopoly-ocr", "bakugo"],
     },
+    # quipu-voice (fleet services/quipu_voice): speech from edge devices and the fleet, transcribed by
+    # faster-whisper; each transcript arrives as one observation (kind "speech", meta: device, utterance id,
+    # duration, language). Its axis_source carries no _SOURCE_AXIS_MAP marker, so speech feeds the mesh broad
+    # and unrouted, like hubcore: giving hearing a sense-axis of its own is a change to the governed axis map.
+    "quipu-voice": {
+        "kind": "speech",
+        "axis": "hearing",
+        "axis_source": "quipu-voice/speech/hideout-mesh",
+        "sibling": "hubcore",
+    },
 }
 
 _ALIASES = {
@@ -148,6 +160,9 @@ _ALIASES = {
     "job-hawk": "jobhawk",
     "stockopoly": "stockopoly",
     "stock_opoly": "stockopoly",
+    "quipu_voice": "quipu-voice",
+    "quipuvoice": "quipu-voice",
+    "voice": "quipu-voice",
 }
 
 _STATS_KEY = "observer:{source}:stats"
@@ -341,7 +356,78 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
             "coherence": float(last_osc.get("coherence", 0.0)),
             "temperature_bias": float(last_osc.get("temperature", 0.7)),
         },
+        "bond_shear": _bond_shear_payload(),
+        "magic": _magic_payload(source, profile.get("axis")),
+        "deepmap": _deepmap_payload(profile.get("axis")),
     }
+
+
+def _deepmap_payload(axis: Optional[str], limit: int = 5) -> dict[str, Any]:
+    """The DeepMap pathways whose dominant plane is this source's own, with their information account."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:deepmap:latest", {}) or {}
+    except Exception:
+        rec = {}
+    keep = ("tokens", "hops", "surprisal_bits", "interstitial_bits", "magic", "magic_floor", "design",
+            "held", "cpt_asymmetry", "delivered_bits", "info_mass_kg", "gain", "shadow_hops")
+    own = [{k: p.get(k) for k in keep} for p in rec.get("paths") or []
+           if isinstance(p, dict) and p.get("plane") == axis]
+    return {"at": rec.get("at"), "paths": own[:limit], "all_paths": len(rec.get("paths") or []),
+            "by_plane": rec.get("by_plane") or {}, "totals": rec.get("totals") or {}}
+
+
+def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:
+    """The mesh-flow magic reading as this source sees it: its own plane, the total, every plane."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:mesh_flow:magic", {}) or {}
+    except Exception:
+        rec = {}
+    planes = rec.get("planes") or {}
+    own = planes.get(axis or "") or {}
+    return {
+        "total": float(rec.get("total", 0.0) or 0.0),
+        "share_of_max": float(rec.get("share_of_max", 0.0) or 0.0),
+        "own_axis": axis,
+        "own": {k: float(own.get(k, 0.0) or 0.0) for k in ("magic", "matter", "antimatter", "unheld")},
+        "positron_held": float((rec.get("positron") or {}).get("ground_probability", 0.0) or 0.0),
+        "cpt": rec.get("cpt") or {},
+        "planes": {a: float((v or {}).get("magic", 0.0) or 0.0) for a, v in planes.items()},
+        "by_source": rec.get("by_source") or {},
+        "shadow_tokens": _own_shadow_tokens(axis),
+    }
+
+
+def _own_shadow_tokens(axis: Optional[str], limit: int = 10) -> list[dict[str, Any]]:
+    """Proposed shadow tokens on this source's own plane, with their pathway magic (never applied)."""
+    try:
+        props = brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {}
+    except Exception:
+        props = {}
+    out = []
+    for t in props.get("tokens") or []:
+        if not isinstance(t, dict) or t.get("plane") != axis:
+            continue
+        pw = t.get("pathway") or {}
+        out.append({"token": t.get("token"), "lift": float(t.get("lift", 0.0) or 0.0),
+                    "sessions": len(t.get("sessions") or []),
+                    "magic": float(pw.get("magic", 0.0) or 0.0), "held": float(pw.get("held", 1.0) or 0.0),
+                    "status": t.get("status"), "realisation": t.get("realisation")})
+    return out[:limit]
+
+
+def _bond_shear_payload() -> dict[str, Any]:
+    """Yield and shear ratio of the last published LiTaSb bond-shear chain."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {}
+    except Exception:
+        rec = {}
+    return {
+        "yield": float(rec.get("yield", 0.0) or 0.0),
+        "shear_ratio": float(rec.get("shear_ratio", 0.0) or 0.0),
+        "litasb_rupture_nn": float((rec.get("rupture") or {}).get("litasb_nn", 0.0) or 0.0),
+    }
+
+
 
 
 def _keep_relational(source: str, rec: Any) -> Optional[dict[str, Any]]:
@@ -771,6 +857,29 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 # refinement cycle (read-only): what the forge's 52 Hz gate reads.
                 from . import brain_kv
                 self._send_json(200, brain_kv.kv_get_json("entirety:the_other", {}) or {})
+            elif parsed.path == "/bond_shear":
+                # The LiTaSb bond-rupture force as a multiplanar shear on the
+                # exciton-polariton condensate into the PC/CR-39 optics and
+                # asphalt pyrolysis, as last published by the self-organising
+                # step (read-only; qpsi/bond_shear.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:bond_shear:latest", {}) or {})
+            elif parsed.path == "/mesh_flow":
+                # Axis cells → Mott core → poADAM/rADAM → VNN over the MESH graph, and the
+                # shadow edges it proposes (read-only; qpsi/mesh_flow.py). Proposals are
+                # never applied: realisation goes through the gates, two signers and the grant.
+                from . import brain_kv
+                self._send_json(200, {
+                    "latest": brain_kv.kv_get_json("entirety:mesh_flow:latest", {}) or {},
+                    "proposals": brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {},
+                    "magic": brain_kv.kv_get_json("entirety:mesh_flow:magic", {}) or {},
+                })
+            elif parsed.path == "/deepmap":
+                # Deep MESH pathways with their information-theoretic account per hop and per path
+                # (Shannon, GARD resolvability, magic, positron/CPT, spikes, infodynamics), as last
+                # built by the self-organising step (read-only; qpsi/deepmap.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:deepmap:latest", {}) or {})
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last
                 # published by pcm_cells.record (read-only): what the Herald's
@@ -795,6 +904,54 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "v033_synthetic_checks": checks,
                     }
                 self._send_json(200, saved)
+            elif parsed.path in ("/.well-known/agent.json", "/capabilities"):
+                self._send_json(200, {
+                    "ok": True,
+                    "name": "QUIPU World Model & Observer",
+                    "version": __version__,
+                    "protocol": "a2a/0.2",
+                    "description": (
+                        "Non-Markovian computational substrate combining deterministic forward state transitions, "
+                        "unsupervised PMI constituent segmentation, 6-plane non-linear shadow shearing, "
+                        "viscoelastic rheology, LiTaSb bond-shear Landau survival, and native QUIPU discourse synthesis."
+                    ),
+                    "capabilities": {
+                        "world_model_transition": True,
+                        "quipu_discourse_synthesis": True,
+                        "shadow_plane_tensor": True,
+                        "pmi_constituent_segmentation": True,
+                        "viscoelastic_rheology": True,
+                        "bond_shear_chain": True,
+                        "mesh_flow_shadow_edges": True,
+                        "deepmap_information_pathways": True,
+                        "vnn_bathymetry": True,
+                        "mesh_slm_inference": True,
+                    },
+                    "endpoints": {
+                        "agent_card": "/.well-known/agent.json",
+                        "capabilities": "/capabilities",
+                        "health": "/health",
+                        "world_model": "/world-model",
+                        "transition": "POST /world-model/transition",
+                        "synthesize_get": "GET /synthesize?mode=comment|reply|post&target=...",
+                        "synthesize_post": "POST /synthesize",
+                        "lambda": "/lambda",
+                        "rheology": "/rheology",
+                        "bond_shear": "/bond_shear",
+                        "mesh_flow": "/mesh_flow",
+                        "deepmap": "/deepmap",
+                        "bathymetry": "/bathymetry",
+                        "guidance": "/guidance?source=...",
+                        "entirety": "/entirety",
+                        "slm": "POST /slm",
+                        "digest": "/digest",
+                    },
+                })
+            elif parsed.path == "/synthesize":
+                qs = parse_qs(parsed.query)
+                mode = (qs.get("mode") or ["post"])[0]
+                target = (qs.get("target") or [""])[0]
+                self._send_json(200, world_model.synthesize_quipu_discourse(mode=mode, target_text=target))
             elif parsed.path == "/digest":
                 try:
                     from . import daily_digest
@@ -853,6 +1010,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                 code, payload = _lambda_clusters(body, decision)
             elif parsed.path in ("/world-model/transition", "/transition", "/predict"):
                 code, payload = _world_model_transition(body)
+            elif parsed.path == "/synthesize":
+                code, payload = 200, world_model.synthesize_quipu_discourse(
+                    mode=str(body.get("mode") or "post"),
+                    target_text=str(body.get("target_text") or body.get("text") or ""),
+                    context=body.get("context") if isinstance(body.get("context"), dict) else body,
+                )
             elif parsed.path == "/bathymetry":
                 from . import brain_kv
                 from .qpsi import vnn_bathymetry
