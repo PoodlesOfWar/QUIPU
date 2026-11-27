@@ -256,3 +256,14 @@ def test_guidance_lists_the_sources_own_plane_shadow_tokens(monkeypatch):
     assert [t["token"] for t in own] == ["dock"]
     assert own[0]["magic"] == 0.3 and own[0]["sessions"] == 2 and own[0]["realisation"].startswith("none")
     assert O2._magic_payload("perceptopoly", "perception")["shadow_tokens"] == own
+
+
+def test_guidance_carries_the_sources_own_deepmap_paths(monkeypatch):
+    from quipu import observer_service as O2, brain_kv as bk
+    rec = {"at": 3.0, "paths": [{"tokens": ["a", "b"], "plane": "perception", "gain": 1.2, "hops": 1},
+                                {"tokens": ["c", "d"], "plane": "touch", "gain": 1.1, "hops": 1}],
+           "by_plane": {"perception": 1, "touch": 1}, "totals": {"magic": 0.4}}
+    monkeypatch.setattr(bk, "kv_get_json", lambda k, d=None: rec if k == "entirety:deepmap:latest" else d)
+    out = O2._deepmap_payload("perception")
+    assert [p["tokens"] for p in out["paths"]] == [["a", "b"]] and out["all_paths"] == 2
+    assert out["totals"] == {"magic": 0.4} and out["paths"][0]["gain"] == 1.2

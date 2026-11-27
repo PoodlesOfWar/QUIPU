@@ -91,6 +91,7 @@ PLANES_ENV: str = "QUIPU_COHERENCY_DEPTH"
 SENSES_ENV: str = annealed_senses.ENV              # QUIPU_ANNEALED_SENSES
 ROUTING_ENV: str = "QUIPU_SILENT_ROUTING"          # route the plan around silent sources (default on)
 PULSE_SOURCES_ENV: str = "QUIPU_PULSE_SOURCES"      # optional comma list narrowing the operator's grant
+DEEPMAP_ENV: str = "QUIPU_DEEPMAP"                # information theory along deep MESH pathways (default on with the flow)
 MESH_FLOW_ENV: str = "QUIPU_MESH_FLOW"            # cells → Mott core → VNN → proposed shadow edges (default on with the cells)
 
 # Invariance #7 ruling (operator, 2026-09-22): allocating an operator-granted
@@ -267,6 +268,21 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                         out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes", "latent",
                                                                "shadow_this_step", "proposed", "proposed_tokens",
                                                                "magic", "pathway_magic")}
+                        # The DeepMap: deep MESH pathways from the shadow tokens, each hop carrying the
+                        # flow's information aspects (writes only entirety:deepmap:*).
+                        if os.environ.get(DEEPMAP_ENV, "1").strip() != "0":
+                            cn.execute("SAVEPOINT qpsi_deepmap")
+                            try:
+                                from . import deepmap
+                                dm = deepmap.build(cn, now=now)
+                            except Exception as exc:
+                                cn.execute("ROLLBACK TO SAVEPOINT qpsi_deepmap")
+                                cn.execute("RELEASE SAVEPOINT qpsi_deepmap")
+                                out["deepmap"] = {"error": str(exc)}
+                            else:
+                                cn.execute("RELEASE SAVEPOINT qpsi_deepmap")
+                                out["deepmap"] = {"paths": len(dm["paths"]), "seed_from": dm["seed_from"],
+                                                  **{k: dm["totals"][k] for k in ("surprisal_bits", "magic")}}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:

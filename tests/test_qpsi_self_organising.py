@@ -438,3 +438,5 @@ def test_mesh_flow_runs_after_the_cells_and_proposes_only(isolated):
     keys = {k for (k,) in brain_kv.open_conn().execute(
         "SELECT key FROM brain_kv WHERE key LIKE 'entirety:mesh_flow:%'")}
     assert {"entirety:mesh_flow:latest", "entirety:mesh_flow:proposals"} <= keys
+    dm = a["self_organising"].get("deepmap")
+    assert dm is not None and "error" not in dm, dm

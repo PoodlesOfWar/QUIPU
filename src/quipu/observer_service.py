@@ -358,7 +358,22 @@ def _guidance(source: str, limit: int, device_id: str | None = None) -> dict[str
         },
         "bond_shear": _bond_shear_payload(),
         "magic": _magic_payload(source, profile.get("axis")),
+        "deepmap": _deepmap_payload(profile.get("axis")),
     }
+
+
+def _deepmap_payload(axis: Optional[str], limit: int = 5) -> dict[str, Any]:
+    """The DeepMap pathways whose dominant plane is this source's own, with their information account."""
+    try:
+        rec = brain_kv.kv_get_json("entirety:deepmap:latest", {}) or {}
+    except Exception:
+        rec = {}
+    keep = ("tokens", "hops", "surprisal_bits", "interstitial_bits", "magic", "magic_floor", "design",
+            "held", "cpt_asymmetry", "delivered_bits", "info_mass_kg", "gain", "shadow_hops")
+    own = [{k: p.get(k) for k in keep} for p in rec.get("paths") or []
+           if isinstance(p, dict) and p.get("plane") == axis]
+    return {"at": rec.get("at"), "paths": own[:limit], "all_paths": len(rec.get("paths") or []),
+            "by_plane": rec.get("by_plane") or {}, "totals": rec.get("totals") or {}}
 
 
 def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:
@@ -859,6 +874,12 @@ class ObserverHandler(BaseHTTPRequestHandler):
                     "proposals": brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {},
                     "magic": brain_kv.kv_get_json("entirety:mesh_flow:magic", {}) or {},
                 })
+            elif parsed.path == "/deepmap":
+                # Deep MESH pathways with their information-theoretic account per hop and per path
+                # (Shannon, GARD resolvability, magic, positron/CPT, spikes, infodynamics), as last
+                # built by the self-organising step (read-only; qpsi/deepmap.py).
+                from . import brain_kv
+                self._send_json(200, brain_kv.kv_get_json("entirety:deepmap:latest", {}) or {})
             elif parsed.path == "/rheology":
                 # The CRAM axis array read as a viscoelastic material, as last
                 # published by pcm_cells.record (read-only): what the Herald's
@@ -902,6 +923,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "viscoelastic_rheology": True,
                         "bond_shear_chain": True,
                         "mesh_flow_shadow_edges": True,
+                        "deepmap_information_pathways": True,
                         "vnn_bathymetry": True,
                         "mesh_slm_inference": True,
                     },
@@ -917,6 +939,7 @@ class ObserverHandler(BaseHTTPRequestHandler):
                         "rheology": "/rheology",
                         "bond_shear": "/bond_shear",
                         "mesh_flow": "/mesh_flow",
+                        "deepmap": "/deepmap",
                         "bathymetry": "/bathymetry",
                         "guidance": "/guidance?source=...",
                         "entirety": "/entirety",

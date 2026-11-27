@@ -4,6 +4,33 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.82.0] - 2026-11-27
+
+Everything so far becomes aspects of information theory along deep MESH pathways.
+
+### Added
+- `qpsi/deepmap.py`: walks of up to 4 hops through the Quipu graph, seeded at the proposed shadow tokens and chosen by beam search on the GNN message probabilities. Proposed shadow edges can be walked and are flagged. Each hop carries:
+  - **Shannon:** surprisal and branching entropy;
+  - **GARD:** CRB-resolvable versus interstitial bits;
+  - **magic:** on the plane mix travelled;
+  - **positron:** the held share and the CPT asymmetry.
+
+  Each aspect composes along the path by its own rule:
+  - surprisal and bits add;
+  - magic adds and stabilizer purity multiplies (the design value is normalised at the proved two-qubit maximum);
+  - the held share multiplies;
+  - delivered bits are scaled by the spike-channel stability S/φ;
+  - Landauer energy and the info-mass equivalent are reported (Vopson, contested).
+
+  Path gain = (1 + (φ − 1)·design) · held.
+- Built every self-organising step after the mesh flow (`QUIPU_DEEPMAP`, its own savepoint). It writes only `entirety:deepmap:latest`.
+- `GET /deepmap`, its entries on `/capabilities`, and `/guidance` `deepmap` (the source's own-plane paths, so Perceptopoly receives the perception paths).
+- `docs/DEEPMAP.md`; 10 tests.
+
+### Not changed
+- Nothing writes `mesh_slm_*`.
+- The HubCore `x_DeepMap` registry was not available; this is the QUIPU side, served for it to read.
+
 ## [0.81.0] - 2026-11-27
 
 The shadow-pathway gain is now non-linear, grounded on recent magic results that have proofs.
