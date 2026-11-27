@@ -242,3 +242,17 @@ def test_guidance_carries_the_magic_reading_for_perceptopoly(monkeypatch):
     assert out["positron_held"] == 0.0 and out["cpt"] == {}
     assert out["total"] == 0.2 and out["planes"] == {"perception": 0.5, "touch": 0.1}
     assert O2._magic_payload("quipu-voice", "hearing")["own"]["magic"] == 0.0
+
+
+def test_guidance_lists_the_sources_own_plane_shadow_tokens(monkeypatch):
+    from quipu import observer_service as O2, brain_kv as bk
+    props = {"tokens": [
+        {"token": "dock", "plane": "perception", "lift": 0.04, "sessions": ["a", "b"], "status": "proposed",
+         "realisation": "none: through the six gates, two signers and the grant",
+         "pathway": {"magic": 0.3, "held": 1.0}},
+        {"token": "bin", "plane": "touch", "lift": 0.02, "sessions": ["a", "b"], "pathway": {}}]}
+    monkeypatch.setattr(bk, "kv_get_json", lambda k, d=None: props if k == "entirety:mesh_flow:proposals" else d)
+    own = O2._own_shadow_tokens("perception")
+    assert [t["token"] for t in own] == ["dock"]
+    assert own[0]["magic"] == 0.3 and own[0]["sessions"] == 2 and own[0]["realisation"].startswith("none")
+    assert O2._magic_payload("perceptopoly", "perception")["shadow_tokens"] == own

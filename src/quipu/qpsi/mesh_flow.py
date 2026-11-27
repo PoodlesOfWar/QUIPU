@@ -15,7 +15,18 @@ The chain (run once per self-organising step, after the PCM cells and bond shear
           * ``new``:  a pair with no edge that the flow made near-parallel (similarity ≥ 0.9)
         each lift damped by S(Δ)/φ, so a realisation that diverges from its potential
         proposes less
-      → recurrence: an edge is *proposed* only once it appears in ≥ 2 distinct input states.
+      → magic on the pathways (``qpsi.magic``): each plane's pressure and rADAM phase as a
+        matter–antimatter pair, the antimatter half held by the one-positron quantum cyclotron.
+        A shadow edge's *pathway* is the plane mix the flow moved its two tokens along,
+        π_k ∝ |ΔZ_u,k| + |ΔZ_v,k|; its magic is Σ π_k·magic_k (matter, held antimatter,
+        unheld, CPT asymmetry likewise), and its lift is scaled by
+            g = (1 + (φ − 1)·magic/max) · held          ∈ [0, φ], then re-capped,
+        held = (matter + antimatter)/(matter + antimatter + unheld).  Non-stabilizer
+        pathways strengthen, unheld antimatter weakens.
+      → shadow tokens: every endpoint of a shadow edge, on the plane its own state moved
+        most, with its own pathway magic and the largest lift among its edges.
+      → recurrence: an edge or token is *proposed* only once it appears in ≥ 2 distinct
+        input states.
 
 Nothing here writes ``mesh_slm_*``: proposals carry
 ``realisation: "none: through the six gates, two signers and the grant"``, the same
@@ -95,13 +106,50 @@ def _cos_matrix(Z):
     return U @ U.T, ok
 
 
+def pathway_planes(Z0, Z1, nodes: Sequence[int]) -> list[float]:
+    """Plane mix π_k ∝ Σ_nodes |Z1 − Z0|_k (falls back to |Z1|_k when nothing moved)."""
+    import numpy as np
+    Z0, Z1 = np.asarray(Z0, dtype=float), np.asarray(Z1, dtype=float)
+    w = np.zeros(Z1.shape[1])
+    for u in nodes:
+        w += np.abs(Z1[u] - Z0[u])
+    if not np.isfinite(w).all() or w.sum() <= 0.0:
+        w = np.zeros(Z1.shape[1])
+        for u in nodes:
+            w += np.abs(Z1[u])
+    s = float(w.sum())
+    return [float(x) / s for x in w] if s > 0.0 else [1.0 / Z1.shape[1]] * Z1.shape[1]
+
+
+def pathway_magic(planes: Sequence[float], plane_magic: Optional[Mapping[str, Mapping]]) -> dict[str, Any]:
+    """Magic along a pathway: Σ π_k · (magic, matter, antimatter, unheld, cpt_asymmetry)_k, and its gain."""
+    from .magic import MAX_PAIR_MAGIC
+    keys = ("magic", "matter", "antimatter", "unheld", "cpt_asymmetry")
+    acc = {k: 0.0 for k in keys}
+    for a, pk in zip(AXES, planes):
+        rec = (plane_magic or {}).get(a) or {}
+        for k in keys:
+            acc[k] += pk * float(rec.get(k, 0.0) or 0.0)
+    carried = acc["matter"] + acc["antimatter"] + acc["unheld"]
+    held = (acc["matter"] + acc["antimatter"]) / carried if carried > 1e-15 else 1.0
+    gain = (1.0 + (PHI - 1.0) * min(1.0, acc["magic"] / MAX_PAIR_MAGIC)) * held
+    top = max(range(len(planes)), key=lambda k: planes[k]) if planes else 0
+    return {**{k: round(v, 9) for k, v in acc.items()}, "held": round(held, 9),
+            "gain": round(gain, 9), "plane": AXES[top], "planes": [round(x, 6) for x in planes]}
+
+
 def shadow_edges(Z0, Z1, node_ids: Sequence[int], edges: Sequence[tuple[int, int, float]],
-                 damping: float = 1.0) -> dict[str, list[dict]]:
+                 damping: float = 1.0,
+                 plane_magic: Optional[Mapping[str, Mapping]] = None) -> dict[str, list[dict]]:
     """Edges the VNN flow is pulling together, between the pre- and post-step states.
 
     ``lift``: existing edge (u, v) with cos₁ > cos₀; lift = EDGE_LIFT_MAX·damping·(cos₁−cos₀)/(1−cos₀).
     ``new``: no edge either way, cos₁ ≥ NEW_EDGE_MIN_SIM and cos₁ > cos₀;
              weight = NEW_EDGE_WEIGHT·damping·cos₁.
+
+    With ``plane_magic`` (``magic.reading(...)["planes"]``) each edge carries its
+    ``pathway`` and its lift is multiplied by the pathway gain, then re-capped at
+    the kind's ceiling.  Without it the gain is 1 and the result is unchanged.
     """
     import numpy as np
     C0, ok0 = _cos_matrix(np.asarray(Z0, dtype=float))
@@ -118,8 +166,10 @@ def shadow_edges(Z0, Z1, node_ids: Sequence[int], edges: Sequence[tuple[int, int
         c0, c1 = float(C0[u, v]), float(C1[u, v])
         if c1 - c0 > MIN_GAIN:
             lift = EDGE_LIFT_MAX * d * (c1 - c0) / max(1e-9, 1.0 - c0)
-            lifts.append({"src": node_ids[u], "dst": node_ids[v], "kind": "lift",
-                          "cos0": c0, "cos1": c1, "lift": min(EDGE_LIFT_MAX, lift)})
+            pw = pathway_magic(pathway_planes(Z0, Z1, (u, v)), plane_magic) if plane_magic else None
+            g = pw["gain"] if pw else 1.0
+            lifts.append({"src": node_ids[u], "dst": node_ids[v], "kind": "lift", "u": u, "v": v,
+                          "cos0": c0, "cos1": c1, "lift": min(EDGE_LIFT_MAX, lift * g), "pathway": pw})
     news = []
     n = len(node_ids)
     for u in range(n):
@@ -130,11 +180,34 @@ def shadow_edges(Z0, Z1, node_ids: Sequence[int], edges: Sequence[tuple[int, int
                 continue
             c0, c1 = float(C0[u, v]), float(C1[u, v])
             if c1 >= NEW_EDGE_MIN_SIM and c1 - c0 > MIN_GAIN:
-                news.append({"src": node_ids[u], "dst": node_ids[v], "kind": "new",
+                news.append({"src": node_ids[u], "dst": node_ids[v], "kind": "new", "u": u, "v": v,
                              "cos0": c0, "cos1": c1, "lift": NEW_EDGE_WEIGHT * d * c1})
-    lifts.sort(key=lambda e: -e["lift"])
     news.sort(key=lambda e: (-(e["cos1"] - e["cos0"]), -e["cos1"]))
-    return {"lift": lifts[:MAX_PER_KIND], "new": news[:MAX_PER_KIND]}
+    news = news[:MAX_PER_KIND]
+    for e in news:
+        pw = pathway_magic(pathway_planes(Z0, Z1, (e["u"], e["v"])), plane_magic) if plane_magic else None
+        e["pathway"] = pw
+        if pw:
+            e["lift"] = min(NEW_EDGE_WEIGHT, e["lift"] * pw["gain"])
+    lifts.sort(key=lambda e: -e["lift"])
+    return {"lift": lifts[:MAX_PER_KIND], "new": news}
+
+
+def shadow_tokens(Z0, Z1, node_ids: Sequence[int], shadow: Mapping[str, Sequence[Mapping]],
+                  plane_magic: Optional[Mapping[str, Mapping]] = None) -> list[dict]:
+    """Every endpoint of a shadow edge: its own plane (where its state moved most), its own
+    pathway magic, and the largest lift among the shadow edges it sits on."""
+    best: dict[int, float] = {}
+    for kind in ("lift", "new"):
+        for e in shadow.get(kind) or []:
+            for k in ("u", "v"):
+                best[e[k]] = max(best.get(e[k], 0.0), float(e["lift"]))
+    out = []
+    for u, lift in best.items():
+        pw = pathway_magic(pathway_planes(Z0, Z1, (u,)), plane_magic)
+        out.append({"node": node_ids[u], "plane": pw["plane"], "lift": lift, "pathway": pw})
+    out.sort(key=lambda t: -t["lift"])
+    return out
 
 
 def _tokens(cn: sqlite3.Connection, ids: Sequence[int]) -> dict[int, str]:
@@ -177,7 +250,14 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
     target = [float(axes.get(a, 0.0) or 0.0) for a in AXES[:-1]] + [float(observer or 0.0)]
     coupler = vi.TypedViscousCoupler(ns_cfg=vi.NavierStokesConfig(dims=(8, 8), nu=0.03, dt=0.01))
     ns0 = vi.NavierStokesState.taylor_green(coupler.ns_cfg, amplitude=0.4)
+    # 3. Information theory → magic: each plane's pressure and rADAM phase as a matter–antimatter
+    #    pair (antimatter half held by the one-positron quantum cyclotron); it weights the pathways.
+    from . import magic as _magic
+    mg = _magic.reading(pressures, phases, source_axes=source_axes)
+    mg["at"] = now
+
     shadow = {"lift": [], "new": []}
+    stoks: list[dict] = []
     report = None
     if vnn0.node_ids:
         _, vnn1, report = coupler.step(ns0, vnn0, rheology_reading=rheology_reading,
@@ -185,13 +265,22 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
                                        target_mesh7=target)
         vi.publish_vnn_report(cn, report)
         damping = win["stability_number"] / PHI
-        shadow = shadow_edges(vnn0.Z, vnn1.Z, vnn0.node_ids, vnn0.edges, damping)
+        shadow = shadow_edges(vnn0.Z, vnn1.Z, vnn0.node_ids, vnn0.edges, damping, mg["planes"])
+        stoks = shadow_tokens(vnn0.Z, vnn1.Z, vnn0.node_ids, shadow, mg["planes"])
 
-    # 3. Name the edges and fold them into the recurrence history
+    # 4. Name the edges and tokens and fold them into the recurrence history
     toks = _tokens(cn, [e[k] for kind in shadow.values() for e in kind for k in ("src", "dst")])
+
+    def _pw(pw):
+        return {k: pw[k] for k in ("plane", "magic", "matter", "antimatter", "unheld", "cpt_asymmetry",
+                                   "held", "gain")} if pw else None
+
     named = [{"src": toks.get(e["src"], str(e["src"])), "dst": toks.get(e["dst"], str(e["dst"])),
               "lobe": e["kind"], "lift": round(e["lift"], 6), "cos0": round(e["cos0"], 6),
-              "cos1": round(e["cos1"], 6)} for kind in ("lift", "new") for e in shadow[kind]]
+              "cos1": round(e["cos1"], 6), "pathway": _pw(e.get("pathway"))}
+             for kind in ("lift", "new") for e in shadow[kind]]
+    named_tokens = [{"token": toks.get(t["node"], str(t["node"])), "lobe": t["plane"],
+                     "lift": round(t["lift"], 6), "pathway": _pw(t["pathway"])} for t in stoks]
     session = hashlib.sha256(json.dumps({
         "drive": [round(x, 6) for x in drive], "target": [round(x, 6) for x in target],
         "nodes": vnn0.node_ids, "delta": round(diff["delta"], 6),
@@ -199,16 +288,25 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
     }, sort_keys=True).encode()).hexdigest()[:16]
     hist = [h for h in (_kv_get(cn, KV_HISTORY, []) or []) if isinstance(h, dict)]
     if not any(h.get("session") == session for h in hist):
-        hist.append({"session": session, "at": now, "tokens": [], "edges": named})
+        hist.append({"session": session, "at": now, "tokens": named_tokens, "edges": named})
         hist = hist[-HISTORY_CAP:]
-    proposals = recurring(hist, MIN_SESSIONS)["edges"]
+    rec = recurring(hist, MIN_SESSIONS)
+    proposals = rec["edges"]
     for p in proposals:
         p["kind"] = p.pop("lobe")
-
-    # 4. Information theory → magic: each plane's pressure and rADAM phase as a matter–antimatter pair
-    from . import magic as _magic
-    mg = _magic.reading(pressures, phases, source_axes=source_axes)
-    mg["at"] = now
+    token_proposals = rec["tokens"]
+    for p in token_proposals:
+        p["plane"] = p.pop("lobe")
+    _latest_pw = {}
+    for h in hist:
+        for e in h.get("edges") or []:
+            _latest_pw[(e["src"], e["dst"], e["lobe"])] = e.get("pathway")
+        for t in h.get("tokens") or []:
+            _latest_pw[(t["token"], t["lobe"])] = t.get("pathway")
+    for p in proposals:
+        p["pathway"] = _latest_pw.get((p["src"], p["dst"], p["kind"]))
+    for p in token_proposals:
+        p["pathway"] = _latest_pw.get((p["token"], p["plane"]))
 
     summary = {
         "at": now,
@@ -220,13 +318,17 @@ def run(cn: sqlite3.Connection, *, pressures: Mapping[str, float], axes: Mapping
         "delta": diff["delta"], "stability_number": win["stability_number"],
         "nodes": len(vnn0.node_ids), "graph_edges": len(vnn0.edges),
         "vnn_graph_cfl": (report.vnn_diagnostics.get("graph_cfl") if report else None),
-        "shadow_this_step": {"lift": len(shadow["lift"]), "new": len(shadow["new"])},
+        "shadow_this_step": {"lift": len(shadow["lift"]), "new": len(shadow["new"]), "tokens": len(stoks)},
         "proposed": len(proposals),
+        "proposed_tokens": len(token_proposals),
+        "pathway_magic": (round(sum(e["pathway"]["magic"] for e in named if e["pathway"]) /
+                                max(1, sum(1 for e in named if e["pathway"])), 9) if named else 0.0),
         "realisation": REALISATION,
     }
     _kv_set(cn, KV_STATE, {"v": st.v, "poadam": po, "radam": rr})
     _kv_set(cn, KV_HISTORY, hist)
-    _kv_set(cn, KV_PROPOSALS, {"at": now, "min_sessions": MIN_SESSIONS, "edges": proposals})
+    _kv_set(cn, KV_PROPOSALS, {"at": now, "min_sessions": MIN_SESSIONS, "edges": proposals,
+                               "tokens": token_proposals})
     _kv_set(cn, KV_MAGIC, mg)
     _kv_set(cn, KV_LATEST, summary)
     return summary
@@ -243,4 +345,5 @@ def proposals(cn: sqlite3.Connection) -> dict:
 
 
 __all__ = ["KV_PREFIX", "KV_STATE", "KV_HISTORY", "KV_PROPOSALS", "KV_LATEST", "KV_MAGIC", "AXES",
-           "mott_drive", "shadow_edges", "run", "latest", "proposals"]
+           "mott_drive", "pathway_planes", "pathway_magic", "shadow_edges", "shadow_tokens",
+           "run", "latest", "proposals"]

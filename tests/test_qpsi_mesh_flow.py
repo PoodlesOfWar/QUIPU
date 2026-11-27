@@ -138,3 +138,71 @@ def test_run_publishes_the_magic_reading_with_source_attribution(cn):
     assert out["magic"] == mg["total"] > 0.0
     assert set(mg["by_source"]) == {"perceptopoly", "supply-chain-brain"}
     assert mg["by_source"]["supply-chain-brain"] == mg["planes"]["brain"]["magic"]
+
+
+# ---- magic on the shadow token pathways ---------------------------------------
+
+from src.quipu.qpsi import magic as MG  # noqa: E402
+
+PHI_ = (1 + math.sqrt(5)) / 2
+
+
+def _planes(**over):
+    pr = {a: 0.0 for a in MF.AXES}
+    pr.update(over)
+    return MG.reading(pr, {a: math.pi / 4 for a in MF.AXES}, weights=[1] * 7)["planes"]
+
+
+def test_pathway_planes_follow_where_the_flow_moved():
+    Z0 = np.zeros((2, 7))
+    Z1 = np.zeros((2, 7))
+    Z1[0, 4] = 0.3
+    Z1[1, 4] = 0.1
+    Z1[1, 5] = 0.1
+    pi = MF.pathway_planes(Z0, Z1, (0, 1))
+    assert pi[4] == pytest.approx(0.8) and pi[5] == pytest.approx(0.2) and sum(pi) == pytest.approx(1.0)
+    still = MF.pathway_planes(Z1, Z1, (0,))
+    assert still[4] == pytest.approx(1.0)                     # nothing moved: falls back to where it sits
+
+
+def test_pathway_gain_spans_one_to_phi_and_unheld_antimatter_weakens_it():
+    brain = [0, 0, 0, 0, 1.0, 0, 0]
+    stab = MF.pathway_magic(brain, _planes(brain=0.0))         # stabilizer plane: no magic
+    assert stab["magic"] == 0.0 and stab["gain"] == pytest.approx(1.0) and stab["plane"] == "brain"
+    top = MF.pathway_magic(brain, _planes(brain=MG.P_AT_MAX))  # maximal magic
+    assert top["gain"] == pytest.approx(PHI_, rel=1e-6) and top["held"] == pytest.approx(1.0)
+    warm_planes = MG.reading({"brain": MG.P_AT_MAX}, {"brain": math.pi / 4}, weights=[1] * 7,
+                             temp_k=20.0)["planes"]
+    warm = MF.pathway_magic(brain, warm_planes)
+    assert warm["held"] < 0.75 and warm["gain"] < top["gain"]
+
+
+def test_shadow_edges_carry_pathways_and_magic_scales_lifts_within_caps():
+    Z0 = np.array([[1.0, 0, 0, 0, 0, 0, 0], [0.7, 0.7, 0, 0, 0, 0, 0], [0.6, 0.8, 0, 0, 0, 0, 0]])
+    Z1 = np.array([[1.0, 0.3, 0, 0, 0, 0, 0], [0.8, 0.6, 0, 0, 0, 0, 0], [0.75, 0.66, 0, 0, 0, 0, 0]])
+    E = [(0, 1, 0.9), (1, 2, 0.9)]
+    plain = MF.shadow_edges(Z0, Z1, [10, 11, 12], E)
+    magic = MF.shadow_edges(Z0, Z1, [10, 11, 12], E, plane_magic=_planes(vision=MG.P_AT_MAX, touch=MG.P_AT_MAX))
+    assert all(e["pathway"] is None for e in plain["lift"])
+    for a, b in zip(plain["lift"], magic["lift"]):
+        assert b["pathway"]["gain"] > 1.0
+        assert b["lift"] == pytest.approx(min(MF.EDGE_LIFT_MAX, a["lift"] * b["pathway"]["gain"]))
+    assert magic["new"][0]["lift"] <= MF.NEW_EDGE_WEIGHT
+    toks = MF.shadow_tokens(Z0, Z1, [10, 11, 12], magic, _planes(vision=MG.P_AT_MAX, touch=MG.P_AT_MAX))
+    assert {t["node"] for t in toks} == {10, 11, 12}
+    assert all(t["plane"] in MF.AXES and t["pathway"]["gain"] >= 1.0 for t in toks)
+
+
+def test_run_proposes_shadow_tokens_with_their_pathway_magic(cn):
+    MF.run(cn, pressures=P1, axes=AXES, observer=0.5, now=1.0)
+    out = MF.run(cn, pressures=P2, axes={**AXES, "brain": 0.2}, observer=0.4, now=3.0,
+                 phases={a: 0.7 for a in MF.AXES})
+    props = MF.proposals(cn)
+    assert out["proposed_tokens"] == len(props["tokens"]) > 0
+    assert out["pathway_magic"] >= 0.0
+    toks = {"alpha", "beta", "gamma", "delta", "eps", "zeta"}
+    for t in props["tokens"]:
+        assert t["token"] in toks and t["plane"] in MF.AXES and len(t["sessions"]) >= 2
+        assert t["status"] == "proposed" and t["realisation"].startswith("none")
+        assert t["pathway"] and 0.0 <= t["pathway"]["held"] <= 1.0
+    assert all(e["pathway"] for e in props["edges"])

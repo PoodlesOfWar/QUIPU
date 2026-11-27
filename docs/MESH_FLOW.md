@@ -99,3 +99,30 @@ The antimatter side of each plane's pair follows **"One-Positron Quantum Cyclotr
 - **Defaults, not data.** B is the order of the Gabrielse electron traps, not a value from this paper. T is the ≈ 0.3 K reported in coverage of the trap. r defaults to 0 because the experiment's aim is to test it.
 - **Source not read directly.** The PRL page was not reachable; the description comes from its indexed abstract and press coverage.
 - **Declared mapping.** The CPT ratio acting on the partner's phase is this repo's mapping. It is not a model of the spin–cyclotron dynamics.
+
+## Magic on the shadow token pathways (v0.80.0)
+
+The magic reading now acts on the shadow pathways instead of sitting beside them. It is computed before the shadow edges, and each edge and token is weighted by the magic of the planes it actually travelled.
+
+| Step | Formula |
+|---|---|
+| Pathway of an edge (u, v) | π_k ∝ \|ΔZ_u,k\| + \|ΔZ_v,k\|: the plane mix the VNN moved its two tokens along. If nothing moved, it falls back to where they sit. |
+| Pathway magic | Σ π_k · magic_k. The matter half, the held antimatter half, the unheld remainder and the CPT asymmetry are summed the same way. |
+| held | (matter + antimatter) / (matter + antimatter + unheld): how much of the pathway's antimatter half the positron cyclotron holds |
+| Gain | g = (1 + (φ − 1)·magic/max) · held ∈ [0, φ] |
+| Lift | lift × g, re-capped at 0.05 (the same ceilings as before) |
+
+**What the gain does:**
+- A pathway through stabilizer planes, which carry no magic, keeps its lift (g = 1).
+- A pathway through the most magic planes is raised by up to φ.
+- Antimatter the trap no longer holds (a warm trap) lowers the lift.
+- At the defaults CPT holds, so the gain is the same for matter and antimatter.
+
+**Shadow tokens.** Every endpoint of a shadow edge becomes a shadow token. Its plane is where its own state moved most, and it carries its own pathway magic and the largest lift among its edges. Tokens recur like edges (≥ 2 distinct input states) and are proposed with the same `realisation: none: …`.
+
+**Where to read them:**
+- `entirety:mesh_flow:proposals` now holds `edges` and `tokens`, each with its `pathway`.
+- `/mesh_flow` serves them.
+- `/guidance?source=…` lists the proposed shadow tokens on the source's own plane under `magic.shadow_tokens`. Perceptopoly sees those on perception.
+
+**Still proposals only.** Nothing writes `mesh_slm_*`.

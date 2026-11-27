@@ -4,6 +4,24 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.80.0] - 2026-11-27
+
+The magic reading now acts on the shadow token pathways.
+
+### Changed
+- `qpsi/mesh_flow`: magic is computed before the shadow edges. Each edge's lift is multiplied by its pathway gain and then re-capped at the existing ceilings:
+  - **Pathway:** the planes the VNN moved its two tokens along.
+  - **Pathway magic:** the magic of those planes, weighted by how far the tokens moved on each.
+  - **Gain:** g = (1 + (φ − 1)·magic/max) · held. Stabilizer pathways keep their lift, maximally magic ones gain up to φ, and antimatter the positron trap no longer holds lowers the lift.
+
+### Added
+- **Shadow tokens.** Every endpoint of a shadow edge becomes a shadow token, on the plane its own state moved most, with its own pathway magic. Recurring tokens are proposed alongside edges under `entirety:mesh_flow:proposals`, each with its `pathway`.
+- **Guidance.** `/guidance` `magic.shadow_tokens` lists the proposed shadow tokens on the source's own plane, so Perceptopoly receives those on perception.
+- 6 tests, and a section in `docs/MESH_FLOW.md`.
+
+### Not changed
+- Proposals only: nothing writes `mesh_slm_*`.
+
 ## [0.79.0] - 2026-11-27
 
 The antimatter partner of each plane's magic is held as a one-positron quantum cyclotron, and the matter/antimatter split becomes a CPT test.

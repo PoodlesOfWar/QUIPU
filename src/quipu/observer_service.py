@@ -378,7 +378,26 @@ def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:
         "cpt": rec.get("cpt") or {},
         "planes": {a: float((v or {}).get("magic", 0.0) or 0.0) for a, v in planes.items()},
         "by_source": rec.get("by_source") or {},
+        "shadow_tokens": _own_shadow_tokens(axis),
     }
+
+
+def _own_shadow_tokens(axis: Optional[str], limit: int = 10) -> list[dict[str, Any]]:
+    """Proposed shadow tokens on this source's own plane, with their pathway magic (never applied)."""
+    try:
+        props = brain_kv.kv_get_json("entirety:mesh_flow:proposals", {}) or {}
+    except Exception:
+        props = {}
+    out = []
+    for t in props.get("tokens") or []:
+        if not isinstance(t, dict) or t.get("plane") != axis:
+            continue
+        pw = t.get("pathway") or {}
+        out.append({"token": t.get("token"), "lift": float(t.get("lift", 0.0) or 0.0),
+                    "sessions": len(t.get("sessions") or []),
+                    "magic": float(pw.get("magic", 0.0) or 0.0), "held": float(pw.get("held", 1.0) or 0.0),
+                    "status": t.get("status"), "realisation": t.get("realisation")})
+    return out[:limit]
 
 
 def _bond_shear_payload() -> dict[str, Any]:

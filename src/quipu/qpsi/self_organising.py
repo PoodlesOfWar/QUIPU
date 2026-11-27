@@ -265,7 +265,8 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                     else:
                         cn.execute("RELEASE SAVEPOINT qpsi_mesh_flow")
                         out["mesh_flow"] = {k: mf[k] for k in ("delta", "stability_number", "spikes", "latent",
-                                                               "shadow_this_step", "proposed", "magic")}
+                                                               "shadow_this_step", "proposed", "proposed_tokens",
+                                                               "magic", "pathway_magic")}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}
         if flags.learned_prior:
