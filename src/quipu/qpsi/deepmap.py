@@ -21,6 +21,23 @@ aspect composes along the path by the rule its theory gives:
 
 Path gain g = (1 + (φ − 1)·D) · held ∈ [0, φ].
 
+**Perceptopoly's supernova events.**  Each TheSeuScape NPC posts its latest
+``perceptopoly.supernova/1`` record through ``/relational``: a magnitude
+m ∈ [0, 1] and a direction θ ∈ [0, 2π) for its local expansion.  The DeepMap
+connects them both ways:
+
+* *Events → pathways.*  A fresh event (age −60 s … 3600 s) weighs
+  w = e^{−age/1800}·m (the same freshness rule as the held ACRE tool's gate).
+  Its direction is read on the seven axis planes placed evenly round the
+  circle, ν_k ∝ exp(κ cos(θ − 2πk/7)) with κ = 2 (a declared von Mises
+  mapping).  A path's alignment with an event is the cosine between its plane
+  mix and ν, its supernova pressure is s = Σ w·a / max(1, Σ w), and its
+  expansion gain is min(φ, g·(1 + (φ − 1)·s)).  Paths are ranked by expansion
+  gain, which equals g when no event is fresh.
+* *Pathways → events.*  Each fresh NPC gets the three pathways its expansion
+  would travel (largest w·a·g), with their information account: the answer
+  Perceptopoly reads back on ``/deepmap`` and ``/guidance`` → ``deepmap.supernova``.
+
 Reads the MESH tables and ``entirety:mesh_flow:*``; writes only
 ``brain_kv["entirety:deepmap:*"]``.  Never writes ``mesh_slm_*``.  The HubCore
 ``x_DeepMap`` registry was not available to the session that wrote this; this
@@ -48,6 +65,11 @@ K_BOLTZMANN: float = 1.380649e-23
 C_LIGHT: float = 299_792_458.0
 TEMPERATURE_K: float = 300.0
 PURITY_AT_MAX: float = 7.0 / 16.0
+SUPERNOVA_TAU_S: float = 1800.0
+SUPERNOVA_WINDOW_S: float = 3600.0
+SUPERNOVA_KAPPA: float = 2.0
+PATHS_PER_NPC: int = 3
+MAX_NPCS_OUT: int = 32
 _TINY: frozenset = frozenset({"landauer_j", "info_mass_kg", "probability"})
 
 
@@ -256,6 +278,72 @@ def pathways(cn: sqlite3.Connection, seeds: Sequence[int], plane_magic: Mapping[
     return found
 
 
+# ---------------------------------------------------------------- supernova events
+
+def npc_planes(direction: float, kappa: float = SUPERNOVA_KAPPA) -> list[float]:
+    """ν_k ∝ exp(κ cos(θ − 2πk/7)): an NPC's expansion direction read on the seven axis planes."""
+    th = float(direction)
+    if not math.isfinite(th):
+        raise ValueError("direction must be finite")
+    w = [math.exp(float(kappa) * math.cos(th - 2.0 * math.pi * k / 7.0)) for k in range(7)]
+    s = sum(w)
+    return [x / s for x in w]
+
+
+def alignment(a: Sequence[float], b: Sequence[float]) -> float:
+    """Cosine of two non-negative plane mixes, in [0, 1]."""
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    if na <= 0.0 or nb <= 0.0:
+        return 0.0
+    return max(0.0, min(1.0, sum(x * y for x, y in zip(a, b)) / (na * nb)))
+
+
+def supernova_events(cn: sqlite3.Connection, now: float) -> tuple[list[dict], int]:
+    """Fresh Perceptopoly supernova decisions with their weight and plane reading; and how many were ignored."""
+    from .knot_shadow import _npcs
+    try:
+        raw = _npcs(cn)
+    except sqlite3.OperationalError:
+        return [], 0
+    fresh, ignored = [], 0
+    for n in raw:
+        age = float(now) - float(n["t"])
+        if not (-60.0 <= age <= SUPERNOVA_WINDOW_S):
+            ignored += 1
+            continue
+        m = max(0.0, min(1.0, float(n["magnitude"])))
+        nu = npc_planes(n["direction"])
+        fresh.append({"agent_id": n["id"], "magnitude": m, "direction": float(n["direction"]),
+                      "age_s": age, "weight": math.exp(-max(0.0, age) / SUPERNOVA_TAU_S) * m,
+                      "plane": AXES[max(range(7), key=lambda k: nu[k])], "planes": nu})
+    return fresh, ignored
+
+
+def connect_supernova(paths: list[dict], npcs: Sequence[Mapping[str, Any]]) -> list[dict]:
+    """Score paths by the fresh events (in place) and return each NPC's pathways."""
+    sw = sum(n["weight"] for n in npcs)
+    for p in paths:
+        a = [alignment(p["planes"], n["planes"]) for n in npcs]
+        s = sum(n["weight"] * x for n, x in zip(npcs, a)) / max(1.0, sw)
+        p["supernova"] = round(s, 9)
+        p["expansion_gain"] = math.floor(min(PHI, p["gain"] * (1.0 + (PHI - 1.0) * s)) * 1e9) / 1e9
+    out = []
+    for n in sorted(npcs, key=lambda n: -n["weight"])[:MAX_NPCS_OUT]:
+        scored = sorted(((n["weight"] * alignment(p["planes"], n["planes"]) * p["gain"],
+                          alignment(p["planes"], n["planes"]), p) for p in paths), key=lambda t: -t[0])
+        out.append({
+            "agent_id": n["agent_id"], "magnitude": n["magnitude"], "direction": n["direction"],
+            "age_s": round(n["age_s"], 3), "weight": round(n["weight"], 9), "plane": n["plane"],
+            "paths": [{"tokens": p["tokens"], "alignment": round(a, 9), "score": round(sc, 9),
+                       "plane": p["plane"], "gain": p["gain"], "expansion_gain": p["expansion_gain"],
+                       "surprisal_bits": p["surprisal_bits"], "delivered_bits": p["delivered_bits"],
+                       "magic": p["magic"], "held": p["held"], "shadow_hops": p["shadow_hops"]}
+                      for sc, a, p in scored[:PATHS_PER_NPC] if sc > 0.0],
+        })
+    return out
+
+
 # ---------------------------------------------------------------- the map
 
 def build(cn: sqlite3.Connection, *, now: Optional[float] = None,
@@ -288,7 +376,9 @@ def build(cn: sqlite3.Connection, *, now: Optional[float] = None,
         acc = compose(hops, stability_number=stability, temperature_k=temperature_k)
         paths.append({"tokens": list(key), **{k: (round(v, 9) if isinstance(v, float) and k not in _TINY else v)
                                               for k, v in acc.items()}})
-    paths.sort(key=lambda p: (-p["gain"], p["surprisal_bits"]))
+    npcs, ignored = supernova_events(cn, now)
+    per_npc = connect_supernova(paths, npcs)
+    paths.sort(key=lambda p: (-p["expansion_gain"], p["surprisal_bits"]))
     paths = paths[:max(1, int(max_paths))]
     by_plane: dict[str, int] = {}
     for p in paths:
@@ -307,6 +397,9 @@ def build(cn: sqlite3.Connection, *, now: Optional[float] = None,
             "magic": round(sum(p["magic"] for p in paths), 9),
             "info_mass_kg": sum(p["info_mass_kg"] for p in paths),
         },
+        "supernova": {"fresh": len(npcs), "ignored": ignored,
+                      "pressure": round(sum(p["supernova"] for p in paths) / len(paths), 9) if paths else 0.0,
+                      "npcs": per_npc},
         "realisation": "map only: pathways are read, never written",
     }
     _kv_set(cn, KV_LATEST, rec)
@@ -318,5 +411,6 @@ def latest(cn: sqlite3.Connection) -> dict:
     return rec if isinstance(rec, dict) else {}
 
 
-__all__ = ["KV_PREFIX", "KV_LATEST", "AXES", "resolvable_bits", "branching_entropy", "hop_planes",
+__all__ = ["KV_PREFIX", "KV_LATEST", "AXES", "npc_planes", "alignment", "supernova_events",
+           "connect_supernova", "resolvable_bits", "branching_entropy", "hop_planes",
            "hop_magic", "compose", "pathways", "build", "latest"]

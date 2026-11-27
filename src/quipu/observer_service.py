@@ -369,11 +369,15 @@ def _deepmap_payload(axis: Optional[str], limit: int = 5) -> dict[str, Any]:
     except Exception:
         rec = {}
     keep = ("tokens", "hops", "surprisal_bits", "interstitial_bits", "magic", "magic_floor", "design",
-            "held", "cpt_asymmetry", "delivered_bits", "info_mass_kg", "gain", "shadow_hops")
+            "held", "cpt_asymmetry", "delivered_bits", "info_mass_kg", "gain", "supernova", "expansion_gain",
+            "shadow_hops")
     own = [{k: p.get(k) for k in keep} for p in rec.get("paths") or []
            if isinstance(p, dict) and p.get("plane") == axis]
+    sn = rec.get("supernova") or {}
     return {"at": rec.get("at"), "paths": own[:limit], "all_paths": len(rec.get("paths") or []),
-            "by_plane": rec.get("by_plane") or {}, "totals": rec.get("totals") or {}}
+            "by_plane": rec.get("by_plane") or {}, "totals": rec.get("totals") or {},
+            "supernova": {"fresh": sn.get("fresh", 0), "pressure": sn.get("pressure", 0.0),
+                          "npcs": (sn.get("npcs") or [])[:8]}}
 
 
 def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:

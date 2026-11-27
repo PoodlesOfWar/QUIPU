@@ -282,6 +282,7 @@ def after_step(summary: dict, *, flags: Flags | None = None, cfg: SomnConfig | N
                             else:
                                 cn.execute("RELEASE SAVEPOINT qpsi_deepmap")
                                 out["deepmap"] = {"paths": len(dm["paths"]), "seed_from": dm["seed_from"],
+                                                  "supernova_fresh": dm["supernova"]["fresh"],
                                                   **{k: dm["totals"][k] for k in ("surprisal_bits", "magic")}}
             except Exception as exc:
                 out["pcm"] = {"error": str(exc)}

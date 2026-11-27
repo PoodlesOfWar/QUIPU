@@ -267,3 +267,12 @@ def test_guidance_carries_the_sources_own_deepmap_paths(monkeypatch):
     out = O2._deepmap_payload("perception")
     assert [p["tokens"] for p in out["paths"]] == [["a", "b"]] and out["all_paths"] == 2
     assert out["totals"] == {"magic": 0.4} and out["paths"][0]["gain"] == 1.2
+
+
+def test_guidance_deepmap_carries_the_supernova_pathways(monkeypatch):
+    from quipu import observer_service as O2, brain_kv as bk
+    rec = {"paths": [], "supernova": {"fresh": 1, "pressure": 0.4,
+                                      "npcs": [{"agent_id": "npc-7", "paths": [{"tokens": ["a", "b"]}]}]}}
+    monkeypatch.setattr(bk, "kv_get_json", lambda k, d=None: rec if k == "entirety:deepmap:latest" else d)
+    out = O2._deepmap_payload("perception")["supernova"]
+    assert out["fresh"] == 1 and out["npcs"][0]["agent_id"] == "npc-7"

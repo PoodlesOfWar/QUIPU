@@ -4,6 +4,23 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.83.0] - 2026-11-27
+
+DeepMap pathways are connected to Perceptopoly's supernova events, both ways.
+
+### Added
+- **Events → pathways.** `qpsi/deepmap` reads fresh `perceptopoly.supernova/1` records:
+  - Each is weighted by freshness and magnitude: w = e^(−age/1800)·m, counted only within the last hour.
+  - Its direction is read onto the seven axis planes.
+  - A pathway pointing the way of the events gains a supernova pressure. Its expansion gain, min(φ, g·(1 + (φ − 1)·s)), ranks the map.
+- **Pathways → events.** Each fresh NPC gets back the three pathways its expansion would travel, with their information account: bits, delivered bits, magic, held share and gain.
+- **Where Perceptopoly reads it:** the `supernova` block on `/deepmap`, and `deepmap.supernova` on `/guidance?source=perceptopoly`.
+- 5 tests; a section in `docs/DEEPMAP.md`.
+
+### Not changed
+- Read-only: no weight changes, and nothing writes `mesh_slm_*`.
+- Mapping a direction onto the planes (von Mises, κ = 2) is a declared choice.
+
 ## [0.82.0] - 2026-11-27
 
 Everything so far becomes aspects of information theory along deep MESH pathways.
