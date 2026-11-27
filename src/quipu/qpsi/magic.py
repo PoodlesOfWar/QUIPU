@@ -22,15 +22,47 @@ Transcription used here (a declared mapping, not a measurement):
   states: magic 0.  The maximum for this family is log₂(3/2) ≈ 0.585 at
   p = (1 ± 1/√3)/2 ≈ 0.211 or 0.789 (cos²θ = 1/3), φ = π/4.
 
-Pure functions, standard library only; no I/O.
+**The positron (antimatter) partner is held as a one-positron quantum
+cyclotron** (Myers, Soucy, Sukra, Sinha & Gabrielse, "One-Positron Quantum
+Cyclotron", *Phys. Rev. Lett.* 137, 173001): a single positron suspended in a
+Penning trap's magnetic field, cooled to its cyclotron ground state and moved
+one quantum jump at a time, towards a positron-vs-electron magnetic-moment
+test of CPT invariance.  Two consequences here:
+
+* **Held fraction.** The cyclotron frequency is ν_c = eB/(2π m_e) and the
+  thermal ground-state probability P₀ = 1 − e^{−hν_c/k_BT}.  The antimatter
+  half of a plane's magic is attributed only in the held share P₀; the rest
+  is reported as ``unheld``.  Defaults B = 5.36 T (ν_c ≈ 150 GHz, the order of
+  the Gabrielse traps) and T = 0.3 K (as reported for this trap) give
+  P₀ ≈ 1 − 4·10⁻¹¹: effectively all held.
+* **CPT test.** The antimatter partner's phase is −φ·(1 + r), with
+  r = (g_e⁺ − g_e⁻)/g_e⁻ the fractional magnetic-moment difference.  CPT
+  invariance (r = 0, the default) makes matter and antimatter magic equal; any
+  r ≠ 0 shows up as an asymmetry in the attribution, which is reported.
+
+B, T and r are overridable (``QUIPU_POSITRON_B_T``, ``QUIPU_POSITRON_T_K``,
+``QUIPU_CPT_RATIO``).  The PRL page was not readable from the session that
+wrote this; the trap description comes from its abstract as indexed and press
+coverage, and no value here is taken from its data.
+
+Pure functions, standard library only; no I/O beyond reading those three
+environment variables.
 """
 from __future__ import annotations
 
 import math
+import os
 from typing import Mapping, Optional, Sequence
 
 AXES: tuple[str, ...] = ("vision", "touch", "smell", "body", "brain", "perception", "entirety")
 MAX_PAIR_MAGIC: float = math.log2(1.5)
+E_CHARGE: float = 1.602176634e-19       # C (exact, SI)
+M_ELECTRON: float = 9.1093837015e-31    # kg (CODATA 2018; the positron mass is equal under CPT)
+H_PLANCK: float = 6.62607015e-34        # J s (exact)
+K_BOLTZMANN: float = 1.380649e-23       # J/K (exact)
+POSITRON_B_T: float = 5.36
+POSITRON_T_K: float = 0.3
+CPT_RATIO: float = 0.0
 P_AT_MAX: float = (1.0 - 1.0 / math.sqrt(3.0)) / 2.0
 
 
@@ -64,9 +96,39 @@ def pair_magic(pressure: float, phase: float) -> float:
     return stabilizer_renyi_2(list(pair_paulis(theta, ph).values()))
 
 
+def quantum_cyclotron(b_tesla: float = POSITRON_B_T, temp_k: float = POSITRON_T_K) -> dict:
+    """One-positron quantum cyclotron: ν_c = eB/(2π m), n̄ and ground-state probability P₀."""
+    b, t = float(b_tesla), float(temp_k)
+    if not (math.isfinite(b) and b > 0.0 and math.isfinite(t) and t > 0.0):
+        raise ValueError("b_tesla and temp_k must be finite and > 0")
+    nu = E_CHARGE * b / (2.0 * math.pi * M_ELECTRON)
+    x = H_PLANCK * nu / (K_BOLTZMANN * t)
+    n_bar = 1.0 / math.expm1(x) if x < 700.0 else 0.0
+    p0 = -math.expm1(-x)
+    return {"b_tesla": b, "temp_k": t, "nu_c_hz": nu, "h_nu_over_kT": x,
+            "n_bar": n_bar, "ground_probability": p0}
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        v = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return v if math.isfinite(v) else default
+
+
+def positron_config() -> dict:
+    """B, T and the CPT ratio r, from the environment or the defaults."""
+    return {"b_tesla": _env_float("QUIPU_POSITRON_B_T", POSITRON_B_T),
+            "temp_k": _env_float("QUIPU_POSITRON_T_K", POSITRON_T_K),
+            "cpt_ratio": _env_float("QUIPU_CPT_RATIO", CPT_RATIO)}
+
+
 def reading(pressures: Mapping[str, float], phases: Optional[Mapping[str, float]] = None,
             weights: Optional[Sequence[float]] = None,
-            source_axes: Optional[Mapping[str, str]] = None) -> dict:
+            source_axes: Optional[Mapping[str, str]] = None,
+            b_tesla: Optional[float] = None, temp_k: Optional[float] = None,
+            cpt_ratio: Optional[float] = None) -> dict:
     """Magic per axis plane, its weighted total, and the attribution per source.
 
     ``weights`` default to the rheology axis weights.  ``source_axes`` maps a
@@ -81,8 +143,16 @@ def reading(pressures: Mapping[str, float], phases: Optional[Mapping[str, float]
         raise ValueError("weights must be 7 non-negative numbers with a positive sum")
     tot = sum(w)
     phases = phases or {}
+    env = positron_config()
+    cyc = quantum_cyclotron(env["b_tesla"] if b_tesla is None else b_tesla,
+                            env["temp_k"] if temp_k is None else temp_k)
+    r = env["cpt_ratio"] if cpt_ratio is None else float(cpt_ratio)
+    if not math.isfinite(r):
+        raise ValueError("cpt_ratio must be finite")
+    held = cyc["ground_probability"]
     planes = {}
     total = 0.0
+    asym = 0.0
     for a, wk in zip(AXES, w):
         p = float(pressures.get(a, 0.0) or 0.0)
         ph = float(phases.get(a, 0.0) or 0.0)
@@ -91,14 +161,22 @@ def reading(pressures: Mapping[str, float], phases: Optional[Mapping[str, float]
         if not math.isfinite(ph):
             ph = 0.0
         m = pair_magic(p, ph)
+        m_bar = pair_magic(p, -ph * (1.0 + r))          # the positron partner's own magic
         planes[a] = {"pressure": round(min(1.0, max(0.0, p)), 6), "phase": round(ph, 6),
-                     "magic": round(m, 6), "matter": round(m / 2.0, 6), "antimatter": round(m / 2.0, 6)}
+                     "magic": round(m, 6), "matter": round(m / 2.0, 6),
+                     "antimatter": round(held * m_bar / 2.0, 6),
+                     "unheld": round((1.0 - held) * m_bar / 2.0, 12),
+                     "cpt_asymmetry": round(m_bar - m, 12)}
         total += (wk / tot) * m
+        asym = max(asym, abs(m_bar - m))
     out = {"planes": planes, "total": round(total, 6), "max": round(MAX_PAIR_MAGIC, 6),
-           "share_of_max": round(total / MAX_PAIR_MAGIC, 6)}
+           "share_of_max": round(total / MAX_PAIR_MAGIC, 6),
+           "positron": {**{k: (v if k in ("n_bar", "ground_probability") else round(v, 6)) for k, v in cyc.items()},
+                        "source": "one-positron quantum cyclotron, PRL 137, 173001"},
+           "cpt": {"ratio": r, "max_asymmetry": asym, "conserved": asym < 1e-12}}
     if source_axes:
         out["by_source"] = {s: planes[a]["magic"] for s, a in sorted(source_axes.items()) if a in planes}
     return out
 
 
-__all__ = ["AXES", "MAX_PAIR_MAGIC", "P_AT_MAX", "stabilizer_renyi_2", "pair_paulis", "pair_magic", "reading"]
+__all__ = ["AXES", "MAX_PAIR_MAGIC", "P_AT_MAX", "quantum_cyclotron", "positron_config", "stabilizer_renyi_2", "pair_paulis", "pair_magic", "reading"]

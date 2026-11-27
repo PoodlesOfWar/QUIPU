@@ -64,3 +64,37 @@ def test_bad_inputs():
     with pytest.raises(ValueError):
         M.stabilizer_renyi_2([])
     assert M.reading({"vision": float("inf")})["planes"]["vision"]["magic"] == 0.0
+
+
+def test_one_positron_quantum_cyclotron_is_held_in_its_ground_state():
+    c = M.quantum_cyclotron(5.36, 0.3)
+    assert c["nu_c_hz"] == pytest.approx(1.5004e11, rel=1e-3)          # eB/(2 pi m_e)
+    assert c["n_bar"] < 1e-10 and 1 - c["ground_probability"] < 1e-10
+    warm = M.quantum_cyclotron(5.36, 20.0)
+    assert warm["ground_probability"] < 0.5
+    with pytest.raises(ValueError):
+        M.quantum_cyclotron(0.0, 0.3)
+
+
+def test_held_positron_carries_the_antimatter_half_and_cpt_holds_by_default():
+    r = M.reading({"perception": 0.3}, {"perception": 0.8}, weights=[1] * 7)
+    pl = r["planes"]["perception"]
+    assert pl["antimatter"] == pytest.approx(pl["matter"]) and pl["cpt_asymmetry"] == 0.0
+    assert r["cpt"] == {"ratio": 0.0, "max_asymmetry": 0.0, "conserved": True}
+    assert "173001" in r["positron"]["source"]
+
+
+def test_a_warm_trap_leaves_antimatter_magic_unheld():
+    pl = M.reading({"perception": 0.3}, {"perception": 0.8}, weights=[1] * 7, temp_k=20.0)["planes"]["perception"]
+    assert pl["antimatter"] + pl["unheld"] == pytest.approx(pl["matter"], abs=1e-6)
+    assert pl["unheld"] > pl["antimatter"]
+
+
+def test_a_cpt_violating_moment_ratio_shows_as_asymmetry(monkeypatch):
+    monkeypatch.setenv("QUIPU_CPT_RATIO", "0.2")
+    r = M.reading({"perception": 0.3}, {"perception": 0.8}, weights=[1] * 7)
+    assert r["cpt"]["ratio"] == 0.2 and r["cpt"]["conserved"] is False
+    assert r["planes"]["perception"]["cpt_asymmetry"] != 0.0
+    assert r["planes"]["vision"]["cpt_asymmetry"] == 0.0               # no magic, nothing to break
+    monkeypatch.setenv("QUIPU_CPT_RATIO", "nan")
+    assert M.reading({"perception": 0.3}, {"perception": 0.8}, weights=[1] * 7)["cpt"]["conserved"] is True

@@ -4,6 +4,25 @@ All notable changes to **Supply Chain Architect** are documented here. Versions
 follow [Semantic Versioning](https://semver.org). The single source of
 truth for the version number is `src/quipu/_version.py`.
 
+## [0.79.0] - 2026-11-27
+
+The antimatter partner of each plane's magic is held as a one-positron quantum cyclotron, and the matter/antimatter split becomes a CPT test.
+
+### Added
+- **Cyclotron state.** `qpsi/magic.quantum_cyclotron(B, T)` follows "One-Positron Quantum Cyclotron" (Myers, Soucy, Sukra, Sinha & Gabrielse, *Phys. Rev. Lett.* 137, 173001): a single positron in a Penning trap, held in its cyclotron ground state. It returns:
+  - ν_c = eB/(2π m_e), ≈ 150 GHz at 5.36 T;
+  - the thermal occupation n̄;
+  - P₀ = 1 − e^{−hν_c/k_BT}, ≈ 1 − 4·10⁻¹¹ at 0.3 K.
+- **Held antimatter magic.** Each plane's antimatter half is attributed in the held share P₀; the rest is reported as `unheld`.
+- **CPT test.** The partner's phase is −φ(1 + r), with r = (g_e⁺ − g_e⁻)/g_e⁻. With r = 0 (the default, CPT) matter and antimatter magic are equal. Any r ≠ 0 appears in `cpt.max_asymmetry`, and `cpt.conserved` turns false.
+- **Overrides:** `QUIPU_POSITRON_B_T`, `QUIPU_POSITRON_T_K` and `QUIPU_CPT_RATIO`.
+- **Guidance.** `/guidance` `magic` adds `own.unheld`, `positron_held` and `cpt`, so Perceptopoly sees whether its plane's antimatter half is held and whether CPT holds.
+- 4 tests, and a section in `docs/MESH_FLOW.md`.
+
+### Not changed
+- At the defaults, matter and antimatter magic are equal, as before.
+- The constants are defaults, not the paper's data: the PRL page was not reachable.
+
 ## [0.78.0] - 2026-11-26
 
 The system's information-theoretic readings are transcribed into quantum "magic" and delivered to every source, including Perceptopoly.

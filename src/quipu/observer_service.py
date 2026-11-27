@@ -373,7 +373,9 @@ def _magic_payload(source: str, axis: Optional[str]) -> dict[str, Any]:
         "total": float(rec.get("total", 0.0) or 0.0),
         "share_of_max": float(rec.get("share_of_max", 0.0) or 0.0),
         "own_axis": axis,
-        "own": {k: float(own.get(k, 0.0) or 0.0) for k in ("magic", "matter", "antimatter")},
+        "own": {k: float(own.get(k, 0.0) or 0.0) for k in ("magic", "matter", "antimatter", "unheld")},
+        "positron_held": float((rec.get("positron") or {}).get("ground_probability", 0.0) or 0.0),
+        "cpt": rec.get("cpt") or {},
         "planes": {a: float((v or {}).get("magic", 0.0) or 0.0) for a, v in planes.items()},
         "by_source": rec.get("by_source") or {},
     }

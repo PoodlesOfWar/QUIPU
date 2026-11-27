@@ -237,6 +237,8 @@ def test_guidance_carries_the_magic_reading_for_perceptopoly(monkeypatch):
                                                          "touch": {"magic": 0.1}}, "by_source": {"perceptopoly": 0.5}}
     monkeypatch.setattr(bk, "kv_get_json", lambda k, d=None: rec if k == "entirety:mesh_flow:magic" else d)
     out = O2._magic_payload("perceptopoly", "perception")
-    assert out["own_axis"] == "perception" and out["own"] == {"magic": 0.5, "matter": 0.25, "antimatter": 0.25}
+    assert out["own_axis"] == "perception"
+    assert out["own"] == {"magic": 0.5, "matter": 0.25, "antimatter": 0.25, "unheld": 0.0}
+    assert out["positron_held"] == 0.0 and out["cpt"] == {}
     assert out["total"] == 0.2 and out["planes"] == {"perception": 0.5, "touch": 0.1}
     assert O2._magic_payload("quipu-voice", "hearing")["own"]["magic"] == 0.0

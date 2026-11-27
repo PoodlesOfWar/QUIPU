@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-__version__ = "0.78.0"
+__version__ = "0.79.0"
 __release__ = (
+    "The positron partner held as a one-positron quantum cyclotron (PRL 137, 173001): ground-state-held antimatter magic and a CPT matter/antimatter test."
+)
+_RELEASE_0_78_0 = (
     "Magic: each axis plane's pressure and rADAM phase read as a matter-antimatter pair (stabilizer Renyi entropy), attributed per source and delivered to Perceptopoly on /guidance."
 )
 _RELEASE_0_77_0 = (
@@ -40,9 +43,10 @@ _RELEASE_0_67_0 = (
 _RELEASE_0_66_0 = (
     "Viscous Neural Network, Multidimensional Navier-Stokes, Monte Carlo CVaR Decision Pruning + Greedy Dijkstra, Native Semantic Distillation, and VNN Bathymetry & Temporal-Spatial Physics-Constrained Reconstruction (v0.33, Helena Sloman 1850 & Pompeii-Vesuvius 79 CE)."
 )
-__build_date__ = "2026-11-26"
+__build_date__ = "2026-11-27"
 
 PHASES = {
+    "0.79.0": "qpsi/magic.py: the antimatter partner of each plane pair is a one-positron quantum cyclotron (Myers, Soucy, Sukra, Sinha & Gabrielse, PRL 137, 173001: single positron held in a Penning trap, cyclotron ground state, one quantum jump at a time, towards a positron-vs-electron moment CPT test). quantum_cyclotron(B, T): nu_c = eB/(2 pi m_e) (~150 GHz at 5.36 T), n_bar, P0 = 1 - exp(-h nu_c / k T) (~1 - 4e-11 at 0.3 K). The antimatter half of a plane magic is attributed in the held share P0, the rest reported as unheld; the partner phase is -phi(1 + r) with r = (g+ - g-)/g- (default 0, CPT), so matter/antimatter asymmetry is reported in cpt {ratio, max_asymmetry, conserved}. Overrides QUIPU_POSITRON_B_T, QUIPU_POSITRON_T_K, QUIPU_CPT_RATIO. /guidance magic adds own.unheld, positron_held, cpt. Defaults, not the paper data (PRL page unreachable). 4 tests.",
     "0.78.0": "qpsi/magic.py: second stabilizer Renyi entropy M2 = -log2(sum <P>^4 / sum <P>^2) (White & White, PRD 110, 116016 (2024), magic of top quark-antiquark pairs) of a per-plane pair cos(theta/2)|00> + e^{i phi} sin(theta/2)|11> with sin^2(theta/2) = the plane PCM pressure and phi = its rADAM phase; antimatter partner = charge conjugate (phi -> -phi), same magic, attributed half each; max log2(3/2). mesh_flow.run publishes entirety:mesh_flow:magic (planes, weighted total, by_source via SOURCE_PROFILES axes); self_organising passes the cell phases; GET /mesh_flow and GET /guidance (magic: own plane, total, planes, by_source) deliver it to every source including perceptopoly. A declared mapping, not a measurement; the cited video and ScienceDaily article were unreachable. 12 tests.",
     "0.77.0": "qpsi/mesh_flow.py joins the chain and runs in self_organising.after_step after the PCM cells (QUIPU_MESH_FLOW, default on with the cells, own savepoint): PCM pressures drive the Mott core (I = 1/tau + 0.10 p, 64 steps), its poADAM/rADAM differential sets the VNN stability number S(delta), the coupler reads rheology and bond shear with the live 7-D MESH state as target, and the VNN steps over a read-only copy of the MESH graph (top 128 tokens, Quipu edges). Shadow edges: existing edges whose ends converged (lift) and unlinked pairs the flow made near-parallel (new, cos >= 0.9), damped by S/phi; proposed only after recurring in >= 2 distinct input states, realisation none. Writes only entirety:mesh_flow:* and entirety:vnn:latest; never mesh_slm_*. GET /mesh_flow and /capabilities entries. A brain without MESH tables runs the core only. docs/MESH_FLOW.md; 10 tests.",
     "0.76.0": "qpsi/mott_spintronic.py: behavioural model of an edge hybrid compute-and-store core. Seven leaky integrate-and-fire Mott neurons (one per CAT axis plane) with shadow potentials u = V/V_th, non-linear multiplanar shear tanh(sum_j w_j (u_j - u_k)) on the rheology axis weights, and entropic coupling J*H(u)*shear. A spike is written straight into a domain-wall racetrack (N pinning sites) or an SOT-MTJ (one bit) iff its own amplitude clears the critical current (no amplifier, no ADC); otherwise it stays latent. poADAM is poissonic ADAM: vanilla Adam on the Fisher-normalised Poisson score (k - lambda)/sqrt(max(lambda,1)) of the spike count; rADAM takes g_re from written spikes, g_im from latent ones and pivot slope written/spikes, so it equals poADAM exactly when every spike is stored (delta = 0, stability number phi). run_window returns radam_differential for TypedViscousCoupler. Pure functions, no table or brain_kv access, not wired into training. Constants are defaults, not fitted to the cited paper (unreachable). docs/MOTT_SPINTRONIC_CORE.md; 12 tests.",
