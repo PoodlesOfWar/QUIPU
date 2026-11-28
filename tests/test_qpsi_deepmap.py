@@ -128,3 +128,73 @@ def test_no_mesh_and_no_flow_still_publish(cn):
 def test_prefix_guard(cn):
     with pytest.raises(PermissionError):
         DM._kv_set(cn, "entirety:mesh_flow:latest", {})
+
+
+# ---- Perceptopoly supernova events ------------------------------------------------
+
+NOW = 1795082400.0  # 2026-11-19T10:00:00Z
+
+
+def _npc(c, agent, magnitude, direction, at, schema="perceptopoly.supernova/1"):
+    rec = {"agent_id": agent, "schema": schema, "magnitude": magnitude, "direction": direction,
+           "at": at, "source": "perceptopoly", "received_at": "2026-11-19T10:00:00+00:00"}
+    row = c.execute("SELECT value FROM brain_kv WHERE key='relational:index'").fetchone()
+    idx = json.loads(row[0]) if row else {}
+    idx[f"perceptopoly:{agent}"] = {"schema": schema}
+    c.execute("INSERT OR REPLACE INTO brain_kv(key, value) VALUES(?,?)",
+              (f"relational:perceptopoly:{agent}", json.dumps(rec)))
+    c.execute("INSERT OR REPLACE INTO brain_kv(key, value) VALUES('relational:index', ?)", (json.dumps(idx),))
+
+
+def test_npc_direction_reads_onto_the_seven_planes():
+    nu = DM.npc_planes(2 * math.pi * 4 / 7)               # pointing at "brain"
+    assert sum(nu) == pytest.approx(1.0) and max(range(7), key=lambda k: nu[k]) == 4
+    assert DM.npc_planes(0.0)[0] == max(DM.npc_planes(0.0))
+    assert DM.alignment([0, 0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0]) == pytest.approx(1.0)
+    assert DM.alignment([1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0]) == 0.0
+    with pytest.raises(ValueError):
+        DM.npc_planes(float("nan"))
+
+
+def test_only_fresh_supernova_records_count_and_they_decay(cn):
+    _npc(cn, "fresh", 0.8, 1.0, "2026-11-19T09:59:00+00:00")
+    _npc(cn, "old", 0.9, 1.0, "2026-11-19T08:00:00+00:00")
+    _npc(cn, "other-schema", 0.9, 1.0, "2026-11-19T09:59:00+00:00", schema="perceptopoly.control/1")
+    npcs, ignored = DM.supernova_events(cn, NOW)
+    assert [n["agent_id"] for n in npcs] == ["fresh"] and ignored == 1
+    assert npcs[0]["weight"] == pytest.approx(0.8 * math.exp(-60 / 1800))
+
+
+def test_events_raise_aligned_paths_and_each_npc_gets_its_pathways(cn):
+    paths = [{"tokens": ["a", "b"], "planes": [0, 0, 0, 0, 1, 0, 0], "plane": "brain", "gain": 1.2,
+              "surprisal_bits": 1.0, "delivered_bits": 1.0, "magic": 0.3, "held": 1.0, "shadow_hops": 0},
+             {"tokens": ["c", "d"], "planes": [1, 0, 0, 0, 0, 0, 0], "plane": "vision", "gain": 1.3,
+              "surprisal_bits": 1.0, "delivered_bits": 1.0, "magic": 0.3, "held": 1.0, "shadow_hops": 0}]
+    npc = {"agent_id": "npc-7", "magnitude": 1.0, "direction": 2 * math.pi * 4 / 7, "age_s": 0.0,
+           "weight": 1.0, "plane": "brain", "planes": DM.npc_planes(2 * math.pi * 4 / 7)}
+    out = DM.connect_supernova(paths, [npc])
+    brain, vision = paths
+    assert brain["supernova"] > vision["supernova"]
+    assert brain["expansion_gain"] > brain["gain"] and brain["expansion_gain"] <= PHI
+    assert out[0]["agent_id"] == "npc-7" and out[0]["paths"][0]["tokens"] == ["a", "b"]
+    none = [dict(p) for p in paths]
+    DM.connect_supernova(none, [])
+    assert all(p["supernova"] == 0.0 and p["expansion_gain"] == p["gain"] for p in none)
+
+
+def test_build_connects_perceptopoly_events_into_the_map(cn):
+    MF.run(cn, pressures=P1, axes=AX, now=NOW - 20)
+    MF.run(cn, pressures=P2, axes={**AX, "brain": .2}, now=NOW - 10, phases={a: .7 for a in MF.AXES})
+    _npc(cn, "npc-7", 0.9, 2 * math.pi * 2 / 7, "2026-11-19T09:59:30+00:00")
+    _npc(cn, "npc-8", 0.4, 2 * math.pi * 5 / 7, "2026-11-19T09:58:00+00:00")
+    before = _mesh(cn)
+    dm = DM.build(cn, now=NOW)
+    assert _mesh(cn) == before
+    sn = dm["supernova"]
+    assert sn["fresh"] == 2 and [n["agent_id"] for n in sn["npcs"]] == ["npc-7", "npc-8"]
+    assert all(n["paths"] and len(n["paths"]) <= DM.PATHS_PER_NPC for n in sn["npcs"])
+    assert all(0.0 <= p["supernova"] <= 1.0 and p["gain"] <= p["expansion_gain"] <= PHI + 1e-9
+               for p in dm["paths"])
+    eg = [p["expansion_gain"] for p in dm["paths"]]
+    assert eg == sorted(eg, reverse=True)
+    assert DM.build(cn, now=NOW + 7200)["supernova"]["fresh"] == 0        # expired: back to plain gain
